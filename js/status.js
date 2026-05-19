@@ -1,7 +1,8 @@
-// status.js - VERSION 4.0 (FULL FEATURE: TEXT FIX + REPLY + VIEWERS LIST)
+// status.js - VERSION 4.1 (TEXT FIX + REPLY INTEGRATED TO CHAT + VIEWERS)
 // Fitur Status: upload teks/gambar, auto-delete 24 jam, reply/balas status,
 // daftar orang yang melihat (viewers), notifikasi.
 // PERBAIKAN: Teks pada status gambar kini tampil sebagai caption.
+// PERBAIKAN: Balasan status langsung masuk ke chat pribadi (seperti WhatsApp)
 // ============================================================================
 
 let statusesListener = null;
@@ -386,7 +387,7 @@ function showStatusViewerModal(status) {
                 </div>
             `;
         } else {
-            // Tombol untuk pengunjung: reply dan lihat viewers (jika ada)
+            // Tombol untuk pengunjung: reply
             ownerButtons = `
                 <div class="status-visitor-buttons" style="position: absolute; bottom: 20px; right: 20px; z-index: 9999; display: flex; gap: 8px;">
                     <button class="status-reply-btn" onclick="openReplyToStatus('${s.id}', '${escapeHtml(s.userName)}')" title="Balas status">💬 Balas</button>
@@ -394,12 +395,10 @@ function showStatusViewerModal(status) {
             `;
         }
         
-        // Tampilkan caption untuk status gambar (perbaikan BUG)
+        // **PERBAIKAN: Tampilkan caption untuk status gambar**
         let captionHtml = '';
         if (s.text && s.type === 'image') {
             captionHtml = `<div class="status-image-caption">${escapeHtml(s.text)}</div>`;
-        } else if (s.text && s.type === 'text') {
-            // Teks sudah di dalam mediaHtml, tidak perlu caption tambahan
         }
         
         content.innerHTML = `
@@ -462,7 +461,6 @@ async function showStatusViewers(event, statusId) {
         }
     }
     
-    // Buat modal untuk menampilkan daftar viewers
     let modalHtml = `
         <div id="modal-status-viewers" class="modal-overlay open">
             <div class="modal-box" style="max-width: 400px;">
@@ -499,9 +497,8 @@ async function showStatusViewers(event, statusId) {
     document.body.insertAdjacentHTML('beforeend', modalHtml);
 }
 
-// ======================= FITUR BALAS STATUS (REPLY) ========================
+// ======================= FITUR BALAS STATUS + INTEGRASI CHAT ========================
 function openReplyToStatus(statusId, ownerName) {
-    // Tampilkan modal untuk menulis balasan
     let modalHtml = `
         <div id="modal-reply-status" class="modal-overlay open">
             <div class="modal-box" style="max-width: 450px;">
@@ -538,6 +535,34 @@ async function sendStatusReply(statusId) {
     }
     
     try {
+        // Dapatkan informasi status (pemilik status)
+        let ownerUid = null;
+        let ownerName = null;
+        // Cari dari currentStatusList (yang sedang dibuka)
+        for (let i = 0; i < currentStatusList.length; i++) {
+            if (currentStatusList[i].id === statusId) {
+                ownerUid = currentStatusList[i].userId;
+                ownerName = currentStatusList[i].userName;
+                break;
+            }
+        }
+        if (!ownerUid && currentStatusOwnerId) {
+            // fallback: coba dari database langsung
+            const snapshot = await db.ref(`statuses/${currentStatusOwnerId}`).once('value');
+            const statuses = snapshot.val();
+            for (const [sid, sdata] of Object.entries(statuses || {})) {
+                if (sid === statusId) {
+                    ownerUid = sdata.userId;
+                    ownerName = sdata.userName;
+                    break;
+                }
+            }
+        }
+        if (!ownerUid) {
+            throw new Error("Tidak dapat menemukan pemilik status");
+        }
+        
+        // 1. Simpan balasan ke node status_replies
         const replyId = `${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
         const replyData = {
             fromUid: currentUser.uid,
@@ -547,33 +572,44 @@ async function sendStatusReply(statusId) {
             timestamp: firebase.database.ServerValue.TIMESTAMP,
             statusId: statusId
         };
-        
         await db.ref(`status_replies/${statusId}/${replyId}`).set(replyData);
         
-        // Kirim notifikasi ke pemilik status
-        const statusSnapshot = await db.ref(`statuses/${currentStatusOwnerId}`).once('value');
-        const statuses = statusSnapshot.val();
-        let ownerUid = null;
-        for (const [sid, sdata] of Object.entries(statuses)) {
-            if (sid === statusId) {
-                ownerUid = sdata.userId;
-                break;
-            }
-        }
-        if (ownerUid && ownerUid !== currentUser.uid) {
-            await db.ref(`notifications/${ownerUid}/${replyId}`).set({
-                type: 'status_reply',
-                fromUid: currentUser.uid,
-                fromName: currentUser.nama,
-                statusId: statusId,
-                message: message.substring(0, 50),
-                timestamp: firebase.database.ServerValue.TIMESTAMP,
-                read: false
-            });
-        }
+        // 2. Kirim pesan chat ke pemilik status (integrasi dengan sistem chat)
+        const chatMessageId = `${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+        const timestamp = firebase.database.ServerValue.TIMESTAMP;
+        // Format pesan: "Balasan status: [isi balasan]"
+        const chatMessageText = `💬 Balasan status: ${message}`;
         
-        showToast("✅ Balasan terkirim!", "success");
+        const messageData = {
+            id: chatMessageId,
+            from: currentUser.uid,
+            to: ownerUid,
+            message: chatMessageText,
+            type: 'text',
+            timestamp: timestamp,
+            read: false
+        };
+        
+        await Promise.all([
+            db.ref(`chats/${currentUser.uid}/messages/${ownerUid}/${chatMessageId}`).set(messageData),
+            db.ref(`chats/${ownerUid}/messages/${currentUser.uid}/${chatMessageId}`).set(messageData),
+            db.ref(`chats/${ownerUid}/inbox/${currentUser.uid}`).update({
+                lastMessage: chatMessageText,
+                lastMessageType: 'text',
+                lastMessageTime: timestamp,
+                unreadCount: firebase.database.ServerValue.increment(1)
+            }),
+            db.ref(`chats/${currentUser.uid}/inbox/${ownerUid}`).update({
+                lastMessage: chatMessageText,
+                lastMessageType: 'text',
+                lastMessageTime: timestamp,
+                unreadCount: 0
+            })
+        ]);
+        
+        showToast(`✅ Balasan terkirim ke ${ownerName || 'pemilik status'} (cek tab Chat)`, "success");
         closeModal('modal-reply-status');
+        
     } catch (err) {
         console.error("Send reply error:", err);
         showToast("❌ Gagal mengirim balasan: " + err.message, "error");
@@ -658,7 +694,6 @@ async function deleteCurrentStatus(event) {
                 await deleteFromSupabase(currentStatus.mediaUrl);
             }
         }
-        // Hapus juga semua balasan
         await db.ref(`status_replies/${currentStatus.id}`).remove();
         await db.ref(`statuses/${currentUser.uid}/${currentStatus.id}`).remove();
         showToast("✅ Status dihapus", "success");
@@ -765,4 +800,4 @@ window.sendStatusReply = sendStatusReply;
 window.showStatusRepliesModal = showStatusRepliesModal;
 window.cleanupStatusSystem = cleanupStatusSystem;
 
-console.log("✅ status.js V4.0 loaded - Text caption fixed + Reply & Viewers features");
+console.log("✅ status.js V4.1 loaded - Text caption fixed + Reply integrated to Chat");
