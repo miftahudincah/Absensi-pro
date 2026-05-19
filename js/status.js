@@ -1,10 +1,13 @@
-// status.js - VERSION 3.0 (SUPABASE INTEGRATION)
-// Fitur Status dengan upload ke Supabase + auto-delete expired
+// status.js - VERSION 4.0 (FULL FEATURE: TEXT FIX + REPLY + VIEWERS LIST)
+// Fitur Status: upload teks/gambar, auto-delete 24 jam, reply/balas status,
+// daftar orang yang melihat (viewers), notifikasi.
+// PERBAIKAN: Teks pada status gambar kini tampil sebagai caption.
 // ============================================================================
 
 let statusesListener = null;
 let currentStatusList = [];
 let currentStatusIndex = 0;
+let currentStatusOwnerId = null;
 let statusViewerInterval = null;
 let statusExpiryInterval = null;
 let statusUiReadyListenerAdded = false;
@@ -60,7 +63,6 @@ function setupStatusEventDelegation(retry = 0) {
 }
 
 function handleStatusClick(e) {
-    console.log("🖱️ Klik di statusBar, target:", e.target);
     let target = e.target;
     while (target && !target.classList?.contains('status-item')) {
         target = target.parentElement;
@@ -68,7 +70,6 @@ function handleStatusClick(e) {
     }
     if (!target) return;
     const userId = target.getAttribute('data-user-id');
-    console.log("User ID dari status:", userId);
     if (!userId) return;
     e.stopPropagation();
     if (!currentUser) {
@@ -108,6 +109,8 @@ function setupStatusListener() {
                                     deleteFromSupabase(status.mediaUrl).catch(console.error);
                                 }
                             }
+                            // Hapus juga replies jika ada
+                            db.ref(`status_replies/${statusId}`).remove().catch(console.error);
                             db.ref(`statuses/${userId}/${statusId}`).remove();
                         }
                     });
@@ -212,7 +215,7 @@ function startStatusExpiryChecker() {
     }, 60 * 60 * 1000);
 }
 
-// ======================= CREATE STATUS (DENGAN SUPABASE) ========================
+// ======================= CREATE STATUS ========================
 function openCreateStatusModal() {
     const modal = document.getElementById('modal-create-status');
     if (!modal) return;
@@ -257,19 +260,15 @@ async function createStatus() {
     let type = 'text';
     
     try {
-        // Upload gambar ke Supabase jika ada
         if (imageFile) {
             if (imageFile.size > 5 * 1024 * 1024) {
                 showToast("Ukuran gambar maksimal 5MB!", "error");
                 if (btn) { btn.disabled = false; btn.innerHTML = originalText; }
                 return;
             }
-            
-            // Gunakan uploadStatusImageToSupabase dari supabase-config.js
             if (typeof uploadStatusImageToSupabase === 'undefined') {
                 throw new Error('Fungsi uploadStatusImageToSupabase tidak tersedia');
             }
-            
             const uploadResult = await uploadStatusImageToSupabase(imageFile, currentUser.uid);
             mediaUrl = uploadResult.url;
             mediaPath = uploadResult.path;
@@ -280,7 +279,7 @@ async function createStatus() {
         const statusData = {
             text: text || (type === 'image' ? '📸 ' : ''),
             mediaUrl: mediaUrl,
-            mediaPath: mediaPath, // Simpan path untuk cleanup nanti
+            mediaPath: mediaPath,
             type: type,
             userName: currentUser.nama,
             userPhoto: currentUser.photoUrl || null,
@@ -296,8 +295,6 @@ async function createStatus() {
     } catch (err) {
         console.error("Create status error:", err);
         showToast("❌ Gagal posting status: " + err.message, "error");
-        
-        // Jika gagal upload ke Supabase, hapus file yang sudah terupload
         if (mediaPath && typeof deleteFromSupabase === 'function') {
             await deleteFromSupabase(mediaPath);
         }
@@ -306,7 +303,7 @@ async function createStatus() {
     }
 }
 
-// ======================= STATUS VIEWER ========================
+// ======================= STATUS VIEWER (DENGAN REPLY & VIEWERS) ========================
 async function openStatusViewer(userId) {
     console.log("📸 openStatusViewer called for userId:", userId);
     if (!currentUser) {
@@ -336,7 +333,7 @@ async function openStatusViewer(userId) {
             showToast("Status sudah kadaluarsa", "info");
             return;
         }
-        // Tandai sudah dilihat (kecuali untuk status sendiri)
+        // Tandai sudah dilihat
         if (userId !== currentUser.uid) {
             for (const status of userStatuses) {
                 if (!status.viewedBy || !status.viewedBy[currentUser.uid]) {
@@ -346,37 +343,63 @@ async function openStatusViewer(userId) {
         }
         currentStatusList = userStatuses;
         currentStatusIndex = 0;
-        showStatusViewerModal(currentStatusList[currentStatusIndex], userId);
+        currentStatusOwnerId = userId;
+        showStatusViewerModal(currentStatusList[currentStatusIndex]);
     } catch (err) {
         console.error("Error opening status viewer:", err);
         showToast("Gagal memuat status: " + err.message, "error");
     }
 }
 
-function showStatusViewerModal(status, ownerUserId) {
+function showStatusViewerModal(status) {
     const modal = document.getElementById('modal-status-viewer');
     if (!modal) return;
     const content = document.getElementById('statusViewerContent');
     if (!content) return;
     if (statusViewerInterval) clearInterval(statusViewerInterval);
     
-    const isOwner = (ownerUserId === currentUser.uid);
-    console.log("🔍 showStatusViewerModal: isOwner =", isOwner, "ownerUserId=", ownerUserId, "currentUser.uid=", currentUser?.uid);
+    const isOwner = (currentStatusOwnerId === currentUser.uid);
     
     const updateContent = () => {
         const s = currentStatusList[currentStatusIndex];
         if (!s) { closeModal('modal-status-viewer'); return; }
-        let mediaHtml = s.type === 'image' && s.mediaUrl
-            ? `<div class="status-image-wrapper" onclick="nextStatus()"><img src="${s.mediaUrl}" class="status-full-image" alt="Status"></div>`
-            : `<div class="status-text-wrapper" onclick="nextStatus()"><div class="status-full-text">${escapeHtml(s.text)}</div></div>`;
         
-        let deleteButton = '';
+        let mediaHtml = '';
+        if (s.type === 'image' && s.mediaUrl) {
+            mediaHtml = `<div class="status-image-wrapper" onclick="nextStatus()">
+                            <img src="${s.mediaUrl}" class="status-full-image" alt="Status">
+                         </div>`;
+        } else {
+            mediaHtml = `<div class="status-text-wrapper" onclick="nextStatus()">
+                            <div class="status-full-text">${escapeHtml(s.text)}</div>
+                         </div>`;
+        }
+        
+        // Tombol untuk owner: hapus, lihat viewers, dan lihat balasan
+        let ownerButtons = '';
         if (isOwner) {
-            deleteButton = `
-                <div style="position: absolute; top: 12px; left: 12px; z-index: 9999;">
+            ownerButtons = `
+                <div class="status-owner-buttons" style="position: absolute; top: 12px; left: 12px; z-index: 9999; display: flex; gap: 8px;">
                     <button class="status-delete-btn" onclick="deleteCurrentStatus(event)" title="Hapus status ini">🗑️</button>
+                    <button class="status-viewers-btn" onclick="showStatusViewers(event, '${s.id}')" title="Dilihat oleh">👁️</button>
+                    <button class="status-replies-btn" onclick="showStatusRepliesModal('${s.id}')" title="Balasan">💬</button>
                 </div>
             `;
+        } else {
+            // Tombol untuk pengunjung: reply dan lihat viewers (jika ada)
+            ownerButtons = `
+                <div class="status-visitor-buttons" style="position: absolute; bottom: 20px; right: 20px; z-index: 9999; display: flex; gap: 8px;">
+                    <button class="status-reply-btn" onclick="openReplyToStatus('${s.id}', '${escapeHtml(s.userName)}')" title="Balas status">💬 Balas</button>
+                </div>
+            `;
+        }
+        
+        // Tampilkan caption untuk status gambar (perbaikan BUG)
+        let captionHtml = '';
+        if (s.text && s.type === 'image') {
+            captionHtml = `<div class="status-image-caption">${escapeHtml(s.text)}</div>`;
+        } else if (s.text && s.type === 'text') {
+            // Teks sudah di dalam mediaHtml, tidak perlu caption tambahan
         }
         
         content.innerHTML = `
@@ -384,12 +407,15 @@ function showStatusViewerModal(status, ownerUserId) {
                 <div class="status-viewer-header">
                     <div class="status-viewer-user">
                         <img src="${s.userPhoto || getAvatarUrl(s.userName)}" alt="${escapeHtml(s.userName)}">
-                        <div class="status-user-info"><strong>${escapeHtml(s.userName)}</strong><span>${formatTimeAgo(s.createdAt)}</span></div>
+                        <div class="status-user-info">
+                            <strong>${escapeHtml(s.userName)}</strong>
+                            <span>${formatTimeAgo(s.createdAt)}</span>
+                        </div>
                     </div>
                 </div>
-                ${deleteButton}
+                ${ownerButtons}
                 ${mediaHtml}
-                ${s.text && s.type !== 'image' ? `<div class="status-image-caption">${escapeHtml(s.text)}</div>` : ''}
+                ${captionHtml}
                 <div class="status-nav-buttons">
                     <button class="status-nav-prev" ${currentStatusIndex === 0 ? 'disabled' : ''} onclick="prevStatus()">◀</button>
                     <span class="status-counter">${currentStatusIndex+1} / ${currentStatusList.length}</span>
@@ -398,6 +424,7 @@ function showStatusViewerModal(status, ownerUserId) {
             </div>
         `;
     };
+    
     updateContent();
     modal.classList.add('open');
     statusViewerInterval = setInterval(() => {
@@ -406,7 +433,206 @@ function showStatusViewerModal(status, ownerUserId) {
     }, 5000);
 }
 
-// ======================= DELETE STATUS (DENGAN HAPUS GAMBAR DARI SUPABASE) ========================
+// ======================= LIHAT VIEWERS (SIAPA YANG MELIHAT) ========================
+async function showStatusViewers(event, statusId) {
+    if (event) event.stopPropagation();
+    const currentStatus = currentStatusList[currentStatusIndex];
+    if (!currentStatus) return;
+    
+    const viewers = currentStatus.viewedBy || {};
+    const viewerUids = Object.keys(viewers);
+    
+    if (viewerUids.length === 0) {
+        showToast("Belum ada yang melihat status ini", "info");
+        return;
+    }
+    
+    // Ambil detail user dari users_auth
+    const viewersData = [];
+    for (const uid of viewerUids) {
+        const snap = await db.ref(`users_auth/${uid}`).once('value');
+        if (snap.exists()) {
+            const user = snap.val();
+            viewersData.push({
+                uid: uid,
+                nama: user.nama,
+                photoUrl: user.photoUrl,
+                role: user.role
+            });
+        }
+    }
+    
+    // Buat modal untuk menampilkan daftar viewers
+    let modalHtml = `
+        <div id="modal-status-viewers" class="modal-overlay open">
+            <div class="modal-box" style="max-width: 400px;">
+                <div class="modal-title">
+                    <span>👁️ Dilihat oleh (${viewersData.length})</span>
+                    <span onclick="closeModal('modal-status-viewers')">✖</span>
+                </div>
+                <div style="max-height: 60vh; overflow-y: auto; padding: 10px;">
+    `;
+    
+    viewersData.forEach(v => {
+        modalHtml += `
+            <div style="display: flex; align-items: center; gap: 12px; padding: 10px; border-bottom: 1px solid var(--border);">
+                <img src="${v.photoUrl || getAvatarUrl(v.nama)}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;">
+                <div>
+                    <div style="font-weight: bold;">${escapeHtml(v.nama)}</div>
+                    <div style="font-size: 0.7rem; color: var(--text-muted);">${v.role === 'siswa' ? '👨‍🎓 Siswa' : (v.role === 'guru' ? '👨‍🏫 Guru' : '👑 Admin')}</div>
+                </div>
+            </div>
+        `;
+    });
+    
+    modalHtml += `
+                </div>
+                <div class="modal-actions">
+                    <button class="btn-cancel" onclick="closeModal('modal-status-viewers')">Tutup</button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    const existingModal = document.getElementById('modal-status-viewers');
+    if (existingModal) existingModal.remove();
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+}
+
+// ======================= FITUR BALAS STATUS (REPLY) ========================
+function openReplyToStatus(statusId, ownerName) {
+    // Tampilkan modal untuk menulis balasan
+    let modalHtml = `
+        <div id="modal-reply-status" class="modal-overlay open">
+            <div class="modal-box" style="max-width: 450px;">
+                <div class="modal-title">
+                    <span>💬 Balas status ${escapeHtml(ownerName)}</span>
+                    <span onclick="closeModal('modal-reply-status')">✖</span>
+                </div>
+                <div class="form-group">
+                    <textarea id="replyMessage" rows="3" placeholder="Tulis balasan Anda..." style="width: 100%;"></textarea>
+                </div>
+                <div class="modal-actions">
+                    <button class="btn-cancel" onclick="closeModal('modal-reply-status')">Batal</button>
+                    <button class="btn-save" onclick="sendStatusReply('${statusId}')">Kirim Balasan</button>
+                </div>
+            </div>
+        </div>
+    `;
+    const existingModal = document.getElementById('modal-reply-status');
+    if (existingModal) existingModal.remove();
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+}
+
+async function sendStatusReply(statusId) {
+    const message = document.getElementById('replyMessage')?.value.trim();
+    if (!message) {
+        showToast("Balasan tidak boleh kosong!", "error");
+        return;
+    }
+    
+    const btn = document.querySelector('#modal-reply-status .btn-save');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '⏳ Mengirim...';
+    }
+    
+    try {
+        const replyId = `${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+        const replyData = {
+            fromUid: currentUser.uid,
+            fromName: currentUser.nama,
+            fromPhoto: currentUser.photoUrl || null,
+            message: message,
+            timestamp: firebase.database.ServerValue.TIMESTAMP,
+            statusId: statusId
+        };
+        
+        await db.ref(`status_replies/${statusId}/${replyId}`).set(replyData);
+        
+        // Kirim notifikasi ke pemilik status
+        const statusSnapshot = await db.ref(`statuses/${currentStatusOwnerId}`).once('value');
+        const statuses = statusSnapshot.val();
+        let ownerUid = null;
+        for (const [sid, sdata] of Object.entries(statuses)) {
+            if (sid === statusId) {
+                ownerUid = sdata.userId;
+                break;
+            }
+        }
+        if (ownerUid && ownerUid !== currentUser.uid) {
+            await db.ref(`notifications/${ownerUid}/${replyId}`).set({
+                type: 'status_reply',
+                fromUid: currentUser.uid,
+                fromName: currentUser.nama,
+                statusId: statusId,
+                message: message.substring(0, 50),
+                timestamp: firebase.database.ServerValue.TIMESTAMP,
+                read: false
+            });
+        }
+        
+        showToast("✅ Balasan terkirim!", "success");
+        closeModal('modal-reply-status');
+    } catch (err) {
+        console.error("Send reply error:", err);
+        showToast("❌ Gagal mengirim balasan: " + err.message, "error");
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = "Kirim Balasan";
+        }
+    }
+}
+
+// ======================= LIHAT BALASAN STATUS (UNTUK OWNER) ========================
+async function showStatusRepliesModal(statusId) {
+    const snapshot = await db.ref(`status_replies/${statusId}`).once('value');
+    const replies = snapshot.val();
+    const repliesList = replies ? Object.values(replies).sort((a,b) => (a.timestamp||0) - (b.timestamp||0)) : [];
+    
+    let modalHtml = `
+        <div id="modal-status-replies" class="modal-overlay open">
+            <div class="modal-box" style="max-width: 500px;">
+                <div class="modal-title">
+                    <span>💬 Balasan Status</span>
+                    <span onclick="closeModal('modal-status-replies')">✖</span>
+                </div>
+                <div style="max-height: 60vh; overflow-y: auto; padding: 10px;">
+    `;
+    
+    if (repliesList.length === 0) {
+        modalHtml += `<div class="text-small" style="text-align:center; padding:20px;">📭 Belum ada balasan</div>`;
+    } else {
+        repliesList.forEach(reply => {
+            modalHtml += `
+                <div style="display: flex; gap: 12px; margin-bottom: 15px; padding: 10px; background: var(--bg-hover); border-radius: 12px;">
+                    <img src="${reply.fromPhoto || getAvatarUrl(reply.fromName)}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;">
+                    <div style="flex:1;">
+                        <div style="font-weight: bold;">${escapeHtml(reply.fromName)}</div>
+                        <div style="font-size: 0.85rem;">${escapeHtml(reply.message)}</div>
+                        <div style="font-size: 0.65rem; color: var(--text-muted); margin-top: 4px;">${formatTimeAgo(reply.timestamp)}</div>
+                    </div>
+                </div>
+            `;
+        });
+    }
+    
+    modalHtml += `
+                </div>
+                <div class="modal-actions">
+                    <button class="btn-cancel" onclick="closeModal('modal-status-replies')">Tutup</button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    const existingModal = document.getElementById('modal-status-replies');
+    if (existingModal) existingModal.remove();
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+}
+
+// ======================= DELETE STATUS ========================
 async function deleteCurrentStatus(event) {
     if (event) event.stopPropagation();
     if (!currentUser) return;
@@ -418,7 +644,6 @@ async function deleteCurrentStatus(event) {
     }
     if (!confirm("Hapus status ini?")) return;
     
-    // Tampilkan loading
     const deleteBtn = document.querySelector('.status-delete-btn');
     if (deleteBtn) {
         deleteBtn.disabled = true;
@@ -426,18 +651,15 @@ async function deleteCurrentStatus(event) {
     }
     
     try {
-        // HAPUS GAMBAR DARI SUPABASE JIKA ADA
         if (currentStatus.mediaUrl && currentStatus.mediaUrl.includes(SUPABASE_URL)) {
             if (typeof deleteStatusImage === 'function') {
                 await deleteStatusImage(currentStatus.mediaUrl);
-                console.log("✅ Gambar status dihapus dari Supabase");
             } else if (typeof deleteFromSupabase === 'function') {
                 await deleteFromSupabase(currentStatus.mediaUrl);
-                console.log("✅ Gambar status dihapus dari Supabase");
             }
         }
-        
-        // Hapus status dari Firebase
+        // Hapus juga semua balasan
+        await db.ref(`status_replies/${currentStatus.id}`).remove();
         await db.ref(`statuses/${currentUser.uid}/${currentStatus.id}`).remove();
         showToast("✅ Status dihapus", "success");
         
@@ -450,8 +672,7 @@ async function deleteCurrentStatus(event) {
         } else {
             if (currentStatusIndex >= currentStatusList.length) currentStatusIndex = currentStatusList.length - 1;
             if (currentStatusIndex < 0) currentStatusIndex = 0;
-            const ownerUserId = currentStatusList[0]?.userId;
-            showStatusViewerModal(currentStatusList[currentStatusIndex], ownerUserId);
+            showStatusViewerModal(currentStatusList[currentStatusIndex]);
         }
     } catch (err) {
         console.error("Delete status error:", err);
@@ -467,16 +688,14 @@ async function deleteCurrentStatus(event) {
 function nextStatus() {
     if (currentStatusIndex < currentStatusList.length - 1) {
         currentStatusIndex++;
-        const ownerUserId = currentStatusList[currentStatusIndex]?.userId;
-        showStatusViewerModal(currentStatusList[currentStatusIndex], ownerUserId);
+        showStatusViewerModal(currentStatusList[currentStatusIndex]);
     } else closeModal('modal-status-viewer');
 }
 
 function prevStatus() {
     if (currentStatusIndex > 0) {
         currentStatusIndex--;
-        const ownerUserId = currentStatusList[currentStatusIndex]?.userId;
-        showStatusViewerModal(currentStatusList[currentStatusIndex], ownerUserId);
+        showStatusViewerModal(currentStatusList[currentStatusIndex]);
     }
 }
 
@@ -540,6 +759,10 @@ window.openStatusViewer = openStatusViewer;
 window.nextStatus = nextStatus;
 window.prevStatus = prevStatus;
 window.deleteCurrentStatus = deleteCurrentStatus;
+window.showStatusViewers = showStatusViewers;
+window.openReplyToStatus = openReplyToStatus;
+window.sendStatusReply = sendStatusReply;
+window.showStatusRepliesModal = showStatusRepliesModal;
 window.cleanupStatusSystem = cleanupStatusSystem;
 
-console.log("✅ status.js V3.0 loaded - Supabase integration with auto-delete");
+console.log("✅ status.js V4.0 loaded - Text caption fixed + Reply & Viewers features");
