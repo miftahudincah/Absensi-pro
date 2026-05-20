@@ -1,8 +1,8 @@
-// status.js - VERSION 4.6 (VIEWER COUNT BADGE ON BUTTON, REAL-TIME UPDATE)
+// status.js - VERSION 4.7 (VIEWERS BUTTON ONLY FOR OWNER)
 // Fitur Status: upload teks/gambar, auto-delete 24 jam, reply/balas status,
 // daftar orang yang melihat (viewers), notifikasi.
-// PERBAIKAN: Tombol mata sekarang menampilkan jumlah viewer (misal 👁️ 3) jika ada,
-// jika tidak ada viewer tampil 👁️ 0 atau hanya ikon. Jumlah diperbarui real-time.
+// PERBAIKAN: Tombol mata (👁️) hanya muncul untuk pemilik status.
+// Untuk pengamat hanya tombol balas yang ditampilkan.
 // ============================================================================
 
 let statusesListener = null;
@@ -320,7 +320,6 @@ async function getViewerCount(userId, statusId) {
 // ======================= UPDATE VIEWER COUNT ON BUTTON ========================
 function updateViewerCountButton(buttonElement, count) {
     if (!buttonElement) return;
-    // Simpan teks asli jika belum ada data count
     if (count > 0) {
         buttonElement.innerHTML = `👁️ <span style="font-size: 14px; background: rgba(255,255,255,0.3); border-radius: 20px; padding: 2px 6px; margin-left: 4px;">${count}</span> <span style="font-size: 14px;">Lihat yang melihat</span>`;
         buttonElement.title = `${count} orang telah melihat status ini`;
@@ -394,8 +393,9 @@ function showStatusViewerModal(status) {
     
     const isOwner = (currentStatusOwnerId === currentUser.uid);
     
-    // Fungsi untuk memperbarui jumlah viewer pada tombol
+    // Fungsi untuk memperbarui jumlah viewer pada tombol (hanya untuk owner)
     const updateViewerCount = async (statusId) => {
+        if (!isOwner) return;
         const count = await getViewerCount(currentStatusOwnerId, statusId);
         currentViewerCount = count;
         const viewersBtn = document.querySelector('.status-viewers-btn');
@@ -404,8 +404,9 @@ function showStatusViewerModal(status) {
         }
     };
     
-    // Pasang listener realtime untuk perubahan viewer
+    // Pasang listener realtime untuk perubahan viewer (hanya untuk owner)
     const setupViewerListener = (statusId) => {
+        if (!isOwner) return;
         if (viewerCountListener) {
             db.ref(`statuses/${currentStatusOwnerId}/${statusId}/viewedBy`).off('value', viewerCountListener);
         }
@@ -423,11 +424,8 @@ function showStatusViewerModal(status) {
         const s = currentStatusList[currentStatusIndex];
         if (!s) { closeModal('modal-status-viewer'); return; }
         
-        // Setup listener untuk status ini
+        // Setup listener untuk status ini (hanya jika owner)
         setupViewerListener(s.id);
-        // Ambil jumlah viewer awal
-        const viewerCount = await getViewerCount(currentStatusOwnerId, s.id);
-        currentViewerCount = viewerCount;
         
         let mediaHtml = '';
         if (s.type === 'image' && s.mediaUrl) {
@@ -440,17 +438,20 @@ function showStatusViewerModal(status) {
                          </div>`;
         }
         
-        // Tombol mata dengan jumlah viewer
-        let viewersButton = `
-            <button class="status-viewers-btn" onclick="showStatusViewersWithId('${currentStatusOwnerId}', '${s.id}')" style="background: rgba(0,0,0,0.6); border: none; font-size: 32px; cursor: pointer; color: white; padding: 12px 20px; border-radius: 60px; backdrop-filter: blur(8px); transition: transform 0.1s; display: inline-flex; align-items: center; gap: 8px;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'" title="Dilihat oleh">
-                👁️ <span style="font-size: 14px;">${viewerCount > 0 ? `<span style="background: rgba(255,255,255,0.3); border-radius: 20px; padding: 2px 6px; margin-left: 4px;">${viewerCount}</span> ` : ''}Lihat yang melihat${viewerCount === 0 ? ' (0)' : ''}</span>
-            </button>
-        `;
-        
+        let viewersButton = '';
         let leftButtons = '';
         let rightButtons = '';
         
         if (isOwner) {
+            // Ambil jumlah viewer awal
+            const viewerCount = await getViewerCount(currentStatusOwnerId, s.id);
+            currentViewerCount = viewerCount;
+            
+            viewersButton = `
+                <button class="status-viewers-btn" onclick="showStatusViewersWithId('${currentStatusOwnerId}', '${s.id}')" style="background: rgba(0,0,0,0.6); border: none; font-size: 32px; cursor: pointer; color: white; padding: 12px 20px; border-radius: 60px; backdrop-filter: blur(8px); transition: transform 0.1s; display: inline-flex; align-items: center; gap: 8px;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'" title="Dilihat oleh">
+                    👁️ <span style="font-size: 14px;">${viewerCount > 0 ? `<span style="background: rgba(255,255,255,0.3); border-radius: 20px; padding: 2px 6px; margin-left: 4px;">${viewerCount}</span> ` : ''}Lihat yang melihat${viewerCount === 0 ? ' (0)' : ''}</span>
+                </button>
+            `;
             leftButtons = `
                 <button class="status-delete-btn" onclick="deleteCurrentStatus(event)" style="background: rgba(0,0,0,0.6); border: none; font-size: 32px; cursor: pointer; color: white; padding: 12px 20px; border-radius: 60px; backdrop-filter: blur(8px); transition: transform 0.1s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'" title="Hapus status">🗑️</button>
             `;
@@ -458,6 +459,7 @@ function showStatusViewerModal(status) {
                 <button class="status-replies-btn" onclick="showStatusRepliesModal('${s.id}')" style="background: rgba(0,0,0,0.6); border: none; font-size: 32px; cursor: pointer; color: white; padding: 12px 20px; border-radius: 60px; backdrop-filter: blur(8px); transition: transform 0.1s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'" title="Balasan">💬</button>
             `;
         } else {
+            // Non-owner: hanya tombol balas di kanan, tanpa tombol mata
             rightButtons = `
                 <button class="status-reply-btn" onclick="openReplyToStatus('${s.id}', '${escapeHtml(s.userName)}')" style="background: #00bcd4; border: none; border-radius: 60px; padding: 12px 28px; font-size: 18px; font-weight: bold; cursor: pointer; color: white; box-shadow: 0 4px 12px rgba(0,0,0,0.3); transition: transform 0.1s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">💬 Balas</button>
             `;
@@ -907,4 +909,4 @@ window.sendStatusReply = sendStatusReply;
 window.showStatusRepliesModal = showStatusRepliesModal;
 window.cleanupStatusSystem = cleanupStatusSystem;
 
-console.log("✅ status.js V4.6 loaded - Viewer count badge on button, real-time update");
+console.log("✅ status.js V4.7 loaded - Viewers button only for owner status");
