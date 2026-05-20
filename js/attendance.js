@@ -1,10 +1,11 @@
-// attendance.js - VERSION 3.5 (PERBAIKAN: WAIT FOR DOM ELEMENTS)
+// attendance.js - VERSION 4.1 (SIMULASI DENGAN SEARCH SISWA)
 // Mengelola data absensi, filter, validasi delay pulang,
 // serta manual status (sakit, izin, alpha) untuk siswa yang tidak hadir.
 // PERUBAHAN: 
-//   - Menambahkan mekanisme retry untuk mencari elemen DOM
-//   - Menambahkan akses untuk role developer (sama seperti admin & guru)
-//   - Memperbaiki error "tbody-attendance not found"
+//   - Simulasi scan masuk & pulang menggunakan input pencarian + daftar siswa (tanpa dropdown rumit)
+//   - Admin/guru dapat mencari siswa berdasarkan nama atau ID
+//   - Simulasi scan masuk: pilih siswa dan kondisi (Hadir, Izin, Sakit, Alpha)
+//   - Simulasi scan pulang: pilih siswa yang sudah absen masuk
 // ============================================================================
 
 // ======================== GLOBAL VARIABLES ========================
@@ -23,10 +24,7 @@ function setupAttendanceDataReadyListener() {
     window.addEventListener('dataReady', (e) => {
         console.log("📋 attendance.js: dataReady received, updating attendance UI");
         
-        // Reset retry counter
         attendanceRetryCount = 0;
-        
-        // Tunggu DOM siap
         waitForAttendanceElements(() => {
             if (typeof populateFilters === 'function') populateFilters();
             if (typeof populateDateFilter === 'function') populateDateFilter();
@@ -53,7 +51,6 @@ function setupAttendanceDataReadyListener() {
     }
 }
 
-// Fungsi untuk menunggu elemen DOM attendance tersedia
 function waitForAttendanceElements(callback) {
     const tbody = document.getElementById('tbody-attendance');
     const filterKelas = document.getElementById('filterKelas');
@@ -75,24 +72,19 @@ function waitForAttendanceElements(callback) {
     }
     
     console.error("❌ Attendance DOM elements not found after max retries!");
-    
-    // Coba buat elemen secara dinamis jika masih belum ditemukan
     const tabAttendance = document.getElementById('tab-attendance');
     if (tabAttendance) {
         console.log("🔧 Attempting to create attendance table dynamically...");
         createAttendanceTableDynamic();
         if (callback) setTimeout(callback, 100);
     }
-    
     return false;
 }
 
-// Fungsi untuk membuat tabel attendance secara dinamis
 function createAttendanceTableDynamic() {
     const tabAttendance = document.getElementById('tab-attendance');
     if (!tabAttendance) return;
     
-    // Cek apakah sudah ada table-container
     let tableContainer = tabAttendance.querySelector('.table-container');
     if (!tableContainer) {
         tableContainer = document.createElement('div');
@@ -101,7 +93,6 @@ function createAttendanceTableDynamic() {
         console.log("✅ Created table-container dynamically");
     }
     
-    // Cek apakah sudah ada table
     let table = tableContainer.querySelector('table');
     if (!table) {
         table = document.createElement('table');
@@ -118,7 +109,7 @@ function createAttendanceTableDynamic() {
                 </tr>
             </thead>
             <tbody id="tbody-attendance">
-                <tr><td colspan="7" style="text-align:center; padding:20px;">Memuat data...</td></tr>
+                <tr><td colspan="7" style="text-align:center; padding:20px;">Memuat data...<\/td></tr>
             </tbody>
         `;
         tableContainer.appendChild(table);
@@ -163,7 +154,6 @@ function populateFilters() {
     kelasOptions.forEach(kelas => {
         kelasSelect.innerHTML += `<option value="${kelas}">${kelas}</option>`;
     });
-    
     if (currentKelas !== 'all' && kelasOptions.includes(currentKelas)) {
         kelasSelect.value = currentKelas;
     }
@@ -181,7 +171,6 @@ function populateFilters() {
     jurusanOptions.forEach(jurusan => {
         jurusanSelect.innerHTML += `<option value="${jurusan}">${jurusan}</option>`;
     });
-    
     if (currentJurusan !== 'all' && jurusanOptions.includes(currentJurusan)) {
         jurusanSelect.value = currentJurusan;
     }
@@ -200,7 +189,6 @@ function populateDateFilter() {
     }
     
     const currentValue = dateSelect.value;
-    
     dateSelect.innerHTML = '<option value="all">📅 Semua Tanggal</option>';
     dateSelect.innerHTML += '<option value="today">📆 Hari Ini</option>';
     
@@ -216,7 +204,6 @@ function populateDateFilter() {
         const exists = Array.from(dateSelect.options).some(opt => opt.value === currentValue);
         if (exists) dateSelect.value = currentValue;
     }
-    
     console.log(`✅ populateDateFilter selesai, total options: ${dateSelect.options.length}`);
 }
 
@@ -240,10 +227,8 @@ function updateAttendanceDonutChart() {
         console.warn("attendanceDonutChart canvas not found");
         return;
     }
-    
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    
     if (!dbData || !dbData.attendance) {
         console.warn("Data absensi belum siap untuk chart");
         return;
@@ -287,7 +272,7 @@ function updateAttendanceDonutChart() {
     }
 }
 
-// ======================== RENDER TABLE (DENGAN STATUS MANUAL) ========================
+// ======================== RENDER TABLE ========================
 
 async function renderTable() {
     console.log("📊 renderTable dipanggil - Total attendance:", dbData.attendance?.length || 0);
@@ -337,7 +322,7 @@ async function renderTable() {
         tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:20px; color:#888;">
             📭 Data absensi tidak ditemukan.
             ${currentUser?.role === 'siswa' ? '<br><small>Hubungi guru untuk informasi lebih lanjut.</small>' : ''}
-            </td></tr>`;
+        <\/td><\/tr>`;
         updateAttendanceStatistics(data);
         updateAttendanceDonutChart();
         return;
@@ -376,16 +361,16 @@ async function renderTable() {
         
         rows.push(`
             <tr class="${isNew ? 'attendance-new-row' : ''}">
-                <td>⏰ ${timeDisplay}<br><span class="text-small">📅 ${row.date}</span>${outDisplay}</td>
-                <td><strong>#${row.studentId}</strong></td>
-                <td>${escapeHtml(row.nama)}</div></td>
-                <td>${row.kelas || '-'}</div></td>
-                <td>${row.jurusan || '-'}</div></td>
-                <td>${statusHtml}</div></td>
+                <td>⏰ ${timeDisplay}<br><span class="text-small">📅 ${row.date}</span>${outDisplay}<\/td>
+                <td><strong>#${row.studentId}<\/strong><\/td>
+                <td>${escapeHtml(row.nama)}<\/td>
+                <td>${row.kelas || '-'}<\/td>
+                <td>${row.jurusan || '-'}<\/td>
+                <td>${statusHtml}<\/td>
                 <td class="role-guru role-admin role-developer">
-                    <button class="btn-icon delete" onclick="deleteAttendance('${row.id}')" title="Hapus Data">🗑️</button>
-                </div>
-            </tr>
+                    <button class="btn-icon delete" onclick="deleteAttendance('${row.id}')" title="Hapus Data">🗑️<\/button>
+                <\/td>
+            <\/tr>
         `);
     });
     tbody.innerHTML = rows.join('');
@@ -417,10 +402,10 @@ function updateAttendanceStatistics(data) {
     
     statsContainer.innerHTML = `
         <div style="display: flex; gap: 20px; flex-wrap: wrap;">
-            <div><span style="color: #4a90e2;">📅 Hari Ini:</span> <strong>${hadirToday}</strong> Hadir, <strong>${pulangToday}</strong> Pulang</div>
-            <div><span style="color: #4a90e2;">👥 Total Hari Ini:</span> <strong>${todayData.length}</strong> Transaksi</div>
-            <div><span style="color: #4a90e2;">📊 Total Unik:</span> <strong>${totalUnique}</strong> Siswa</div>
-        </div>
+            <div><span style="color: #4a90e2;">📅 Hari Ini:</span> <strong>${hadirToday}</strong> Hadir, <strong>${pulangToday}</strong> Pulang<\/div>
+            <div><span style="color: #4a90e2;">👥 Total Hari Ini:</span> <strong>${todayData.length}</strong> Transaksi<\/div>
+            <div><span style="color: #4a90e2;">📊 Total Unik:</span> <strong>${totalUnique}</strong> Siswa<\/div>
+        <\/div>
     `;
 }
 
@@ -452,211 +437,326 @@ function deleteAttendance(id) {
         });
 }
 
-// ======================== SIMULATE ATTENDANCE MASUK ========================
+// ======================== SIMULASI SCAN MASUK (DENGAN SEARCH SISWA) ========================
 
-function simulateAttendance() {
-    if (!currentUser) {
-        showToast("Anda harus login!", "error");
-        return;
-    }
-    // Izinkan admin, guru, dan developer
-    if (currentUser.role !== 'admin' && currentUser.role !== 'guru' && currentUser.role !== 'developer') {
-        showToast("⛔ Simulasi hanya untuk Admin, Guru, dan Developer!", "error");
+let currentStudentsListForIn = [];
+
+function openSimulateInModal() {
+    if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'guru' && currentUser.role !== 'developer')) {
+        showToast("⛔ Hanya Admin, Guru, dan Developer yang dapat mensimulasikan absen!", "error");
         return;
     }
     
     const students = dbData.users;
     if (!students || students.length === 0) {
-        showToast("❌ Belum ada siswa di Database!", "error");
+        showToast("❌ Belum ada data siswa di database!", "error");
         return;
     }
+    currentStudentsListForIn = [...students];
     
-    const validStudents = students.filter(s => s.nama && s.id);
-    if (validStudents.length === 0) {
-        showToast("❌ Tidak ada data siswa yang valid!", "error");
-        return;
-    }
-    
-    const s = validStudents[Math.floor(Math.random() * validStudents.length)];
-    const now = new Date();
-    const timeStr = now.toLocaleTimeString('id-ID', {hour: '2-digit', minute:'2-digit'});
-    const dateStr = now.toISOString().split('T')[0];
-    
-    const existingAttendance = dbData.attendance.find(a => a.studentId == s.id && a.date === dateStr && a.status === 'Hadir');
-    if (existingAttendance) {
-        showToast(`⚠️ ${s.nama} sudah absen masuk hari ini!`, "warning");
-        return;
-    }
-    
-    const btn = document.querySelector('button[onclick="simulateAttendance()"]');
-    const originalText = btn?.innerHTML;
-    if (btn) { btn.disabled = true; btn.innerHTML = '⏳ Memproses...'; }
-    
-    const attendanceData = {
-        id: parseInt(s.id),
-        nama: s.nama,
-        kelas: s.kelas,
-        jurusan: s.jurusan,
-        in: timeStr,
-        out: null,
-        timestamp: firebase.database.ServerValue.TIMESTAMP
-    };
-    
-    db.ref(`absensi/${dateStr}/${s.id}`).set(attendanceData)
-        .then(() => showToast(`✅ Simulasi Absen Masuk Berhasil: ${s.nama} (${timeStr})`, "success"))
-        .catch((err) => showToast("❌ Gagal simulasi: " + err.message, "error"))
-        .finally(() => {
-            if (btn) { btn.disabled = false; btn.innerHTML = originalText || '📷 Simulasi Scan Masuk'; }
-        });
-}
-
-// ======================== SIMULATE ATTENDANCE PULANG ========================
-
-function simulateAttendanceOut() {
-    if (!currentUser) {
-        showToast("Anda harus login!", "error");
-        return;
-    }
-    // Izinkan admin, guru, dan developer
-    if (currentUser.role !== 'admin' && currentUser.role !== 'guru' && currentUser.role !== 'developer') {
-        showToast("⛔ Simulasi hanya untuk Admin, Guru, dan Developer!", "error");
-        return;
-    }
-    
-    const todayStr = new Date().toISOString().split('T')[0];
-    const todayAttendance = dbData.attendance.filter(a => a.date === todayStr && a.status === 'Hadir');
-    
-    if (todayAttendance.length === 0) {
-        showToast("⚠️ Tidak ada siswa yang absen masuk hari ini!", "warning");
-        return;
-    }
-    
-    const selected = todayAttendance[Math.floor(Math.random() * todayAttendance.length)];
-    const student = dbData.users.find(s => s.id == selected.studentId);
-    if (!student) {
-        showToast("❌ Data siswa tidak ditemukan!", "error");
-        return;
-    }
-    
-    const now = new Date();
-    const timeOutStr = now.toLocaleTimeString('id-ID', {hour: '2-digit', minute:'2-digit'});
-    const delayMinutes = parseInt(student.delayOut) || 60;
-    const timeInDate = new Date(`${selected.date}T${selected.timeIn}`);
-    const diffMinutes = (now - timeInDate) / (1000 * 60);
-    
-    let warningMsg = '';
-    if (diffMinutes < delayMinutes) {
-        const remaining = Math.ceil(delayMinutes - diffMinutes);
-        warningMsg = ` ⚠️ (Belum ${remaining} menit lagi, force pulang?)`;
-        if (!confirm(`⚠️ Siswa ${student.nama} absen masuk pukul ${selected.timeIn}. Delay pulang ${delayMinutes} menit.\n\nBelum mencapai waktu minimal pulang (kurang ${remaining} menit).\nTetap lanjutkan scan pulang?`)) {
-            return;
-        }
-    }
-    
-    const btn = document.querySelector('button[onclick="simulateAttendanceOut()"]');
-    const originalText = btn?.innerHTML;
-    if (btn) { btn.disabled = true; btn.innerHTML = '⏳ Memproses...'; }
-    
-    db.ref(`absensi/${todayStr}/${student.id}`).update({ out: timeOutStr })
-        .then(() => {
-            showToast(`✅ Simulasi Absen Pulang Berhasil: ${student.nama} (${timeOutStr})${warningMsg}`, "success");
-            if (typeof renderTable === 'function') setTimeout(() => renderTable(), 500);
-        })
-        .catch((err) => showToast("❌ Gagal simulasi pulang: " + err.message, "error"))
-        .finally(() => {
-            if (btn) { btn.disabled = false; btn.innerHTML = originalText || '🏠 Simulasi Scan Pulang'; }
-        });
-}
-
-function openSimulateOutModal() {
-    if (!currentUser || currentUser.role === 'siswa') {
-        showToast("⛔ Akses ditolak!", "error");
-        return;
-    }
-    
-    const todayStr = new Date().toISOString().split('T')[0];
-    const todayAttendance = dbData.attendance.filter(a => a.date === todayStr && a.status === 'Hadir');
-    if (todayAttendance.length === 0) {
-        showToast("⚠️ Tidak ada siswa yang absen masuk hari ini!", "warning");
-        return;
-    }
-    
-    const existingModal = document.getElementById('modal-simulate-out');
+    const modalId = 'modal-simulate-in';
+    let existingModal = document.getElementById(modalId);
     if (existingModal) existingModal.remove();
     
-    let modalHtml = `
-        <div id="modal-simulate-out" class="modal-overlay open">
-            <div class="modal-box" style="max-width: 450px;">
+    const modalHtml = `
+        <div id="${modalId}" class="modal-overlay open">
+            <div class="modal-box" style="max-width: 500px;">
                 <div class="modal-title">
-                    <span>🏠 Simulasi Scan Pulang</span>
-                    <span onclick="closeModal('modal-simulate-out')">✖</span>
+                    <span>📷 Simulasi Scan Masuk</span>
+                    <span onclick="closeModal('${modalId}')">✖</span>
                 </div>
                 <div style="padding: 20px;">
                     <div class="form-group">
-                        <label>Pilih Siswa yang Sudah Absen Masuk</label>
-                        <select id="simulateOutStudentSelect" class="form-control" style="width:100%; padding:10px;">
-    `;
-    todayAttendance.forEach(a => {
-        const student = dbData.users.find(s => s.id == a.studentId);
-        const name = student?.nama || a.nama;
-        modalHtml += `<option value="${a.studentId}" data-timein="${a.timeIn}">${name} (ID: ${a.studentId}) - Masuk: ${a.timeIn}</option>`;
-    });
-    modalHtml += `
+                        <label>🔍 Cari Siswa (Nama atau ID)</label>
+                        <input type="text" id="simulateInSearchInput" class="form-control" placeholder="Ketik nama atau ID siswa..." style="width:100%; padding:10px; margin-bottom:10px;">
+                        <div id="simulateInStudentList" style="max-height: 200px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 15px;">
+                            <div class="student-list-item" style="padding: 10px; text-align:center; color:#888;">Ketik untuk mencari siswa</div>
+                        </div>
+                        <input type="hidden" id="selectedStudentIdIn" value="">
+                        <input type="hidden" id="selectedStudentNameIn" value="">
+                        <input type="hidden" id="selectedStudentKelasIn" value="">
+                        <input type="hidden" id="selectedStudentJurusanIn" value="">
+                    </div>
+                    <div class="form-group">
+                        <label>Status / Kondisi</label>
+                        <select id="simulateInStatusSelect" class="form-control" style="width:100%; padding:10px;">
+                            <option value="hadir">✅ Hadir (Normal)</option>
+                            <option value="izin">📝 Izin</option>
+                            <option value="sakit">🤒 Sakit</option>
+                            <option value="alpha">❌ Alpha (Bolos)</option>
                         </select>
                     </div>
-                    <div id="simulateOutDelayWarning" class="text-small" style="color:#ff9800; margin-top: 5px;"></div>
+                    <div id="simulateInWarning" class="text-small" style="color:#ff9800; margin-top: 5px;"></div>
                 </div>
                 <div class="modal-actions">
-                    <button class="btn-cancel" onclick="closeModal('modal-simulate-out')">Batal</button>
-                    <button class="btn-save" onclick="simulateOutForSelected()">🏠 Simpan Pulang</button>
+                    <button class="btn-cancel" onclick="closeModal('${modalId}')">Batal</button>
+                    <button class="btn-save" onclick="executeSimulateIn()">✅ Simpan Absen Masuk</button>
                 </div>
             </div>
         </div>
     `;
     document.body.insertAdjacentHTML('beforeend', modalHtml);
     
-    const select = document.getElementById('simulateOutStudentSelect');
-    if (select) {
-        select.addEventListener('change', function() {
-            const selectedOption = select.options[select.selectedIndex];
-            const timeIn = selectedOption.getAttribute('data-timein');
-            if (timeIn) {
-                const studentId = select.value;
-                const student = dbData.users.find(u => u.id == studentId);
-                const delayMinutes = parseInt(student?.delayOut) || 60;
-                const now = new Date();
-                const [hours, minutes] = timeIn.split(':');
-                const timeInDate = new Date();
-                timeInDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
-                const diffMinutes = (now - timeInDate) / (1000 * 60);
-                const warningSpan = document.getElementById('simulateOutDelayWarning');
-                if (diffMinutes < delayMinutes) {
-                    const remaining = Math.ceil(delayMinutes - diffMinutes);
-                    warningSpan.innerHTML = `⚠️ Delay pulang ${delayMinutes} menit. Belum mencapai waktu minimal (kurang ${remaining} menit). Tetap bisa dipulangkan secara paksa.`;
-                    warningSpan.style.color = '#ff9800';
-                } else {
-                    warningSpan.innerHTML = `✅ Sudah memenuhi delay pulang (${delayMinutes} menit).`;
-                    warningSpan.style.color = '#4caf50';
-                }
-            }
+    const searchInput = document.getElementById('simulateInSearchInput');
+    const studentListDiv = document.getElementById('simulateInStudentList');
+    
+    const renderStudentList = (filterText = '') => {
+        const filtered = currentStudentsListForIn.filter(s => 
+            s.nama && (s.nama.toLowerCase().includes(filterText.toLowerCase()) || 
+                       s.id.toString().includes(filterText))
+        );
+        if (filtered.length === 0) {
+            studentListDiv.innerHTML = '<div class="student-list-item" style="padding: 10px; text-align:center; color:#888;">📭 Tidak ada siswa yang cocok</div>';
+            return;
+        }
+        let html = '';
+        filtered.forEach(s => {
+            html += `
+                <div class="student-list-item" data-id="${s.id}" data-nama="${escapeHtml(s.nama)}" data-kelas="${s.kelas || ''}" data-jurusan="${s.jurusan || ''}" style="padding: 10px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.2s;" onmouseover="this.style.backgroundColor='var(--bg-hover)'" onmouseout="this.style.backgroundColor='transparent'">
+                    <strong>${s.id}</strong> - ${escapeHtml(s.nama)} <span style="color: #888;">(${s.kelas || '-'} / ${s.jurusan || '-'})</span>
+                </div>
+            `;
         });
-        select.dispatchEvent(new Event('change'));
+        studentListDiv.innerHTML = html;
+        // Attach click event to each item
+        document.querySelectorAll('#simulateInStudentList .student-list-item').forEach(el => {
+            el.addEventListener('click', () => {
+                const id = el.getAttribute('data-id');
+                const nama = el.getAttribute('data-nama');
+                const kelas = el.getAttribute('data-kelas');
+                const jurusan = el.getAttribute('data-jurusan');
+                document.getElementById('selectedStudentIdIn').value = id;
+                document.getElementById('selectedStudentNameIn').value = nama;
+                document.getElementById('selectedStudentKelasIn').value = kelas;
+                document.getElementById('selectedStudentJurusanIn').value = jurusan;
+                searchInput.value = `${id} - ${nama}`;
+                studentListDiv.innerHTML = `<div class="student-list-item" style="padding: 10px; color: #4caf50;">✅ Dipilih: ${nama} (ID: ${id})</div>`;
+                // Update warning
+                checkExistingAttendanceForIn(id);
+            });
+        });
+    };
+    
+    const checkExistingAttendanceForIn = (studentId) => {
+        const todayStr = new Date().toISOString().split('T')[0];
+        const warningSpan = document.getElementById('simulateInWarning');
+        const existing = dbData.attendance.find(a => a.date === todayStr && a.studentId == studentId && (a.status === 'Hadir' || a.status === 'Pulang'));
+        if (existing) {
+            warningSpan.innerHTML = `⚠️ Siswa ini sudah absen masuk hari ini pukul ${existing.timeIn}. Jika tetap disimpan, akan mengganti data sebelumnya.`;
+            warningSpan.style.color = '#f44336';
+        } else {
+            warningSpan.innerHTML = '';
+        }
+    };
+    
+    searchInput.addEventListener('input', (e) => renderStudentList(e.target.value));
+    renderStudentList('');
+}
+
+async function executeSimulateIn() {
+    const studentId = document.getElementById('selectedStudentIdIn').value;
+    const nama = document.getElementById('selectedStudentNameIn').value;
+    const kelas = document.getElementById('selectedStudentKelasIn').value;
+    const jurusan = document.getElementById('selectedStudentJurusanIn').value;
+    const selectStatus = document.getElementById('simulateInStatusSelect');
+    
+    if (!studentId || !nama) {
+        showToast("❌ Pilih siswa terlebih dahulu!", "error");
+        return;
+    }
+    
+    const statusCondition = selectStatus.value; // hadir, izin, sakit, alpha
+    
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString('id-ID', {hour: '2-digit', minute:'2-digit'});
+    const dateStr = now.toISOString().split('T')[0];
+    
+    let statusFinal = 'Hadir';
+    if (statusCondition === 'izin') statusFinal = 'Izin';
+    else if (statusCondition === 'sakit') statusFinal = 'Sakit';
+    else if (statusCondition === 'alpha') statusFinal = 'Alpha';
+    
+    const existingAttendance = dbData.attendance.find(a => a.date === dateStr && a.studentId == studentId);
+    if (existingAttendance && (existingAttendance.status === 'Hadir' || existingAttendance.status === 'Pulang')) {
+        if (!confirm(`⚠️ Siswa ${nama} sudah absen masuk pukul ${existingAttendance.timeIn}. Timpa data?`)) {
+            return;
+        }
+    }
+    
+    const btn = document.querySelector('#modal-simulate-in .btn-save');
+    const originalText = btn?.innerHTML;
+    if (btn) { btn.disabled = true; btn.innerHTML = '⏳ Memproses...'; }
+    
+    try {
+        const attendanceData = {
+            id: parseInt(studentId),
+            nama: nama,
+            kelas: kelas,
+            jurusan: jurusan,
+            in: (statusCondition === 'hadir') ? timeStr : null,
+            out: null,
+            timestamp: firebase.database.ServerValue.TIMESTAMP,
+            status: statusFinal
+        };
+        await db.ref(`absensi/${dateStr}/${studentId}`).set(attendanceData);
+        
+        if (statusCondition !== 'hadir') {
+            await db.ref(`attendance_status/${dateStr}/${studentId}`).set({
+                status: statusCondition,
+                updatedBy: currentUser.nama || currentUser.email,
+                updatedAt: firebase.database.ServerValue.TIMESTAMP
+            });
+        }
+        
+        showToast(`✅ Simulasi Absen ${statusFinal} berhasil untuk ${nama} (${timeStr})`, "success");
+        closeModal('modal-simulate-in');
+        if (typeof renderTable === 'function') setTimeout(() => renderTable(), 500);
+    } catch (err) {
+        showToast("❌ Gagal: " + err.message, "error");
+    } finally {
+        if (btn) { btn.disabled = false; btn.innerHTML = originalText; }
     }
 }
 
-async function simulateOutForSelected() {
-    const select = document.getElementById('simulateOutStudentSelect');
-    if (!select) return;
-    const studentId = select.value;
-    const selectedOption = select.options[select.selectedIndex];
-    const timeIn = selectedOption.getAttribute('data-timein');
-    const todayStr = new Date().toISOString().split('T')[0];
-    const selectedAttendance = dbData.attendance.find(a => a.date === todayStr && a.studentId == studentId && a.status === 'Hadir');
-    if (!selectedAttendance) {
-        showToast("❌ Data absensi tidak ditemukan!", "error");
-        closeModal('modal-simulate-out');
+// ======================== SIMULASI SCAN PULANG (DENGAN SEARCH SISWA) ========================
+
+let currentStudentsListForOut = [];
+
+function openSimulateOutModal() {
+    if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'guru' && currentUser.role !== 'developer')) {
+        showToast("⛔ Hanya Admin, Guru, dan Developer yang dapat mensimulasikan pulang!", "error");
         return;
     }
+    
+    const todayStr = new Date().toISOString().split('T')[0];
+    const todayAttendance = dbData.attendance.filter(a => a.date === todayStr && a.status === 'Hadir');
+    
+    if (todayAttendance.length === 0) {
+        showToast("⚠️ Tidak ada siswa yang absen masuk hari ini (status Hadir)!", "warning");
+        return;
+    }
+    
+    // Build list of students with their attendance info
+    currentStudentsListForOut = todayAttendance.map(a => {
+        const student = dbData.users.find(u => u.id == a.studentId);
+        return {
+            id: a.studentId,
+            nama: student?.nama || a.nama,
+            kelas: student?.kelas || a.kelas,
+            jurusan: student?.jurusan || a.jurusan,
+            timeIn: a.timeIn || '-'
+        };
+    });
+    
+    const modalId = 'modal-simulate-out';
+    let existingModal = document.getElementById(modalId);
+    if (existingModal) existingModal.remove();
+    
+    const modalHtml = `
+        <div id="${modalId}" class="modal-overlay open">
+            <div class="modal-box" style="max-width: 500px;">
+                <div class="modal-title">
+                    <span>🏠 Simulasi Scan Pulang</span>
+                    <span onclick="closeModal('${modalId}')">✖</span>
+                </div>
+                <div style="padding: 20px;">
+                    <div class="form-group">
+                        <label>🔍 Cari Siswa (Nama atau ID) - Hanya yang sudah absen masuk</label>
+                        <input type="text" id="simulateOutSearchInput" class="form-control" placeholder="Ketik nama atau ID siswa..." style="width:100%; padding:10px; margin-bottom:10px;">
+                        <div id="simulateOutStudentList" style="max-height: 200px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 15px;">
+                            <div class="student-list-item" style="padding: 10px; text-align:center; color:#888;">Ketik untuk mencari siswa</div>
+                        </div>
+                        <input type="hidden" id="selectedStudentIdOut" value="">
+                        <input type="hidden" id="selectedStudentNameOut" value="">
+                        <input type="hidden" id="selectedStudentTimeIn" value="">
+                    </div>
+                    <div id="simulateOutDelayWarning" class="text-small" style="color:#ff9800; margin-top: 5px;"></div>
+                </div>
+                <div class="modal-actions">
+                    <button class="btn-cancel" onclick="closeModal('${modalId}')">Batal</button>
+                    <button class="btn-save" onclick="executeSimulateOut()">🏠 Simpan Pulang</button>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    
+    const searchInput = document.getElementById('simulateOutSearchInput');
+    const studentListDiv = document.getElementById('simulateOutStudentList');
+    
+    const renderStudentList = (filterText = '') => {
+        const filtered = currentStudentsListForOut.filter(s => 
+            s.nama && (s.nama.toLowerCase().includes(filterText.toLowerCase()) || 
+                       s.id.toString().includes(filterText))
+        );
+        if (filtered.length === 0) {
+            studentListDiv.innerHTML = '<div class="student-list-item" style="padding: 10px; text-align:center; color:#888;">📭 Tidak ada siswa yang cocok</div>';
+            return;
+        }
+        let html = '';
+        filtered.forEach(s => {
+            html += `
+                <div class="student-list-item" data-id="${s.id}" data-nama="${escapeHtml(s.nama)}" data-timein="${s.timeIn}" style="padding: 10px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.2s;" onmouseover="this.style.backgroundColor='var(--bg-hover)'" onmouseout="this.style.backgroundColor='transparent'">
+                    <strong>${s.id}</strong> - ${escapeHtml(s.nama)} <span style="color: #888;">Masuk: ${s.timeIn}</span>
+                </div>
+            `;
+        });
+        studentListDiv.innerHTML = html;
+        // Attach click event
+        document.querySelectorAll('#simulateOutStudentList .student-list-item').forEach(el => {
+            el.addEventListener('click', () => {
+                const id = el.getAttribute('data-id');
+                const nama = el.getAttribute('data-nama');
+                const timeIn = el.getAttribute('data-timein');
+                document.getElementById('selectedStudentIdOut').value = id;
+                document.getElementById('selectedStudentNameOut').value = nama;
+                document.getElementById('selectedStudentTimeIn').value = timeIn;
+                searchInput.value = `${id} - ${nama}`;
+                studentListDiv.innerHTML = `<div class="student-list-item" style="padding: 10px; color: #4caf50;">✅ Dipilih: ${nama} (ID: ${id})</div>`;
+                // Update delay warning
+                updateDelayWarningForOut(id, timeIn);
+            });
+        });
+    };
+    
+    const updateDelayWarningForOut = (studentId, timeIn) => {
+        const warningSpan = document.getElementById('simulateOutDelayWarning');
+        const student = dbData.users.find(u => u.id == studentId);
+        const delayMinutes = parseInt(student?.delayOut) || 60;
+        if (timeIn && timeIn !== '-') {
+            const now = new Date();
+            const [hours, minutes] = timeIn.split(':');
+            const timeInDate = new Date();
+            timeInDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+            const diffMinutes = (now - timeInDate) / (1000 * 60);
+            if (diffMinutes < delayMinutes) {
+                const remaining = Math.ceil(delayMinutes - diffMinutes);
+                warningSpan.innerHTML = `⚠️ Delay pulang ${delayMinutes} menit. Belum mencapai waktu minimal (kurang ${remaining} menit). Tetap bisa dipulangkan secara paksa.`;
+                warningSpan.style.color = '#ff9800';
+            } else {
+                warningSpan.innerHTML = `✅ Sudah memenuhi delay pulang (${delayMinutes} menit).`;
+                warningSpan.style.color = '#4caf50';
+            }
+        } else {
+            warningSpan.innerHTML = '';
+        }
+    };
+    
+    searchInput.addEventListener('input', (e) => renderStudentList(e.target.value));
+    renderStudentList('');
+}
+
+async function executeSimulateOut() {
+    const studentId = document.getElementById('selectedStudentIdOut').value;
+    const nama = document.getElementById('selectedStudentNameOut').value;
+    const timeIn = document.getElementById('selectedStudentTimeIn').value;
+    
+    if (!studentId || !nama) {
+        showToast("❌ Pilih siswa terlebih dahulu!", "error");
+        return;
+    }
+    
+    const todayStr = new Date().toISOString().split('T')[0];
     const student = dbData.users.find(u => u.id == studentId);
     if (!student) {
         showToast("❌ Data siswa tidak ditemukan!", "error");
@@ -668,7 +768,7 @@ async function simulateOutForSelected() {
     const timeOutStr = now.toLocaleTimeString('id-ID', {hour: '2-digit', minute:'2-digit'});
     const delayMinutes = parseInt(student.delayOut) || 60;
     let warningMsg = '';
-    if (timeIn) {
+    if (timeIn && timeIn !== '-') {
         const [hours, minutes] = timeIn.split(':');
         const timeInDate = new Date();
         timeInDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
@@ -676,7 +776,7 @@ async function simulateOutForSelected() {
         if (diffMinutes < delayMinutes) {
             const remaining = Math.ceil(delayMinutes - diffMinutes);
             warningMsg = ` (Belum ${remaining} menit lagi, force pulang)`;
-            if (!confirm(`⚠️ Siswa ${student.nama} absen masuk pukul ${timeIn}. Delay pulang ${delayMinutes} menit.\n\nBelum mencapai waktu minimal pulang (kurang ${remaining} menit).\nTetap lanjutkan scan pulang?`)) {
+            if (!confirm(`⚠️ Siswa ${nama} absen masuk pukul ${timeIn}. Delay pulang ${delayMinutes} menit.\n\nBelum mencapai waktu minimal pulang (kurang ${remaining} menit).\nTetap lanjutkan scan pulang?`)) {
                 return;
             }
         }
@@ -685,9 +785,18 @@ async function simulateOutForSelected() {
     const btn = document.querySelector('#modal-simulate-out .btn-save');
     const originalText = btn?.innerHTML;
     if (btn) { btn.disabled = true; btn.innerHTML = '⏳ Memproses...'; }
+    
     try {
-        await db.ref(`absensi/${todayStr}/${studentId}`).update({ out: timeOutStr });
-        showToast(`✅ ${student.nama} berhasil absen pulang pukul ${timeOutStr}${warningMsg}`, "success");
+        const currentAttendance = await db.ref(`absensi/${todayStr}/${studentId}`).once('value');
+        if (!currentAttendance.exists()) {
+            showToast("❌ Data absensi tidak ditemukan untuk siswa ini!", "error");
+            return;
+        }
+        await db.ref(`absensi/${todayStr}/${studentId}`).update({
+            out: timeOutStr,
+            status: 'Pulang'
+        });
+        showToast(`✅ ${nama} berhasil absen pulang pukul ${timeOutStr}${warningMsg}`, "success");
         closeModal('modal-simulate-out');
         if (typeof renderTable === 'function') setTimeout(() => renderTable(), 500);
     } catch (err) {
@@ -696,6 +805,10 @@ async function simulateOutForSelected() {
         if (btn) { btn.disabled = false; btn.innerHTML = originalText; }
     }
 }
+
+// ======================== FUNGSI LAMA (UNTUK KOMPATIBILITAS) ========================
+window.simulateAttendance = openSimulateInModal;
+window.simulateAttendanceOut = openSimulateOutModal;
 
 // ======================== EXPORT FUNCTIONS ========================
 
@@ -754,10 +867,9 @@ function renderFilteredTable(filteredData) {
     if (!tbody) return;
     
     filteredData.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-    
     tbody.innerHTML = '';
     if (filteredData.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:20px; color:#888;">📭 Tidak ada data dalam rentang tanggal tersebut.</div></div></div></td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:20px; color:#888;">📭 Tidak ada data dalam rentang tanggal tersebut.<\/td><\/tr>`;
         return;
     }
     let rows = [];
@@ -765,14 +877,14 @@ function renderFilteredTable(filteredData) {
         const outDisplay = row.timeOut ? `<br><span class="text-small" style="color:var(--danger)">🏠 Pulang: ${row.timeOut}</span>` : '';
         rows.push(`
             <tr>
-                <td>⏰ ${row.timeIn || '-'}<br><span class="text-small">📅 ${row.date}</span>${outDisplay}</td>
-                <td><strong>#${row.studentId}</strong></td>
-                <td>${escapeHtml(row.nama)}</div></td>
-                <td>${row.kelas || '-'}</div></td>
-                <td>${row.jurusan || '-'}</div></td>
-                <td><span style="color:${row.status === 'Pulang' ? 'var(--danger)' : 'var(--success)'}">${row.status === 'Pulang' ? '🏠' : '✅'} ${row.status}</span></div></td>
-                <td class="role-guru role-admin role-developer"><button class="btn-icon delete" onclick="deleteAttendance('${row.id}')" title="Hapus Data">🗑️</button></div></td>
-            </tr>
+                <td>⏰ ${row.timeIn || '-'}<br><span class="text-small">📅 ${row.date}</span>${outDisplay}<\/td>
+                <td><strong>#${row.studentId}<\/strong><\/td>
+                <td>${escapeHtml(row.nama)}<\/td>
+                <td>${row.kelas || '-'}<\/td>
+                <td>${row.jurusan || '-'}<\/td>
+                <td><span style="color:${row.status === 'Pulang' ? 'var(--danger)' : 'var(--success)'}">${row.status === 'Pulang' ? '🏠' : '✅'} ${row.status}</span><\/td>
+                <td class="role-guru role-admin role-developer"><button class="btn-icon delete" onclick="deleteAttendance('${row.id}')" title="Hapus Data">🗑️<\/button><\/td>
+            <\/tr>
         `);
     });
     tbody.innerHTML = rows.join('');
@@ -781,7 +893,6 @@ function renderFilteredTable(filteredData) {
 // ======================== MANUAL ATTENDANCE STATUS ========================
 
 function openAbsenceModal() {
-    // Izinkan admin, guru, dan developer
     if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'guru' && currentUser.role !== 'developer')) {
         showToast("⛔ Hanya Admin, Guru, dan Developer yang dapat mengatur ketidakhadiran!", "error");
         return;
@@ -953,7 +1064,6 @@ function cleanupAttendanceUI() {
 // ======================== INISIALISASI ========================
 setupAttendanceDataReadyListener();
 
-// Inisialisasi saat DOM siap
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
         setTimeout(() => {
@@ -972,7 +1082,6 @@ if (document.readyState === 'loading') {
     }, 100);
 }
 
-// Jika data sudah tersedia
 if (typeof window !== 'undefined' && window.dbData && window.dbData.attendance) {
     setTimeout(() => {
         waitForAttendanceElements(() => {
@@ -985,10 +1094,9 @@ if (typeof window !== 'undefined' && window.dbData && window.dbData.attendance) 
 // ======================== EKSPOR KE GLOBAL ========================
 window.renderTable = renderTable;
 window.deleteAttendance = deleteAttendance;
-window.simulateAttendance = simulateAttendance;
-window.simulateAttendanceOut = simulateAttendanceOut;
+window.simulateAttendance = openSimulateInModal;
+window.simulateAttendanceOut = openSimulateOutModal;
 window.openSimulateOutModal = openSimulateOutModal;
-window.simulateOutForSelected = simulateOutForSelected;
 window.exportToExcel = exportToExcel;
 window.resetAttendanceFilters = resetAttendanceFilters;
 window.filterByDateRange = filterByDateRange;
@@ -1003,4 +1111,4 @@ window.populateFilters = populateFilters;
 window.populateDateFilter = populateDateFilter;
 window.waitForAttendanceElements = waitForAttendanceElements;
 
-console.log("✅ attendance.js V3.5 loaded - Fixed DOM element waiting");
+console.log("✅ attendance.js V4.1 loaded - Simulasi dengan search siswa");
