@@ -1,8 +1,8 @@
-// status.js - VERSION 4.2 (TEXT FIX + REPLY INTEGRATED TO CHAT WITH STATUS PREVIEW)
+// status.js - VERSION 4.5 (RESPONSIVE VIEWERS BUTTON, LANGSUNG AMBIL DATA)
 // Fitur Status: upload teks/gambar, auto-delete 24 jam, reply/balas status,
 // daftar orang yang melihat (viewers), notifikasi.
-// PERBAIKAN: Teks pada status gambar kini tampil sebagai caption.
-// PERBAIKAN: Balasan status sekarang menyertakan preview status yang dibalas (seperti WhatsApp)
+// PERBAIKAN: Tombol mata sekarang lebih responsif - langsung menampilkan viewer
+// tanpa menunggu status berganti, dengan mengambil data langsung dari Firebase.
 // ============================================================================
 
 let statusesListener = null;
@@ -375,47 +375,58 @@ function showStatusViewerModal(status) {
                          </div>`;
         }
         
-        let ownerButtons = '';
+        // --- TOMBOL MATA SELALU TAMPIL, LANGSUNG PANGGIL showStatusViewersWithId ---
+        let viewersButton = `
+            <button class="status-viewers-btn" onclick="showStatusViewersWithId('${currentStatusOwnerId}', '${s.id}')" style="background: rgba(0,0,0,0.6); border: none; font-size: 32px; cursor: pointer; color: white; padding: 12px 20px; border-radius: 60px; backdrop-filter: blur(8px); transition: transform 0.1s; display: inline-flex; align-items: center; gap: 8px;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'" title="Dilihat oleh">
+                👁️ <span style="font-size: 14px;">Lihat yang melihat</span>
+            </button>
+        `;
+        
+        let leftButtons = '';
+        let rightButtons = '';
+        
         if (isOwner) {
-            ownerButtons = `
-                <div class="status-owner-buttons" style="position: absolute; top: 12px; left: 12px; z-index: 9999; display: flex; gap: 8px;">
-                    <button class="status-delete-btn" onclick="deleteCurrentStatus(event)" title="Hapus status ini">🗑️</button>
-                    <button class="status-viewers-btn" onclick="showStatusViewers(event, '${s.id}')" title="Dilihat oleh">👁️</button>
-                    <button class="status-replies-btn" onclick="showStatusRepliesModal('${s.id}')" title="Balasan">💬</button>
-                </div>
+            leftButtons = `
+                <button class="status-delete-btn" onclick="deleteCurrentStatus(event)" style="background: rgba(0,0,0,0.6); border: none; font-size: 32px; cursor: pointer; color: white; padding: 12px 20px; border-radius: 60px; backdrop-filter: blur(8px); transition: transform 0.1s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'" title="Hapus status">🗑️</button>
+            `;
+            rightButtons = `
+                <button class="status-replies-btn" onclick="showStatusRepliesModal('${s.id}')" style="background: rgba(0,0,0,0.6); border: none; font-size: 32px; cursor: pointer; color: white; padding: 12px 20px; border-radius: 60px; backdrop-filter: blur(8px); transition: transform 0.1s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'" title="Balasan">💬</button>
             `;
         } else {
-            ownerButtons = `
-                <div class="status-visitor-buttons" style="position: absolute; bottom: 20px; right: 20px; z-index: 9999; display: flex; gap: 8px;">
-                    <button class="status-reply-btn" onclick="openReplyToStatus('${s.id}', '${escapeHtml(s.userName)}')" title="Balas status">💬 Balas</button>
-                </div>
+            rightButtons = `
+                <button class="status-reply-btn" onclick="openReplyToStatus('${s.id}', '${escapeHtml(s.userName)}')" style="background: #00bcd4; border: none; border-radius: 60px; padding: 12px 28px; font-size: 18px; font-weight: bold; cursor: pointer; color: white; box-shadow: 0 4px 12px rgba(0,0,0,0.3); transition: transform 0.1s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">💬 Balas</button>
             `;
         }
         
-        // Caption untuk status gambar
+        const bottomBar = `
+            <div class="status-action-buttons" style="position: absolute; bottom: 20px; left: 0; right: 0; z-index: 9999; display: flex; justify-content: center; gap: 20px; align-items: center; margin: 0 auto;">
+                ${leftButtons}
+                ${viewersButton}
+                ${rightButtons}
+            </div>
+        `;
+        
         let captionHtml = '';
         if (s.text && s.type === 'image') {
-            captionHtml = `<div class="status-image-caption">${escapeHtml(s.text)}</div>`;
+            captionHtml = `<div class="status-image-caption" style="position: absolute; bottom: 100px; left: 0; right: 0; text-align: center; color: white; background: rgba(0,0,0,0.6); padding: 8px 16px; font-size: 14px; border-radius: 20px; width: fit-content; margin: 0 auto; max-width: 80%;">${escapeHtml(s.text)}</div>`;
         }
         
         content.innerHTML = `
-            <div class="status-viewer-content">
-                <div class="status-viewer-header">
-                    <div class="status-viewer-user">
-                        <img src="${s.userPhoto || getAvatarUrl(s.userName)}" alt="${escapeHtml(s.userName)}">
-                        <div class="status-user-info">
-                            <strong>${escapeHtml(s.userName)}</strong>
-                            <span>${formatTimeAgo(s.createdAt)}</span>
-                        </div>
+            <div class="status-viewer-content" style="position: relative; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; background: #000;">
+                <div class="status-viewer-header" style="position: absolute; top: 16px; left: 16px; z-index: 10; background: rgba(0,0,0,0.5); border-radius: 40px; padding: 8px 16px; display: flex; align-items: center; gap: 12px;">
+                    <img src="${s.userPhoto || getAvatarUrl(s.userName)}" alt="${escapeHtml(s.userName)}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;">
+                    <div class="status-user-info">
+                        <strong style="color: white;">${escapeHtml(s.userName)}</strong>
+                        <span style="color: #ccc; font-size: 12px;">${formatTimeAgo(s.createdAt)}</span>
                     </div>
                 </div>
-                ${ownerButtons}
+                ${bottomBar}
                 ${mediaHtml}
                 ${captionHtml}
-                <div class="status-nav-buttons">
-                    <button class="status-nav-prev" ${currentStatusIndex === 0 ? 'disabled' : ''} onclick="prevStatus()">◀</button>
-                    <span class="status-counter">${currentStatusIndex+1} / ${currentStatusList.length}</span>
-                    <button class="status-nav-next" ${currentStatusIndex === currentStatusList.length-1 ? 'disabled' : ''} onclick="nextStatus()">▶</button>
+                <div class="status-nav-buttons" style="position: absolute; bottom: 20px; left: 0; right: 0; display: flex; justify-content: center; gap: 30px; z-index: 10;">
+                    <button class="status-nav-prev" ${currentStatusIndex === 0 ? 'disabled' : ''} onclick="prevStatus()" style="background: rgba(0,0,0,0.6); border: none; font-size: 24px; color: white; padding: 8px 16px; border-radius: 40px; cursor: pointer;">◀</button>
+                    <span class="status-counter" style="color: white; background: rgba(0,0,0,0.6); padding: 8px 16px; border-radius: 40px;">${currentStatusIndex+1} / ${currentStatusList.length}</span>
+                    <button class="status-nav-next" ${currentStatusIndex === currentStatusList.length-1 ? 'disabled' : ''} onclick="nextStatus()" style="background: rgba(0,0,0,0.6); border: none; font-size: 24px; color: white; padding: 8px 16px; border-radius: 40px; cursor: pointer;">▶</button>
                 </div>
             </div>
         `;
@@ -429,68 +440,87 @@ function showStatusViewerModal(status) {
     }, 5000);
 }
 
-// ======================= LIHAT VIEWERS ========================
+// ======================= LIHAT VIEWERS - VERSI RESPONSIF LANGSUNG AMBIL DARI FIREBASE ========================
+async function showStatusViewersWithId(userId, statusId) {
+    // Tampilkan loading toast
+    showToast("⏳ Memuat daftar viewer...", "info");
+    
+    try {
+        // Ambil data status langsung dari Firebase
+        const snapshot = await db.ref(`statuses/${userId}/${statusId}/viewedBy`).once('value');
+        const viewers = snapshot.val() || {};
+        const viewerUids = Object.keys(viewers);
+        
+        if (viewerUids.length === 0) {
+            showToast("Belum ada yang melihat status ini", "info");
+            return;
+        }
+        
+        // Ambil data user secara paralel
+        const userPromises = viewerUids.map(uid => db.ref(`users_auth/${uid}`).once('value'));
+        const userSnapshots = await Promise.all(userPromises);
+        
+        const viewersData = [];
+        userSnapshots.forEach(snap => {
+            if (snap.exists()) {
+                const user = snap.val();
+                viewersData.push({
+                    uid: snap.key,
+                    nama: user.nama,
+                    photoUrl: user.photoUrl,
+                    role: user.role
+                });
+            }
+        });
+        
+        // Buat modal
+        let modalHtml = `
+            <div id="modal-status-viewers" class="modal-overlay open">
+                <div class="modal-box" style="max-width: 400px;">
+                    <div class="modal-title">
+                        <span>👁️ Dilihat oleh (${viewersData.length})</span>
+                        <span onclick="closeModal('modal-status-viewers')">✖</span>
+                    </div>
+                    <div style="max-height: 60vh; overflow-y: auto; padding: 10px;">
+        `;
+        
+        viewersData.forEach(v => {
+            modalHtml += `
+                <div style="display: flex; align-items: center; gap: 12px; padding: 10px; border-bottom: 1px solid var(--border);">
+                    <img src="${v.photoUrl || getAvatarUrl(v.nama)}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;">
+                    <div>
+                        <div style="font-weight: bold;">${escapeHtml(v.nama)}</div>
+                        <div style="font-size: 0.7rem; color: var(--text-muted);">${v.role === 'siswa' ? '👨‍🎓 Siswa' : (v.role === 'guru' ? '👨‍🏫 Guru' : '👑 Admin')}</div>
+                    </div>
+                </div>
+            `;
+        });
+        
+        modalHtml += `
+                    </div>
+                    <div class="modal-actions">
+                        <button class="btn-cancel" onclick="closeModal('modal-status-viewers')">Tutup</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        const existingModal = document.getElementById('modal-status-viewers');
+        if (existingModal) existingModal.remove();
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        
+    } catch (err) {
+        console.error("Error loading viewers:", err);
+        showToast("❌ Gagal memuat daftar viewer: " + err.message, "error");
+    }
+}
+
+// Fungsi lama untuk kompatibilitas (tetap ada)
 async function showStatusViewers(event, statusId) {
     if (event) event.stopPropagation();
     const currentStatus = currentStatusList[currentStatusIndex];
     if (!currentStatus) return;
-    
-    const viewers = currentStatus.viewedBy || {};
-    const viewerUids = Object.keys(viewers);
-    
-    if (viewerUids.length === 0) {
-        showToast("Belum ada yang melihat status ini", "info");
-        return;
-    }
-    
-    const viewersData = [];
-    for (const uid of viewerUids) {
-        const snap = await db.ref(`users_auth/${uid}`).once('value');
-        if (snap.exists()) {
-            const user = snap.val();
-            viewersData.push({
-                uid: uid,
-                nama: user.nama,
-                photoUrl: user.photoUrl,
-                role: user.role
-            });
-        }
-    }
-    
-    let modalHtml = `
-        <div id="modal-status-viewers" class="modal-overlay open">
-            <div class="modal-box" style="max-width: 400px;">
-                <div class="modal-title">
-                    <span>👁️ Dilihat oleh (${viewersData.length})</span>
-                    <span onclick="closeModal('modal-status-viewers')">✖</span>
-                </div>
-                <div style="max-height: 60vh; overflow-y: auto; padding: 10px;">
-    `;
-    
-    viewersData.forEach(v => {
-        modalHtml += `
-            <div style="display: flex; align-items: center; gap: 12px; padding: 10px; border-bottom: 1px solid var(--border);">
-                <img src="${v.photoUrl || getAvatarUrl(v.nama)}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;">
-                <div>
-                    <div style="font-weight: bold;">${escapeHtml(v.nama)}</div>
-                    <div style="font-size: 0.7rem; color: var(--text-muted);">${v.role === 'siswa' ? '👨‍🎓 Siswa' : (v.role === 'guru' ? '👨‍🏫 Guru' : '👑 Admin')}</div>
-                </div>
-            </div>
-        `;
-    });
-    
-    modalHtml += `
-                </div>
-                <div class="modal-actions">
-                    <button class="btn-cancel" onclick="closeModal('modal-status-viewers')">Tutup</button>
-                </div>
-            </div>
-        </div>
-    `;
-    
-    const existingModal = document.getElementById('modal-status-viewers');
-    if (existingModal) existingModal.remove();
-    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    await showStatusViewersWithId(currentStatus.userId, statusId);
 }
 
 // ======================= BALAS STATUS + PREVIEW + INTEGRASI CHAT ========================
@@ -584,7 +614,7 @@ async function sendStatusReply(statusId) {
             from: currentUser.uid,
             to: ownerUid,
             message: chatMessageText,
-            type: 'text', // bisa diubah jadi 'status_reply' jika ingin styling khusus
+            type: 'text',
             timestamp: timestamp,
             read: false,
             replyToStatus: {
@@ -799,9 +829,10 @@ window.nextStatus = nextStatus;
 window.prevStatus = prevStatus;
 window.deleteCurrentStatus = deleteCurrentStatus;
 window.showStatusViewers = showStatusViewers;
+window.showStatusViewersWithId = showStatusViewersWithId;
 window.openReplyToStatus = openReplyToStatus;
 window.sendStatusReply = sendStatusReply;
 window.showStatusRepliesModal = showStatusRepliesModal;
 window.cleanupStatusSystem = cleanupStatusSystem;
 
-console.log("✅ status.js V4.2 loaded - Text caption fixed + Reply with status preview integrated to Chat");
+console.log("✅ status.js V4.5 loaded - Responsive viewers button with direct Firebase fetch");
