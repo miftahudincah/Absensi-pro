@@ -1,10 +1,11 @@
-// friends.js - VERSION 2.1 (PERBAIKAN: FOTO PROFIL DINAMIS + CEK DUPLIKAT)
+// friends.js - VERSION 2.2 (PERBAIKAN KECEPATAN: CACHE dbData.users_auth)
 // Fitur Pertemanan (Friendship System)
 // Mengirim request, menerima/menolak, dan daftar teman
 // Dengan integrasi Chat System
-// PERUBAHAN: 
-//   - Foto profil teman diambil langsung dari users_auth setiap render
-//   - Pencegahan duplikasi teman saat menerima request
+// PERUBAHAN V2.2:
+//   - enrichFriendsWithLatestData sekarang menggunakan dbData.users_auth sebagai cache utama
+//   - Menghindari query Firebase serial yang menyebabkan loading lambat
+//   - Mempercepat loadFriendsList dan renderFriendsList
 // ============================================================================
 
 let friendsRealtimeListener = null;
@@ -87,6 +88,7 @@ function setupFriendsListListener() {
         const friendsList = data ? Object.values(data) : [];
         
         // Ambil data terbaru dari users_auth untuk semua teman (update foto & nama)
+        // Gunakan cache dbData.users_auth untuk kecepatan
         const updatedFriends = await enrichFriendsWithLatestData(friendsList);
         
         renderFriendsList(updatedFriends);
@@ -95,6 +97,7 @@ function setupFriendsListListener() {
 }
 
 // Ambil data terbaru dari users_auth untuk setiap teman
+// 🔥 PERBAIKAN V2.2: Gunakan dbData.users_auth sebagai cache utama
 async function enrichFriendsWithLatestData(friendsList) {
     if (!friendsList || friendsList.length === 0) return [];
     
@@ -102,7 +105,37 @@ async function enrichFriendsWithLatestData(friendsList) {
     const friendUids = friendsList.map(f => f.friendUid).filter(Boolean);
     if (friendUids.length === 0) return friendsList;
     
-    // Batch get dari users_auth (menggunakan Promise.all)
+    // 🔥 PRIORITAS: Gunakan dbData.users_auth (cache realtime dari db.js)
+    if (dbData && dbData.users_auth && dbData.users_auth.length > 0) {
+        const userDataMap = {};
+        for (const user of dbData.users_auth) {
+            userDataMap[user.uid] = user;
+        }
+        
+        // Cek apakah semua teman ada di cache
+        const allFound = friendUids.every(uid => userDataMap[uid]);
+        if (allFound) {
+            // Semua data sudah ada di cache, langsung return tanpa query ke Firebase
+            console.log("⚡ friends.js: Using cached user data from dbData");
+            return friendsList.map(friend => {
+                const latest = userDataMap[friend.friendUid];
+                if (latest) {
+                    return {
+                        ...friend,
+                        friendName: latest.nama || friend.friendName,
+                        friendEmail: latest.email || friend.friendEmail,
+                        friendPhoto: latest.photoUrl || null
+                    };
+                }
+                return friend;
+            });
+        }
+    }
+    
+    // Jika tidak semua di cache, lakukan query paralel ke Firebase (hanya untuk yang kurang)
+    console.log("📡 friends.js: Fetching missing user data from Firebase");
+    
+    // Ambil data user dari Firebase (tetap pakai Promise.all untuk paralel)
     const snapshots = await Promise.all(
         friendUids.map(uid => db.ref(`users_auth/${uid}`).once('value'))
     );
@@ -124,7 +157,7 @@ async function enrichFriendsWithLatestData(friendsList) {
                 ...friend,
                 friendName: latest.nama || friend.friendName,
                 friendEmail: latest.email || friend.friendEmail,
-                friendPhoto: latest.photoUrl || null  // ambil foto terbaru (bisa null)
+                friendPhoto: latest.photoUrl || null
             };
         }
         return friend;
@@ -622,7 +655,7 @@ async function loadFriendsList() {
     const snapshot = await db.ref(`friendships/list/${currentUser.uid}`).once('value');
     const data = snapshot.val();
     const friendsList = data ? Object.values(data) : [];
-    // Perkaya dengan data terbaru
+    // Perkaya dengan data terbaru (sekarang menggunakan cache dbData)
     const enriched = await enrichFriendsWithLatestData(friendsList);
     renderFriendsList(enriched);
     updateFriendsCount(enriched.length);
@@ -760,4 +793,4 @@ window.startChatWithFriend = startChatWithFriend;
 window.startChatFromProfile = startChatFromProfile;
 window.cleanupFriendsSystem = cleanupFriendsSystem;
 
-console.log("✅ friends.js V2.1 loaded - Foto profil dinamis + pencegahan duplikasi");
+console.log("✅ friends.js V2.2 loaded - Cache dbData.users_auth untuk kecepatan");

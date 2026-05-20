@@ -1,10 +1,11 @@
-// chat.js - VERSION 4.2 (PERBAIKAN: HAPUS PESAN HANYA UNTUK DIRI SENDIRI)
+// chat.js - VERSION 4.3 (PERBAIKAN KECEPATAN: CACHE dbData.users_auth)
 // Fitur Chat Pribadi antar teman
 // Mendukung: kirim pesan, gambar (upload ke Supabase), hapus pesan, real-time, notifikasi
-// PERUBAHAN V4.2:
-//   - deleteChatMessage hanya menghapus pesan dari sisi pengguna yang melakukan hapus
-//   - clearChat hanya menghapus semua pesan dari sisi pengguna yang melakukan hapus
-//   - Update inbox lastMessage jika pesan terakhir dihapus
+// PERUBAHAN V4.3:
+//   - loadChatList sekarang menggunakan dbData.users_auth sebagai cache utama
+//   - Menghindari query serial per teman yang menyebabkan loading lambat
+//   - Menggunakan Promise.all untuk data yang tidak ada di cache
+//   - deleteChatMessage dan clearChat tetap hanya menghapus dari sisi sendiri
 // ============================================================================
 
 let chatListeners = {};
@@ -220,6 +221,7 @@ function renderChatInterface(containerId = 'chatPanel') {
     return true;
 }
 
+// 🔥 PERBAIKAN UTAMA: loadChatList dengan cache dbData.users_auth
 async function loadChatList() {
     let container = document.getElementById('chatList');
     if (!container) container = document.querySelector('#chatModalPanel #chatList');
@@ -234,16 +236,56 @@ async function loadChatList() {
             return;
         }
         
+        const friendUids = Object.keys(inbox);
+        
+        // 🔥 Ambil data teman dari cache dbData.users_auth jika tersedia
+        let userDataMap = {};
+        let missingUids = [];
+        
+        if (dbData && dbData.users_auth && dbData.users_auth.length > 0) {
+            // Buat map dari cache
+            for (const user of dbData.users_auth) {
+                userDataMap[user.uid] = user;
+            }
+            // Cek UID yang tidak ada di cache
+            missingUids = friendUids.filter(uid => !userDataMap[uid]);
+            console.log(`⚡ chat.js: ${friendUids.length - missingUids.length} teman dari cache, ${missingUids.length} perlu query`);
+        } else {
+            missingUids = [...friendUids];
+        }
+        
+        // Query yang hilang secara paralel (bukan serial)
+        if (missingUids.length > 0) {
+            const promises = missingUids.map(uid => db.ref(`users_auth/${uid}`).once('value'));
+            const snapshots = await Promise.all(promises);
+            snapshots.forEach(snap => {
+                if (snap.exists()) {
+                    userDataMap[snap.key] = snap.val();
+                }
+            });
+        }
+        
         const chatList = [];
         for (const [friendUid, chatInfo] of Object.entries(inbox)) {
-            const friendSnapshot = await db.ref(`users_auth/${friendUid}`).once('value');
-            const friendData = friendSnapshot.val();
+            const friendData = userDataMap[friendUid];
             if (friendData) {
                 chatList.push({
                     uid: friendUid,
                     nama: friendData.nama,
                     email: friendData.email,
                     photoUrl: friendData.photoUrl,
+                    lastMessage: chatInfo.lastMessage || '',
+                    lastMessageType: chatInfo.lastMessageType || 'text',
+                    lastMessageTime: chatInfo.lastMessageTime || 0,
+                    unreadCount: chatInfo.unreadCount || 0
+                });
+            } else {
+                // Fallback jika data tidak ditemukan (misal user sudah dihapus)
+                chatList.push({
+                    uid: friendUid,
+                    nama: 'Pengguna tidak dikenal',
+                    email: '',
+                    photoUrl: null,
                     lastMessage: chatInfo.lastMessage || '',
                     lastMessageType: chatInfo.lastMessageType || 'text',
                     lastMessageTime: chatInfo.lastMessageTime || 0,
@@ -706,4 +748,4 @@ window.cleanupChatSystem = cleanupChatSystem;
 window.renderChatInterface = renderChatInterface;
 window.loadChatList = loadChatList;
 
-console.log("✅ chat.js V4.2 loaded - Delete & Clear only affect current user");
+console.log("✅ chat.js V4.3 loaded - Optimized with dbData cache for speed");

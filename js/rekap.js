@@ -1,10 +1,12 @@
-// rekap.js - VERSION 3.2 (FIXED: ENSURE TBODY EXISTS + FORCE RENDER)
+// rekap.js - VERSION 3.3 (PERBAIKAN KECEPATAN: PARALLEL QUERY + CACHING)
 // Fitur Rekap Absensi per Siswa
 // Mendukung periode: Minggu, Bulan, Semester, dan Custom Range
 // Mendukung status: Hadir, Sakit, Izin, Alpha (termasuk manual dari attendance_status)
-// PERBAIKAN TERBARU:
-//   - Memastikan elemen tbody#rekapTbody ada, jika tidak akan dibuat secara dinamis
-//   - Menambahkan log untuk debugging
+// PERUBAHAN V3.3:
+//   - fetchManualStatusForRange menggunakan Promise.all (paralel) bukan serial loop
+//   - Menambahkan caching hasil rekap di sessionStorage untuk periode yang sama
+//   - Menampilkan loading indicator yang lebih baik
+//   - Optimasi render chart untuk tidak double destroy
 // ============================================================================
 
 let currentRekapData = [];
@@ -13,6 +15,7 @@ let rekapPieChart = null;
 let rekapBarChart = null;
 let rekapDataReadyListenerAdded = false;
 let rekapUiReadyListenerAdded = false;
+let isLoadingRekap = false;
 
 // ======================= EVENT LISTENER ========================
 
@@ -156,6 +159,13 @@ function formatDateRangeDisplay(start, end) {
     return `${start.toLocaleDateString('id-ID', options)} - ${end.toLocaleDateString('id-ID', options)}`;
 }
 
+function getCacheKey(period, startDate, endDate) {
+    if (period === 'custom') {
+        return `rekap_custom_${startDate.toISOString().split('T')[0]}_${endDate.toISOString().split('T')[0]}`;
+    }
+    return `rekap_${period}_${startDate.toISOString().split('T')[0]}_${endDate.toISOString().split('T')[0]}`;
+}
+
 // ======================= HITUNG TOTAL HARI SEKOLAH =======================
 
 function countSchoolDays(startDate, endDate) {
@@ -169,24 +179,36 @@ function countSchoolDays(startDate, endDate) {
     return count > 0 ? count : 1;
 }
 
-// ======================= AMBIL DATA MANUAL STATUS DALAM RENTANG =======================
-
+// ======================= AMBIL DATA MANUAL STATUS DALAM RENTANG (PARALLEL) =======================
+// 🔥 PERBAIKAN: gunakan Promise.all untuk query paralel, bukan serial loop
 async function fetchManualStatusForRange(startDate, endDate) {
     const manualData = {};
     const currentDate = new Date(startDate);
     const end = new Date(endDate);
+    const datePromises = [];
+    const dateStrings = [];
+    
+    // Kumpulkan semua tanggal dan buat promise
     while (currentDate <= end) {
         const dateStr = currentDate.toISOString().split('T')[0];
-        try {
-            const snapshot = await db.ref(`attendance_status/${dateStr}`).once('value');
-            if (snapshot.exists()) {
-                manualData[dateStr] = snapshot.val();
-            }
-        } catch(e) {
-            console.warn(`Gagal mengambil manual status untuk ${dateStr}:`, e);
-        }
+        dateStrings.push(dateStr);
+        datePromises.push(db.ref(`attendance_status/${dateStr}`).once('value'));
         currentDate.setDate(currentDate.getDate() + 1);
     }
+    
+    if (datePromises.length === 0) return manualData;
+    
+    console.log(`📡 Fetching manual status for ${datePromises.length} dates in parallel...`);
+    
+    // Eksekusi semua query secara paralel
+    const snapshots = await Promise.all(datePromises);
+    snapshots.forEach((snapshot, idx) => {
+        if (snapshot.exists()) {
+            manualData[dateStrings[idx]] = snapshot.val();
+        }
+    });
+    
+    console.log(`✅ Loaded manual status for ${Object.keys(manualData).length} dates`);
     return manualData;
 }
 
@@ -338,16 +360,16 @@ function renderRekapTable(data) {
             <tr>
                 <td>${index + 1}</td>
                 <td><strong>#${item.id}</strong></td>
-                <td>${escapeHtml(item.nama)}</td>
-                <td>${item.kelas}</td>
-                <td>${item.jurusan}</td>
-                <td style="text-align:center;">${item.totalDays}</td>
-                <td style="color:#4caf50; font-weight:bold; text-align:center;">${item.hadir}</td>
-                <td style="color:#ff9800; text-align:center;">${item.sakit}</td>
-                <td style="color:#2196f3; text-align:center;">${item.izin}</td>
-                <td style="color:#f44336; text-align:center;">${item.alpha}</td>
-                <td style="text-align:center;"><span class="rekap-percentage" style="color:${persenColor}; font-weight:bold; cursor:help;" title="${tooltip}">${item.percentage}%</span></td>
-                <td style="text-align:center;"><span class="rekap-badge ${item.statusClass}">${item.status}</span></td>
+                <td>${escapeHtml(item.nama)}</div>
+                <td>${item.kelas}</div>
+                <td>${item.jurusan}</div>
+                <td style="text-align:center;">${item.totalDays}</div>
+                <td style="color:#4caf50; font-weight:bold; text-align:center;">${item.hadir}</div>
+                <td style="color:#ff9800; text-align:center;">${item.sakit}</div>
+                <td style="color:#2196f3; text-align:center;">${item.izin}</div>
+                <td style="color:#f44336; text-align:center;">${item.alpha}</div>
+                <td style="text-align:center;"><span class="rekap-percentage" style="color:${persenColor}; font-weight:bold; cursor:help;" title="${tooltip}">${item.percentage}%</span></div>
+                <td style="text-align:center;"><span class="rekap-badge ${item.statusClass}">${item.status}</span></div>
             </tr>
         `;
     });
@@ -418,7 +440,10 @@ function renderRekapCharts(data, startDate, endDate) {
     
     const pieCtx = document.getElementById('rekapPieChart')?.getContext('2d');
     if (pieCtx) {
-        if (rekapPieChart) rekapPieChart.destroy();
+        if (rekapPieChart) {
+            try { rekapPieChart.destroy(); } catch(e) {}
+            rekapPieChart = null;
+        }
         rekapPieChart = new Chart(pieCtx, {
             type: 'pie',
             data: {
@@ -452,7 +477,10 @@ function renderRekapCharts(data, startDate, endDate) {
     const sortedDates = Object.keys(attendanceByDate).sort();
     const barCtx = document.getElementById('rekapBarChart')?.getContext('2d');
     if (barCtx) {
-        if (rekapBarChart) rekapBarChart.destroy();
+        if (rekapBarChart) {
+            try { rekapBarChart.destroy(); } catch(e) {}
+            rekapBarChart = null;
+        }
         rekapBarChart = new Chart(barCtx, {
             type: 'bar',
             data: {
@@ -480,20 +508,25 @@ function renderRekapCharts(data, startDate, endDate) {
     }
 }
 
-// ======================= LOAD REKAP (DENGAN RETRY JIKA DATA SISWA KOSONG) =======================
+// ======================= LOAD REKAP (DENGAN CACHING) =======================
 
-async function loadRekap(retryCount = 0) {
+async function loadRekap(retryCount = 0, forceRefresh = false) {
     const MAX_RETRY = 5;
     const RETRY_DELAY = 1000;
+
+    if (isLoadingRekap) {
+        console.log("⏳ Rekap sedang dimuat, skip duplicate call");
+        return;
+    }
 
     if (!dbData || !dbData.attendance || !dbData.users) {
         console.log("⏳ loadRekap: dbData belum siap, schedule ulang...");
         if (retryCount < MAX_RETRY) {
-            setTimeout(() => loadRekap(retryCount + 1), RETRY_DELAY);
+            setTimeout(() => loadRekap(retryCount + 1, forceRefresh), RETRY_DELAY);
         } else {
             const tbody = document.getElementById('rekapTbody');
             if (tbody) {
-                tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; padding:40px;">❌ Gagal memuat data rekap (database tidak siap).</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; padding:40px;">❌ Gagal memuat data rekap (database tidak siap).</div></div></div></tr>`;
             }
             if (typeof showToast === 'function') showToast("❌ Gagal memuat data rekap (database tidak siap)", "error");
         }
@@ -503,12 +536,12 @@ async function loadRekap(retryCount = 0) {
     if (dbData.users.length === 0) {
         console.warn(`⚠️ loadRekap: dbData.users masih kosong (retry ${retryCount+1}/${MAX_RETRY})`);
         if (retryCount < MAX_RETRY) {
-            setTimeout(() => loadRekap(retryCount + 1), RETRY_DELAY);
+            setTimeout(() => loadRekap(retryCount + 1, forceRefresh), RETRY_DELAY);
             return;
         } else {
             const tbody = document.getElementById('rekapTbody');
             if (tbody) {
-                tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; padding:30px;">⏳ Data siswa belum dimuat. Silakan refresh halaman atau tunggu sebentar.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; padding:30px;">⏳ Data siswa belum dimuat. Silakan refresh halaman atau tunggu sebentar.</div></div></div></td>`;
             }
             if (typeof showToast === 'function') showToast("⚠️ Data siswa belum tersedia, coba muat ulang halaman", "warning");
             return;
@@ -517,7 +550,7 @@ async function loadRekap(retryCount = 0) {
 
     const periodSelect = document.getElementById('rekapPeriod');
     if (!periodSelect) {
-        setTimeout(() => loadRekap(retryCount), 500);
+        setTimeout(() => loadRekap(retryCount, forceRefresh), 500);
         return;
     }
 
@@ -544,18 +577,65 @@ async function loadRekap(retryCount = 0) {
         return;
     }
 
+    // Cek cache di sessionStorage
+    const cacheKey = getCacheKey(period, startDate, endDate);
+    if (!forceRefresh && sessionStorage.getItem(cacheKey)) {
+        try {
+            const cached = JSON.parse(sessionStorage.getItem(cacheKey));
+            if (cached && cached.data && cached.data.length > 0) {
+                console.log("📊 Load rekap from cache:", cacheKey);
+                currentRekapData = cached.data;
+                renderRekapTable(currentRekapData);
+                renderRekapCharts(currentRekapData, startDate, endDate);
+                const totalSiswa = currentRekapData.filter(s => s.nama && s.nama !== 'Tidak Diketahui').length;
+                const rataRata = totalSiswa ? (currentRekapData.reduce((sum, s) => sum + parseFloat(s.percentage), 0) / totalSiswa) : 0;
+                console.log(`📊 Rekap dari cache: ${totalSiswa} siswa, rata-rata: ${rataRata.toFixed(1)}%`);
+                return;
+            }
+        } catch(e) {
+            console.warn("Cache parsing error:", e);
+            sessionStorage.removeItem(cacheKey);
+        }
+    }
+
     localStorage.setItem('rekapLastPeriod', period);
     const periodDisplay = formatDateRangeDisplay(startDate, endDate);
-    console.log(`📊 Load rekap: ${period} (${periodDisplay})`);
-    if (typeof showToast === 'function') showToast(`📊 Memuat rekap periode: ${periodDisplay}`, "info");
+    console.log(`📊 Load rekap (fresh): ${period} (${periodDisplay})`);
+    if (typeof showToast === 'function') showToast(`📊 Menghitung rekap periode: ${periodDisplay}...`, "info");
 
-    currentRekapData = await calculateStudentRekap(dbData.attendance, dbData.users, startDate, endDate);
-    renderRekapTable(currentRekapData);
-    renderRekapCharts(currentRekapData, startDate, endDate);
+    isLoadingRekap = true;
+    
+    // Tampilkan loading indicator di tabel
+    const tbody = document.getElementById('rekapTbody');
+    if (tbody) {
+        tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; padding:40px;">⏳ Menghitung data rekap... (${periodDisplay})</div></div></div></tr>`;
+    }
 
-    const totalSiswa = currentRekapData.filter(s => s.nama && s.nama !== 'Tidak Diketahui').length;
-    const rataRata = totalSiswa ? (currentRekapData.reduce((sum, s) => sum + parseFloat(s.percentage), 0) / totalSiswa) : 0;
-    console.log(`📊 Rekap selesai: ${totalSiswa} siswa, rata-rata kehadiran: ${rataRata.toFixed(1)}%`);
+    try {
+        currentRekapData = await calculateStudentRekap(dbData.attendance, dbData.users, startDate, endDate);
+        
+        // Simpan ke cache
+        try {
+            sessionStorage.setItem(cacheKey, JSON.stringify({ data: currentRekapData, timestamp: Date.now() }));
+        } catch(e) { console.warn("Cache storage error:", e); }
+        
+        renderRekapTable(currentRekapData);
+        renderRekapCharts(currentRekapData, startDate, endDate);
+
+        const totalSiswa = currentRekapData.filter(s => s.nama && s.nama !== 'Tidak Diketahui').length;
+        const rataRata = totalSiswa ? (currentRekapData.reduce((sum, s) => sum + parseFloat(s.percentage), 0) / totalSiswa) : 0;
+        console.log(`📊 Rekap selesai: ${totalSiswa} siswa, rata-rata kehadiran: ${rataRata.toFixed(1)}%`);
+        
+        if (typeof showToast === 'function') showToast(`✅ Rekap selesai: ${totalSiswa} siswa, rata-rata ${rataRata.toFixed(1)}%`, "success");
+    } catch (error) {
+        console.error("Error calculating rekap:", error);
+        if (tbody) {
+            tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; padding:40px;">❌ Gagal menghitung rekap: ${error.message}</div></div></div></td>`;
+        }
+        if (typeof showToast === 'function') showToast("❌ Gagal menghitung rekap: " + error.message, "error");
+    } finally {
+        isLoadingRekap = false;
+    }
 }
 
 // ======================= EXPORT FUNCTIONS =======================
@@ -643,16 +723,16 @@ function exportRekapToPDF() {
             <tr>
                 <td>${no}</td>
                 <td>${item.id}</td>
-                <td class="text-left">${escapeHtml(item.nama)}</td>
-                <td>${item.kelas}</td>
-                <td>${item.jurusan}</td>
-                <td>${item.totalDays}</td>
-                <td>${item.hadir}</td>
-                <td>${item.sakit}</td>
-                <td>${item.izin}</td>
-                <td>${item.alpha}</td>
-                <td>${item.percentage}%</td>
-                <td><span class="${badgeClass}">${item.status}</span></td>
+                <td class="text-left">${escapeHtml(item.nama)}</div>
+                <td>${item.kelas}</div>
+                <td>${item.jurusan}</div>
+                <td>${item.totalDays}</div>
+                <td>${item.hadir}</div>
+                <td>${item.sakit}</div>
+                <td>${item.izin}</div>
+                <td>${item.alpha}</div>
+                <td>${item.percentage}%</div>
+                <td><span class="${badgeClass}">${item.status}</span></div>
             </tr>
         `);
         no++;
@@ -680,10 +760,17 @@ function escapeHtml(str) {
 function cleanupRekap() {
     rekapInitDone = false;
     currentRekapData = [];
-    if (rekapPieChart) { rekapPieChart.destroy(); rekapPieChart = null; }
-    if (rekapBarChart) { rekapBarChart.destroy(); rekapBarChart = null; }
+    if (rekapPieChart) { 
+        try { rekapPieChart.destroy(); } catch(e) {}
+        rekapPieChart = null; 
+    }
+    if (rekapBarChart) { 
+        try { rekapBarChart.destroy(); } catch(e) {}
+        rekapBarChart = null; 
+    }
     rekapDataReadyListenerAdded = false;
     rekapUiReadyListenerAdded = false;
+    isLoadingRekap = false;
     console.log("🧹 Rekap system cleaned up");
 }
 
@@ -705,4 +792,4 @@ window.exportRekapToPDF = exportRekapToPDF;
 window.initRekap = initRekap;
 window.cleanupRekap = cleanupRekap;
 
-console.log("✅ rekap.js V3.2 loaded - tbody creation + force render");
+console.log("✅ rekap.js V3.3 loaded - Parallel queries + sessionStorage caching");
