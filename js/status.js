@@ -1,8 +1,8 @@
-// status.js - VERSION 4.7 (VIEWERS BUTTON ONLY FOR OWNER)
+// status.js - VERSION 4.8 (DENGAN LOG AKTIVITAS)
 // Fitur Status: upload teks/gambar, auto-delete 24 jam, reply/balas status,
 // daftar orang yang melihat (viewers), notifikasi.
 // PERBAIKAN: Tombol mata (👁️) hanya muncul untuk pemilik status.
-// Untuk pengamat hanya tombol balas yang ditampilkan.
+// PERUBAHAN V4.8: Menambahkan logActivity untuk create dan delete status
 // ============================================================================
 
 let statusesListener = null;
@@ -217,7 +217,7 @@ function startStatusExpiryChecker() {
     }, 60 * 60 * 1000);
 }
 
-// ======================= CREATE STATUS ========================
+// ======================= CREATE STATUS (DENGAN LOG) ========================
 function openCreateStatusModal() {
     const modal = document.getElementById('modal-create-status');
     if (!modal) return;
@@ -292,6 +292,14 @@ async function createStatus() {
         
         await db.ref(`statuses/${currentUser.uid}/${statusId}`).set(statusData);
         showToast("✅ Status berhasil diposting!", "success");
+        
+        // LOG: Buat status
+        if (typeof logActivity === 'function') {
+            const statusType = type === 'image' ? 'dengan gambar' : 'teks';
+            const previewText = text ? (text.length > 50 ? text.substring(0, 50) + '...' : text) : '(tanpa teks)';
+            logActivity('create_status', `Membuat status ${statusType}: ${previewText}`);
+        }
+        
         closeModal('modal-create-status');
         
     } catch (err) {
@@ -384,7 +392,6 @@ function showStatusViewerModal(status) {
     if (!content) return;
     if (statusViewerInterval) clearInterval(statusViewerInterval);
     if (viewerCountListener) {
-        // Hentikan listener lama
         if (currentStatusOwnerId && currentStatusList[currentStatusIndex]) {
             const oldStatusId = currentStatusList[currentStatusIndex].id;
             db.ref(`statuses/${currentStatusOwnerId}/${oldStatusId}/viewedBy`).off('value', viewerCountListener);
@@ -393,7 +400,6 @@ function showStatusViewerModal(status) {
     
     const isOwner = (currentStatusOwnerId === currentUser.uid);
     
-    // Fungsi untuk memperbarui jumlah viewer pada tombol (hanya untuk owner)
     const updateViewerCount = async (statusId) => {
         if (!isOwner) return;
         const count = await getViewerCount(currentStatusOwnerId, statusId);
@@ -404,7 +410,6 @@ function showStatusViewerModal(status) {
         }
     };
     
-    // Pasang listener realtime untuk perubahan viewer (hanya untuk owner)
     const setupViewerListener = (statusId) => {
         if (!isOwner) return;
         if (viewerCountListener) {
@@ -424,7 +429,6 @@ function showStatusViewerModal(status) {
         const s = currentStatusList[currentStatusIndex];
         if (!s) { closeModal('modal-status-viewer'); return; }
         
-        // Setup listener untuk status ini (hanya jika owner)
         setupViewerListener(s.id);
         
         let mediaHtml = '';
@@ -443,7 +447,6 @@ function showStatusViewerModal(status) {
         let rightButtons = '';
         
         if (isOwner) {
-            // Ambil jumlah viewer awal
             const viewerCount = await getViewerCount(currentStatusOwnerId, s.id);
             currentViewerCount = viewerCount;
             
@@ -459,7 +462,6 @@ function showStatusViewerModal(status) {
                 <button class="status-replies-btn" onclick="showStatusRepliesModal('${s.id}')" style="background: rgba(0,0,0,0.6); border: none; font-size: 32px; cursor: pointer; color: white; padding: 12px 20px; border-radius: 60px; backdrop-filter: blur(8px); transition: transform 0.1s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'" title="Balasan">💬</button>
             `;
         } else {
-            // Non-owner: hanya tombol balas di kanan, tanpa tombol mata
             rightButtons = `
                 <button class="status-reply-btn" onclick="openReplyToStatus('${s.id}', '${escapeHtml(s.userName)}')" style="background: #00bcd4; border: none; border-radius: 60px; padding: 12px 28px; font-size: 18px; font-weight: bold; cursor: pointer; color: white; box-shadow: 0 4px 12px rgba(0,0,0,0.3); transition: transform 0.1s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">💬 Balas</button>
             `;
@@ -507,13 +509,11 @@ function showStatusViewerModal(status) {
     }, 5000);
 }
 
-// ======================= LIHAT VIEWERS - VERSI RESPONSIF LANGSUNG AMBIL DARI FIREBASE ========================
+// ======================= LIHAT VIEWERS ========================
 async function showStatusViewersWithId(userId, statusId) {
-    // Tampilkan loading toast
     showToast("⏳ Memuat daftar viewer...", "info");
     
     try {
-        // Ambil data status langsung dari Firebase
         const snapshot = await db.ref(`statuses/${userId}/${statusId}/viewedBy`).once('value');
         const viewers = snapshot.val() || {};
         const viewerUids = Object.keys(viewers);
@@ -523,7 +523,6 @@ async function showStatusViewersWithId(userId, statusId) {
             return;
         }
         
-        // Ambil data user secara paralel
         const userPromises = viewerUids.map(uid => db.ref(`users_auth/${uid}`).once('value'));
         const userSnapshots = await Promise.all(userPromises);
         
@@ -540,7 +539,6 @@ async function showStatusViewersWithId(userId, statusId) {
             }
         });
         
-        // Buat modal
         let modalHtml = `
             <div id="modal-status-viewers" class="modal-overlay open">
                 <div class="modal-box" style="max-width: 400px;">
@@ -582,7 +580,6 @@ async function showStatusViewersWithId(userId, statusId) {
     }
 }
 
-// Fungsi lama untuk kompatibilitas (tetap ada)
 async function showStatusViewers(event, statusId) {
     if (event) event.stopPropagation();
     const currentStatus = currentStatusList[currentStatusIndex];
@@ -628,16 +625,13 @@ async function sendStatusReply(statusId) {
     }
     
     try {
-        // Ambil data status yang dibalas (preview)
         let targetStatus = null;
-        // Cari dari currentStatusList (yang sedang dilihat)
         for (let i = 0; i < currentStatusList.length; i++) {
             if (currentStatusList[i].id === statusId) {
                 targetStatus = currentStatusList[i];
                 break;
             }
         }
-        // fallback: coba dari Firebase
         if (!targetStatus && currentStatusOwnerId) {
             const snapshot = await db.ref(`statuses/${currentStatusOwnerId}/${statusId}`).once('value');
             if (snapshot.exists()) targetStatus = snapshot.val();
@@ -647,7 +641,6 @@ async function sendStatusReply(statusId) {
         const ownerUid = targetStatus.userId;
         const ownerName = targetStatus.userName;
         
-        // Buat preview status (teks atau indikasi gambar)
         let statusPreview = '';
         if (targetStatus.type === 'image') {
             statusPreview = '📸 [Gambar]';
@@ -655,10 +648,8 @@ async function sendStatusReply(statusId) {
             statusPreview = targetStatus.text ? `“${targetStatus.text.substring(0, 60)}${targetStatus.text.length > 60 ? '…' : ''}”` : 'Status';
         }
         
-        // Format pesan chat seperti WhatsApp: "Balasan status dari [nama]: [preview]\n\nBalasan: [pesan]"
         const chatMessageText = `📸 Balasan status dari ${ownerName}: ${statusPreview}\n\n💬 ${message}`;
         
-        // 1. Simpan balasan ke node status_replies (opsional)
         const replyId = `${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
         const replyData = {
             fromUid: currentUser.uid,
@@ -672,7 +663,6 @@ async function sendStatusReply(statusId) {
         };
         await db.ref(`status_replies/${statusId}/${replyId}`).set(replyData);
         
-        // 2. Kirim pesan chat ke pemilik status
         const chatMessageId = `${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
         const timestamp = firebase.database.ServerValue.TIMESTAMP;
         
@@ -769,7 +759,7 @@ async function showStatusRepliesModal(statusId) {
     document.body.insertAdjacentHTML('beforeend', modalHtml);
 }
 
-// ======================= DELETE STATUS ========================
+// ======================= DELETE STATUS (DENGAN LOG) ========================
 async function deleteCurrentStatus(event) {
     if (event) event.stopPropagation();
     if (!currentUser) return;
@@ -798,6 +788,12 @@ async function deleteCurrentStatus(event) {
         await db.ref(`status_replies/${currentStatus.id}`).remove();
         await db.ref(`statuses/${currentUser.uid}/${currentStatus.id}`).remove();
         showToast("✅ Status dihapus", "success");
+        
+        // LOG: Hapus status
+        if (typeof logActivity === 'function') {
+            const statusPreview = currentStatus.type === 'image' ? '[Gambar]' : (currentStatus.text ? currentStatus.text.substring(0, 50) : '');
+            logActivity('delete_status', `Menghapus status sendiri: ${statusPreview}${currentStatus.type === 'image' ? ' (gambar)' : ''}`);
+        }
         
         currentStatusList.splice(currentStatusIndex, 1);
         if (currentStatusList.length === 0) {
@@ -909,4 +905,4 @@ window.sendStatusReply = sendStatusReply;
 window.showStatusRepliesModal = showStatusRepliesModal;
 window.cleanupStatusSystem = cleanupStatusSystem;
 
-console.log("✅ status.js V4.7 loaded - Viewers button only for owner status");
+console.log("✅ status.js V4.8 loaded - Dengan log aktivitas untuk status");

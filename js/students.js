@@ -1,12 +1,10 @@
-// students.js - VERSION 3.6 (PERBAIKAN: RENDER TABLE & POPULATE DROPDOWN)
+// students.js - VERSION 3.7 (DENGAN LOG AKTIVITAS)
 // ======================= MANAJEMEN DATA SISWA =======================
 // Fitur: CRUD siswa, sinkronisasi dengan ESP32, delay per siswa,
 //        dukungan kelas & jurusan dinamis dari pengaturan sekolah,
 //        real-time update, import/export CSV.
-// PERUBAHAN: 
-//   - Memperbaiki variabel data di renderStudentsTable
-//   - Menambahkan populateKelasOptions dan populateJurusanOptions untuk form
-//   - Menambahkan retry mechanism untuk dropdown form
+// PERUBAHAN V3.7: 
+//   - Menambahkan logActivity untuk operasi save, delete, import
 // ====================================================================
 
 let studentFormResetTimer = null;
@@ -348,7 +346,7 @@ function renderStudentsTable(retryCount = 0) {
     // CEK DATA
     if (typeof dbData === 'undefined' || !dbData.users) {
         console.log("⏳ students.js: dbData.users not ready yet");
-        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:30px;">⏳ Memuat data siswa...</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:30px;">⏳ Memuat data siswa...</div></div></div></tr></tr>`;
         return;
     }
     
@@ -476,6 +474,14 @@ function saveStudent() {
     db.ref(`users/${idStr}`).set(studentData)
         .then(() => {
             showToast(mode === 'add' ? "✅ Siswa ditambahkan" : "✅ Siswa diupdate");
+            
+            // LOG: Simpan siswa
+            if (typeof logActivity === 'function') {
+                const action = mode === 'add' ? 'add_student' : 'edit_student';
+                const details = `${action}: ${nama} (ID: ${idStr}, Kelas: ${kelas}, Jurusan: ${jurusan}, Delay: ${delay} menit)`;
+                logActivity(action, details);
+            }
+            
             resetStudentForm();
             const authUser = dbData.users_auth?.find(u => u.fpId == idStr);
             if (authUser) {
@@ -565,6 +571,12 @@ async function deleteStudentWithFP(studentId) {
     if (registeredUser) await db.ref(`users_auth/${registeredUser.uid}`).remove().catch(()=>{});
     await db.ref(`users/${studentId}`).remove();
     showToast(`✅ Siswa "${name}" dihapus`, "success");
+    
+    // LOG: Hapus siswa
+    if (typeof logActivity === 'function') {
+        logActivity('delete_student', `Menghapus siswa: ${name} (ID: ${studentId})${registeredUser ? ' beserta akunnya' : ''}`);
+    }
+    
     if (typeof renderStudentsTable === 'function') renderStudentsTable();
     btns.forEach(btn => { btn.disabled = false; btn.innerHTML = '🗑️'; });
 }
@@ -578,6 +590,8 @@ function deleteStudent(id) {
 function importStudentsFromCSV(csvText) {
     const lines = csvText.trim().split('\n');
     let success = 0, fail = 0;
+    let importedNames = [];
+    
     for (const line of lines) {
         const parts = line.split(',');
         if (parts.length >= 4) {
@@ -587,6 +601,7 @@ function importStudentsFromCSV(csvText) {
             const jurusan = parts[3].trim();
             const delay = parts[4] ? parseInt(parts[4].trim()) : 60;
             if (id && nama && kelas && jurusan) {
+                importedNames.push(`${nama} (ID: ${id})`);
                 db.ref(`users/${id}`).set({
                     id: parseInt(id), nama, kelas, jurusan, delayOut: delay,
                     createdAt: firebase.database.ServerValue.TIMESTAMP
@@ -594,6 +609,13 @@ function importStudentsFromCSV(csvText) {
             } else fail++;
         } else fail++;
     }
+    
+    // LOG: Import siswa
+    if (typeof logActivity === 'function' && success > 0) {
+        const summary = `${success} berhasil, ${fail} gagal. Contoh: ${importedNames.slice(0, 3).join(', ')}${importedNames.length > 3 ? '...' : ''}`;
+        logActivity('import_students', summary);
+    }
+    
     setTimeout(() => showToast(`✅ Import: ${success} berhasil, ${fail} gagal`, fail ? "warning" : "success"), 1000);
 }
 
@@ -610,6 +632,11 @@ function exportStudentsToCSV() {
     link.click();
     URL.revokeObjectURL(link.href);
     showToast("📥 Data siswa diekspor", "success");
+    
+    // LOG: Ekspor siswa (opsional, bisa diaktifkan)
+    if (typeof logActivity === 'function') {
+        logActivity('export_students', `Ekspor ${dbData.users.length} data siswa ke CSV`);
+    }
 }
 
 function escapeCsv(str) {
@@ -721,4 +748,4 @@ window.exportStudentsToCSV = exportStudentsToCSV;
 window.cleanupStudentsSystem = cleanupStudentsSystem;
 window.initDelayEventListeners = initDelayEventListeners;
 
-console.log("✅ students.js V3.6 loaded - Fixed renderStudentsTable data variable");
+console.log("✅ students.js V3.7 loaded - Dengan log aktivitas untuk CRUD siswa");

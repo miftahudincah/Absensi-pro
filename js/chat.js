@@ -1,11 +1,7 @@
-// chat.js - VERSION 4.3 (PERBAIKAN KECEPATAN: CACHE dbData.users_auth)
+// chat.js - VERSION 4.4 (DENGAN LOG AKTIVITAS)
 // Fitur Chat Pribadi antar teman
 // Mendukung: kirim pesan, gambar (upload ke Supabase), hapus pesan, real-time, notifikasi
-// PERUBAHAN V4.3:
-//   - loadChatList sekarang menggunakan dbData.users_auth sebagai cache utama
-//   - Menghindari query serial per teman yang menyebabkan loading lambat
-//   - Menggunakan Promise.all untuk data yang tidak ada di cache
-//   - deleteChatMessage dan clearChat tetap hanya menghapus dari sisi sendiri
+// PERUBAHAN V4.4: Menambahkan logActivity untuk deleteChatMessage dan clearChat
 // ============================================================================
 
 let chatListeners = {};
@@ -221,7 +217,6 @@ function renderChatInterface(containerId = 'chatPanel') {
     return true;
 }
 
-// 🔥 PERBAIKAN UTAMA: loadChatList dengan cache dbData.users_auth
 async function loadChatList() {
     let container = document.getElementById('chatList');
     if (!container) container = document.querySelector('#chatModalPanel #chatList');
@@ -238,23 +233,19 @@ async function loadChatList() {
         
         const friendUids = Object.keys(inbox);
         
-        // 🔥 Ambil data teman dari cache dbData.users_auth jika tersedia
         let userDataMap = {};
         let missingUids = [];
         
         if (dbData && dbData.users_auth && dbData.users_auth.length > 0) {
-            // Buat map dari cache
             for (const user of dbData.users_auth) {
                 userDataMap[user.uid] = user;
             }
-            // Cek UID yang tidak ada di cache
             missingUids = friendUids.filter(uid => !userDataMap[uid]);
             console.log(`⚡ chat.js: ${friendUids.length - missingUids.length} teman dari cache, ${missingUids.length} perlu query`);
         } else {
             missingUids = [...friendUids];
         }
         
-        // Query yang hilang secara paralel (bukan serial)
         if (missingUids.length > 0) {
             const promises = missingUids.map(uid => db.ref(`users_auth/${uid}`).once('value'));
             const snapshots = await Promise.all(promises);
@@ -280,7 +271,6 @@ async function loadChatList() {
                     unreadCount: chatInfo.unreadCount || 0
                 });
             } else {
-                // Fallback jika data tidak ditemukan (misal user sudah dihapus)
                 chatList.push({
                     uid: friendUid,
                     nama: 'Pengguna tidak dikenal',
@@ -483,9 +473,6 @@ async function sendChatMessage() {
 
 // ======================= SEND CHAT MEDIA (SUPABASE INTEGRATION) =======================
 
-/**
- * Upload dan kirim gambar chat menggunakan Supabase (dengan fallback ke ImgBB)
- */
 async function sendChatMedia(input) {
     const file = input.files[0];
     if (!file) return;
@@ -514,13 +501,11 @@ async function sendChatMedia(input) {
         let mediaUrl;
         let isFallback = false;
         
-        // Gunakan uploadWithFallback dari supabase-config.js
         if (typeof uploadWithFallback !== 'undefined') {
             const result = await uploadWithFallback(file, 'chat');
             mediaUrl = result.url;
             isFallback = result.isFallback || false;
         } else {
-            // Fallback ke ImgBB jika fungsi tidak tersedia
             console.warn("uploadWithFallback not available, using ImgBB fallback");
             const formData = new FormData();
             formData.append('image', file);
@@ -578,33 +563,32 @@ async function sendChatMedia(input) {
     }
 }
 
-// ======================= PERBAIKAN: HAPUS PESAN HANYA UNTUK DIRI SENDIRI =======================
+// ======================= HAPUS PESAN (DENGAN LOG) =======================
 
 async function deleteChatMessage(friendUid, messageId) {
     if (!confirm("Hapus pesan ini? Pesan hanya akan hilang dari sisi Anda.")) return;
     
-    // Simpan info pesan yang akan dihapus untuk keperluan update inbox jika perlu
     let wasLastMessage = false;
     let lastMessageInfo = null;
     
     try {
-        // Cek apakah pesan ini adalah pesan terakhir di inbox (untuk update lastMessage nanti)
-        const inboxSnapshot = await db.ref(`chats/${currentUser.uid}/inbox/${friendUid}`).once('value');
-        const inboxData = inboxSnapshot.val();
-        if (inboxData && inboxData.lastMessageTime) {
-            // Ambil pesan yang akan dihapus
-            const msgSnapshot = await db.ref(`chats/${currentUser.uid}/messages/${friendUid}/${messageId}`).once('value');
-            const msgData = msgSnapshot.val();
-            if (msgData && msgData.timestamp === inboxData.lastMessageTime) {
-                wasLastMessage = true;
-                lastMessageInfo = { timestamp: msgData.timestamp };
-            }
+        // Ambil data pesan untuk log (isi pesan)
+        let messageText = '';
+        const msgSnapshot = await db.ref(`chats/${currentUser.uid}/messages/${friendUid}/${messageId}`).once('value');
+        const msgData = msgSnapshot.val();
+        if (msgData) {
+            messageText = msgData.type === 'image' ? '[Gambar]' : (msgData.message || '');
         }
         
-        // HAPUS HANYA DARI SISI CURRENT USER
+        const inboxSnapshot = await db.ref(`chats/${currentUser.uid}/inbox/${friendUid}`).once('value');
+        const inboxData = inboxSnapshot.val();
+        if (inboxData && inboxData.lastMessageTime && msgData && msgData.timestamp === inboxData.lastMessageTime) {
+            wasLastMessage = true;
+            lastMessageInfo = { timestamp: msgData.timestamp };
+        }
+        
         await db.ref(`chats/${currentUser.uid}/messages/${friendUid}/${messageId}`).remove();
         
-        // Jika pesan yang dihapus adalah pesan terakhir di inbox, update inbox dengan pesan terbaru yang tersisa
         if (wasLastMessage) {
             const remainingMessages = await db.ref(`chats/${currentUser.uid}/messages/${friendUid}`).once('value');
             const msgs = remainingMessages.val();
@@ -618,7 +602,6 @@ async function deleteChatMessage(friendUid, messageId) {
                         lastMessageTime: lastMsg.timestamp
                     });
                 } else {
-                    // Tidak ada pesan tersisa, hapus inbox juga
                     await db.ref(`chats/${currentUser.uid}/inbox/${friendUid}`).remove();
                 }
             } else {
@@ -628,7 +611,11 @@ async function deleteChatMessage(friendUid, messageId) {
         
         showToast("✅ Pesan dihapus (hanya dari sisi Anda)", "success");
         
-        // Refresh tampilan chat jika sedang terbuka
+        // LOG: Hapus pesan
+        if (typeof logActivity === 'function') {
+            logActivity('delete_chat_message', `Menghapus pesan ${messageText ? `"${messageText.substring(0, 50)}"` : ''} dari chat dengan ${friendUid}`);
+        }
+        
         if (currentChatWith === friendUid) {
             loadChatMessages(friendUid);
         }
@@ -639,19 +626,30 @@ async function deleteChatMessage(friendUid, messageId) {
     }
 }
 
-// ======================= PERBAIKAN: HAPUS SEMUA PESAN HANYA UNTUK DIRI SENDIRI =======================
+// ======================= HAPUS SEMUA PESAN (DENGAN LOG) =======================
 
 async function clearChat(friendUid) {
     if (!confirm(`Hapus SEMUA pesan dengan teman ini?\n\nPesan hanya akan hilang dari sisi Anda. Teman Anda masih akan melihat riwayat chat.`)) return;
     
+    // Ambil nama teman untuk log
+    let friendName = friendUid;
+    const friendSnapshot = await db.ref(`users_auth/${friendUid}`).once('value');
+    if (friendSnapshot.exists()) {
+        friendName = friendSnapshot.val().nama || friendUid;
+    }
+    
     try {
-        // Hanya hapus dari sisi currentUser
         await Promise.all([
             db.ref(`chats/${currentUser.uid}/messages/${friendUid}`).remove(),
             db.ref(`chats/${currentUser.uid}/inbox/${friendUid}`).remove()
         ]);
         
         showToast("✅ Chat berhasil dibersihkan (hanya dari sisi Anda)", "success");
+        
+        // LOG: Bersihkan chat
+        if (typeof logActivity === 'function') {
+            logActivity('clear_chat', `Membersihkan seluruh chat dengan ${friendName}`);
+        }
         
         if (currentChatWith === friendUid) {
             currentChatWith = null;
@@ -748,4 +746,4 @@ window.cleanupChatSystem = cleanupChatSystem;
 window.renderChatInterface = renderChatInterface;
 window.loadChatList = loadChatList;
 
-console.log("✅ chat.js V4.3 loaded - Optimized with dbData cache for speed");
+console.log("✅ chat.js V4.4 loaded - Dengan log aktivitas untuk hapus pesan dan clear chat");

@@ -1,10 +1,6 @@
-// ui.js - VERSION 5.7 (FIXED: TAB CHAT NOW RENDERS INTERFACE)
+// ui.js - VERSION 5.8 (DENGAN LOG AKTIVITAS)
 // Berisi fungsi-fungsi antarmuka pengguna, modal, profil, dan inisialisasi dashboard
-// PERUBAHAN:
-//   - Menambahkan renderChatInterface('chatPanel') di switchTab untuk tab chat
-//   - Upload logo sekolah ke Supabase dengan delete logo lama
-//   - Floating buttons untuk semua user
-//   - Sidebar dan role permissions
+// PERUBAHAN V5.8: Menambahkan logActivity untuk update profil, upload/remove logo, simpan nama sekolah
 // ============================================================================
 
 // ======================== GLOBAL UI STATE ========================
@@ -17,7 +13,6 @@ const MAX_POPULATE_RETRY = 20;
 
 // ======================== HELPER FUNCTIONS ========================
 
-// Fungsi untuk mendapatkan icon kelas berdasarkan nama kelas dari konfigurasi sekolah
 function getClassIconForHeader(className) {
     if (!className) return '🏫';
     const classes = window.currentSchoolConfig?.classes || [];
@@ -28,7 +23,6 @@ function getClassIconForHeader(className) {
     if (classData && typeof classData === 'object' && classData.icon) {
         return classData.icon;
     }
-    // Default icon berdasarkan nama kelas
     if (className.includes('VII')) return '📚';
     if (className.includes('VIII')) return '📖';
     if (className.includes('IX')) return '🎓';
@@ -141,7 +135,6 @@ function updateSidebarUserInfo() {
         sidebarUserRole.textContent = roleText;
     }
     
-    // Tampilkan kelas dengan icon di sidebar untuk siswa
     if (sidebarClassInfo) {
         if (currentUser.role === 'siswa' && currentUser.kelas) {
             const classIcon = getClassIconForHeader(currentUser.kelas);
@@ -210,34 +203,22 @@ function initApp() {
         return;
     }
     
-    // Tampilkan dashboard
     const authSection = document.getElementById('auth-section');
     const dashboardSection = document.getElementById('dashboard-section');
     if (authSection) authSection.style.display = 'none';
     if (dashboardSection) dashboardSection.style.display = 'block';
     
-    // Update user info di UI
     updateUserInterface();
-    
-    // Apply role permissions
     applyRolePermissions();
-    
-    // Init sidebar
     initSidebar();
     updateSidebarUserInfo();
-    
-    // Load logo sekolah (listener tetap karena hanya sekali)
     loadSchoolLogo();
     updateSchoolLogoUI();
-    
-    // Setup chart year listener - TIDAK DIPERLUKAN LAGI
     setupChartYearListener();
     
-    // ========== POPULATE ALL FILTERS DENGAN RETRY (DIPERBAIKI) ==========
     console.log("🔧 Starting to populate all filters (with improved retry)...");
     populateAllFiltersWithRetry();
     
-    // Start clock
     try {
         if (clockInterval) clearInterval(clockInterval);
         clockInterval = setInterval(updateClock, 1000);
@@ -247,7 +228,6 @@ function initApp() {
         console.error("Clock initialization error:", err);
     }
     
-    // ========== PANGGILAN INISIALISASI VIA EVENT ==========
     window.dispatchEvent(new CustomEvent('uiReady', { detail: { currentUser } }));
     
     const renderTables = () => {
@@ -275,10 +255,8 @@ function initApp() {
         });
     }
     
-    // Set dashboard sebagai tab aktif
     switchTab('dashboard');
     
-    // Tampilkan floating buttons (termasuk status button untuk semua user)
     setTimeout(() => {
         if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'guru' || currentUser.role === 'developer')) {
             const floatingBtn = document.getElementById('floatingAnnouncementBtn');
@@ -288,13 +266,10 @@ function initApp() {
         if (floatingFriendsBtn) floatingFriendsBtn.style.display = 'flex';
         const floatingChatBtn = document.getElementById('floatingChatBtn');
         if (floatingChatBtn) floatingChatBtn.style.display = 'flex';
-        
-        // TAMPILKAN TOMBOL FLOATING STATUS UNTUK SEMUA USER
         const floatingStatusBtn = document.getElementById('floatingStatusBtn');
         if (floatingStatusBtn) floatingStatusBtn.style.display = 'flex';
     }, 1000);
     
-    // Inisialisasi modul lain
     if (typeof initAnnouncementSystem === 'function') {
         setTimeout(() => initAnnouncementSystem(), 500);
     }
@@ -317,8 +292,6 @@ function initApp() {
     
     console.log("✅ initApp completed - event 'uiReady' dispatched");
 }
-
-// ======================== POPULATE FILTERS DENGAN RETRY ========================
 
 function populateAllFiltersWithRetry() {
     populateRetryCount = 0;
@@ -390,7 +363,6 @@ window.addEventListener('uiReady', (e) => {
         console.log("💬 uiReady received, initializing chat system");
         window._chatInitialized = true;
         initChatSystem();
-        // Render chat interface for the main chat panel after init
         setTimeout(() => {
             if (typeof renderChatInterface === 'function') {
                 renderChatInterface('chatPanel');
@@ -566,9 +538,6 @@ function loadSchoolLogo() {
     });
 }
 
-/**
- * UPLOAD LOGO SEKOLAH KE SUPABASE (DENGAN DELETE LOGO LAMA)
- */
 async function uploadSchoolLogo(input) {
     if (!currentUser) {
         showToast('Anda harus login!', 'error');
@@ -603,21 +572,18 @@ async function uploadSchoolLogo(input) {
     showToast('📤 Mengunggah logo sekolah ke Supabase...', 'neutral');
     
     try {
-        // Gunakan uploadWithFallback dari supabase-config.js
         if (typeof uploadWithFallback === 'undefined') {
             throw new Error('Fungsi uploadWithFallback tidak tersedia. Pastikan supabase-config.js sudah dimuat.');
         }
         
         const result = await uploadWithFallback(file, 'school');
         
-        // HAPUS LOGO LAMA DARI SUPABASE
         if (typeof deleteOldSchoolLogo === 'function') {
             await deleteOldSchoolLogo(result.url);
         } else {
             console.warn('deleteOldSchoolLogo function not available, skipping old logo deletion');
         }
         
-        // Simpan URL ke Firebase
         await db.ref('system_config/schoolLogo').set(result.url);
         
         if (previewImg) {
@@ -636,6 +602,11 @@ async function uploadSchoolLogo(input) {
         
         const fallbackMsg = result.isFallback ? ' (via ImgBB fallback)' : '';
         showToast(`✅ Logo sekolah berhasil diperbarui!${fallbackMsg}`, 'success');
+        
+        // LOG: Upload logo sekolah
+        if (typeof logActivity === 'function') {
+            logActivity('upload_school_logo', `Upload logo sekolah${result.isFallback ? ' (fallback ImgBB)' : ' (Supabase)'}`);
+        }
         
         if (result.isFallback) {
             console.warn('Supabase gagal, menggunakan ImgBB sebagai fallback');
@@ -657,9 +628,6 @@ async function uploadSchoolLogo(input) {
     }
 }
 
-/**
- * REMOVE LOGO SEKOLAH (HAPUS DARI SUPABASE JIKA ADA)
- */
 async function removeSchoolLogo() {
     if (!currentUser) {
         showToast('Anda harus login!', 'error');
@@ -678,20 +646,22 @@ async function removeSchoolLogo() {
     }
     
     try {
-        // Ambil logo lama sebelum dihapus
         const snapshot = await db.ref('system_config/schoolLogo').once('value');
         const oldLogoUrl = snapshot.val();
         
-        // Hapus dari Firebase
         await db.ref('system_config/schoolLogo').remove();
         
-        // Hapus dari Supabase jika ada
         if (oldLogoUrl && oldLogoUrl.includes(SUPABASE_URL) && typeof deleteFromSupabase === 'function') {
             await deleteFromSupabase(oldLogoUrl);
             console.log("✅ Logo sekolah dihapus dari Supabase");
         }
         
         showToast('✅ Logo sekolah berhasil dihapus', 'success');
+        
+        // LOG: Hapus logo sekolah
+        if (typeof logActivity === 'function') {
+            logActivity('remove_school_logo', 'Menghapus logo sekolah');
+        }
         
         const defaultIcon = 'https://ui-avatars.com/api/?name=S&background=00bcd4&color=fff&size=80';
         const previewImg = document.getElementById('schoolLogoPreview');
@@ -857,7 +827,6 @@ function switchTab(tabId) {
             if (typeof loadFriendRequests === 'function') loadFriendRequests();
             if (typeof loadFriendsList === 'function') loadFriendsList();
         } else if (tabId === 'chat') {
-            // FIX: Render chat interface for the main panel
             if (typeof renderChatInterface === 'function') {
                 renderChatInterface('chatPanel');
             } else {
@@ -1236,6 +1205,7 @@ function closeModal(id) {
     if (modal) modal.classList.remove('open');
 }
 
+// ======================== UPDATE PROFIL (DENGAN LOG) ========================
 function handleUpdateProfileInfo() {
     if (!currentUser) { showToast('Anda harus login terlebih dahulu!', 'error'); return; }
     if (currentUser.role === 'siswa') { showToast('Siswa tidak dapat mengubah data profil. Hubungi Admin/Guru.', 'error'); return; }
@@ -1249,6 +1219,13 @@ function handleUpdateProfileInfo() {
     const originalText = btn.innerText;
     btn.innerText = '💾 Menyimpan...';
     btn.disabled = true;
+    
+    // Simpan data lama untuk log
+    const oldNama = currentUser.nama;
+    const oldKelas = currentUser.kelas;
+    const oldJurusan = currentUser.jurusan;
+    const oldSubject = currentUser.subject;
+    
     const updateData = { nama: newNama, kelas: newKelas, jurusan: newJurusan, subject: newSubject };
     db.ref(`users_auth/${currentUser.uid}`).update(updateData)
         .then(() => {
@@ -1258,6 +1235,21 @@ function handleUpdateProfileInfo() {
             currentUser.subject = newSubject;
             if (typeof saveUserToLocalStorage === 'function') saveUserToLocalStorage(currentUser);
             showToast('✅ Profil berhasil diperbarui');
+            
+            // LOG: Update profil
+            if (typeof logActivity === 'function') {
+                let changes = [];
+                if (oldNama !== newNama) changes.push(`nama: ${oldNama} → ${newNama}`);
+                if (oldKelas !== newKelas) changes.push(`kelas: ${oldKelas} → ${newKelas}`);
+                if (oldJurusan !== newJurusan) changes.push(`jurusan: ${oldJurusan} → ${newJurusan}`);
+                if (oldSubject !== newSubject) changes.push(`subject: ${oldSubject} → ${newSubject}`);
+                if (changes.length) {
+                    logActivity('update_profile', `Memperbarui profil: ${changes.join(', ')}`);
+                } else {
+                    logActivity('update_profile', 'Memperbarui profil (tanpa perubahan data)');
+                }
+            }
+            
             document.getElementById('userProfileDisplay').textContent = newNama;
             if (currentUser.role === 'siswa' && currentUser.fpId) {
                 db.ref(`users/${currentUser.fpId}`).update({ nama: newNama, kelas: newKelas, jurusan: newJurusan });
@@ -1286,7 +1278,13 @@ function handleChangePassword(e) {
     const btn = document.querySelector('#modal-change-pass button[type="submit"]');
     if (btn) { btn.disabled = true; btn.textContent = 'Menyimpan...'; }
     auth.currentUser.updatePassword(newPass)
-        .then(() => { showToast('✅ Password berhasil diubah'); closeModal('modal-change-pass'); document.getElementById('cpNew').value = ''; document.getElementById('cpConfirm').value = ''; })
+        .then(() => { 
+            showToast('✅ Password berhasil diubah'); 
+            closeModal('modal-change-pass'); 
+            document.getElementById('cpNew').value = ''; 
+            document.getElementById('cpConfirm').value = '';
+            // LOG sudah ada di auth.js
+        })
         .catch(err => {
             console.error('Change password error:', err);
             if (err.code === 'auth/requires-recent-login') showToast('⚠️ Silakan logout dan login kembali untuk ubah password.', 'error');
@@ -1296,7 +1294,7 @@ function handleChangePassword(e) {
         .finally(() => { if (btn) { btn.disabled = false; btn.textContent = 'Simpan'; } });
 }
 
-// ======================== UPLOAD PROFILE PHOTO (SUPABASE) ========================
+// ======================== UPLOAD PROFILE PHOTO (SUPABASE) DENGAN LOG ========================
 async function uploadProfilePhoto(input) {
     if (!input.files || !input.files[0]) return;
     
@@ -1330,7 +1328,6 @@ async function uploadProfilePhoto(input) {
         
         const result = await uploadWithFallback(file, 'profiles', currentUser.uid);
         
-        // HAPUS FOTO LAMA DARI SUPABASE
         if (typeof deleteOldProfilePhoto === 'function') {
             await deleteOldProfilePhoto(currentUser.uid, result.url);
         }
@@ -1351,6 +1348,11 @@ async function uploadProfilePhoto(input) {
         
         const fallbackMsg = result.isFallback ? ' (via ImgBB fallback)' : '';
         showToast(`✅ Foto profil berhasil diperbarui!${fallbackMsg}`, 'success');
+        
+        // LOG: Upload foto profil
+        if (typeof logActivity === 'function') {
+            logActivity('upload_profile_photo', `Upload foto profil${result.isFallback ? ' (fallback ImgBB)' : ' (Supabase)'}`);
+        }
         
         if (result.isFallback) {
             setTimeout(() => showToast('ℹ️ Catatan: Gambar disimpan via ImgBB (fallback)', 'info'), 2000);
@@ -1426,7 +1428,7 @@ function toggleGenerateInput() {
     }
 }
 
-// ======================== PENGATURAN NAMA SEKOLAH ========================
+// ======================== PENGATURAN NAMA SEKOLAH (DENGAN LOG) ========================
 function saveSchoolName() {
     if (!currentUser) { showToast('Anda harus login!', 'error'); return; }
     const newSchoolName = document.getElementById('inputSchoolName').value.trim();
@@ -1435,10 +1437,27 @@ function saveSchoolName() {
         showToast('⛔ Hanya Admin atau Developer yang bisa mengubah nama sekolah.', 'error');
         return;
     }
+    
+    // Ambil nama lama untuk log
+    let oldSchoolName = '';
+    const schoolNameRef = db.ref('system_config/schoolName');
+    schoolNameRef.once('value').then(snapshot => {
+        oldSchoolName = snapshot.val() || 'Sistem Absensi';
+    }).catch(() => {});
+    
     const btn = event?.target;
     if (btn) { btn.disabled = true; btn.textContent = 'Menyimpan...'; }
-    db.ref('system_config/schoolName').set(newSchoolName)
-        .then(() => { showToast('✅ Nama sekolah berhasil diperbarui'); const headerTitle = document.getElementById('schoolNameDisplay'); if (headerTitle) headerTitle.textContent = newSchoolName; })
+    schoolNameRef.set(newSchoolName)
+        .then(() => { 
+            showToast('✅ Nama sekolah berhasil diperbarui'); 
+            const headerTitle = document.getElementById('schoolNameDisplay'); 
+            if (headerTitle) headerTitle.textContent = newSchoolName;
+            
+            // LOG: Simpan nama sekolah
+            if (typeof logActivity === 'function') {
+                logActivity('save_school_name', `Mengubah nama sekolah dari "${oldSchoolName}" menjadi "${newSchoolName}"`);
+            }
+        })
         .catch(err => { console.error('Save school name error:', err); showToast('❌ Gagal update: ' + err.message, 'error'); })
         .finally(() => { if (btn) { btn.disabled = false; btn.textContent = 'Simpan'; } });
 }
@@ -1502,8 +1521,8 @@ function renderUsersTable() {
             <td><strong>${escapeHtmlString(u.nama)}</strong>${isMe ? '<br><small style="color:#4a90e2;">Akun Anda</small>' : ''}</td>
             <td style="color:#aaa; font-size:0.9rem;">${u.email || '-'}</td>
             <td>${roleHtml}</td>
-            <td style="color:#888; font-size:0.85rem;">${escapeHtmlString(detailText)}</div>
-            <td style="text-align:center;">${actionsHtml}</div>
+            <td style="color:#888; font-size:0.85rem;">${escapeHtmlString(detailText)}</td>
+            <td style="text-align:center;">${actionsHtml}</td>
         </tr>`;
     });
     console.log(`📊 renderUsersTable: ${data.length} users displayed`);
@@ -1589,4 +1608,4 @@ window.applySidebarRolePermissions = applySidebarRolePermissions;
 // Debug function
 window.debugAttendanceData = debugAttendanceData;
 
-console.log("✅ ui.js V5.7 loaded - Fixed tab chat rendering");
+console.log("✅ ui.js V5.8 loaded - Dengan log aktivitas untuk update profil, logo sekolah, dan nama sekolah");

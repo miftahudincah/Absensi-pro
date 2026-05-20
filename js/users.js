@@ -1,15 +1,13 @@
-// users.js - VERSION 4.1 (FULLY FIXED: STATISTICS & MANAGEMENT)
+// users.js - VERSION 4.2 (DENGAN LOG AKTIVITAS)
 // ============================================================================
 // Manajemen User: Generate kode registrasi (dengan QR), daftar kode,
 // daftar pengguna, ubah role, hapus user, reset password, reset sistem.
 // Role developer (zaki5go@gmail.com) memiliki akses penuh seperti admin
 // namun akun developer TIDAK bisa diubah role, dihapus, atau direset.
 //
-// PERBAIKAN V4.1:
-// - Statistik kode (Aktif/Terpakai/dll) sekarang menggunakan dbData (bukan window.dbData)
-// - Menambahkan panggilan renderCodesTable() & updateCodesStatistics() setelah generate kode
-// - Memastikan event listener dataReady berjalan dengan baik
-// - Tidak mengganggu modul status (status.js)
+// PERUBAHAN V4.2:
+// - Menambahkan logActivity untuk generate kode, delete kode, update role,
+//   delete user, reset system, dan reset password
 // ============================================================================
 
 let usersDataReadyListenerAdded = false;
@@ -42,7 +40,6 @@ function updateCodesStatistics() {
         return;
     }
 
-    // PERBAIKAN: gunakan dbData langsung, bukan window.dbData
     const codes = dbData?.codes || [];
     const activeCodes = codes.filter(c => !c.used).length;
     const usedCodes = codes.filter(c => c.used).length;
@@ -105,14 +102,13 @@ function populateStudentSelectForCode() {
     }
 }
 
-// ======================= GENERATE KODE REGISTRASI + QR CODE ========================
+// ======================= GENERATE KODE REGISTRASI + QR CODE (DENGAN LOG) ========================
 function generateRegistrationCode() {
     if (!currentUser) {
         showToast("Anda harus login!", "error");
         return;
     }
 
-    // Hanya admin, guru, developer yang boleh generate
     if (currentUser.role !== 'admin' && currentUser.role !== 'guru' && currentUser.role !== 'developer') {
         showToast("⛔ Hanya Admin, Guru, dan Developer yang dapat generate kode!", "error");
         return;
@@ -150,7 +146,6 @@ function generateRegistrationCode() {
             return;
         }
 
-        // Cek apakah siswa sudah punya akun
         const existingUser = dbData.users_auth?.find(u => u.fpId == selectedId);
         if (existingUser) {
             showToast(`❌ GAGAL: ID Siswa (${selectedId}) sudah terdaftar pada akun (${existingUser.email}).`, "error");
@@ -158,7 +153,6 @@ function generateRegistrationCode() {
             return;
         }
 
-        // Cek apakah masih ada kode aktif untuk siswa ini
         const existingCode = dbData.codes?.find(c => c.linkedId == selectedId && !c.used && c.type === 'siswa');
         if (existingCode) {
             showToast(`❌ GAGAL: Siswa ini masih memiliki kode aktif (${existingCode.code}). Tunggu expired!`, "error");
@@ -204,7 +198,11 @@ function generateRegistrationCode() {
             }
             showToast(`✅ Kode untuk ${studentName} berhasil dibuat!`, "success");
             
-            // PERBAIKAN: refresh tabel dan statistik setelah generate
+            // LOG: Generate kode siswa
+            if (typeof logActivity === 'function') {
+                logActivity('generate_code', `Generate kode ${targetType}: ${code} untuk ${studentName} (ID: ${selectedId})`);
+            }
+            
             if (typeof renderCodesTable === 'function') renderCodesTable();
             updateCodesStatistics();
         }).catch(err => {
@@ -248,7 +246,11 @@ function generateRegistrationCode() {
             }
             showToast(`✅ Kode registrasi Guru berhasil dibuat!`, "success");
             
-            // PERBAIKAN: refresh tabel dan statistik setelah generate
+            // LOG: Generate kode guru
+            if (typeof logActivity === 'function') {
+                logActivity('generate_code', `Generate kode ${targetType}: ${code}`);
+            }
+            
             if (typeof renderCodesTable === 'function') renderCodesTable();
             updateCodesStatistics();
         }).catch(err => {
@@ -268,14 +270,21 @@ function copyToClipboard(text) {
     });
 }
 
-// ======================= DELETE KODE REGISTRASI ========================
+// ======================= DELETE KODE REGISTRASI (DENGAN LOG) ========================
 function deleteCode(code) {
     const codeData = dbData.codes?.find(c => c.code === code);
     const codeInfo = codeData?.type ? `${codeData.type.toUpperCase()} - ${code}` : code;
     if (!confirm(`⚠️ Yakin ingin menghapus kode: ${codeInfo}?\n\nKode yang sudah dihapus tidak dapat digunakan lagi.`)) return;
+    
     db.ref('codes/' + code).remove()
         .then(() => {
             showToast(`✅ Kode ${code} berhasil dihapus`, "success");
+            
+            // LOG: Hapus kode
+            if (typeof logActivity === 'function') {
+                logActivity('delete_code', `Hapus kode: ${codeInfo}`);
+            }
+            
             if (typeof renderCodesTable === 'function') renderCodesTable();
             updateCodesStatistics();
         })
@@ -288,7 +297,7 @@ function renderCodesTable() {
     if (!tbody) return;
     tbody.innerHTML = '';
     if (typeof dbData === 'undefined' || !dbData.codes || dbData.codes.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding: 30px; color:#888;">🔑 Belum ada kode registrasi. Generate kode di atas.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding: 30px; color:#888;">🔑 Belum ada kode registrasi. Generate kode di atas.</option></td></tr>`;
         updateCodesStatistics();
         return;
     }
@@ -330,7 +339,7 @@ function getCodeTimeRemaining(createdAt) {
     else return '< 1 menit';
 }
 
-// ======================= UPDATE USER ROLE (ADMIN & DEVELOPER) ========================
+// ======================= UPDATE USER ROLE (DENGAN LOG) ========================
 function updateUserRole(uid, newRole) {
     if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'developer')) {
         showToast("⛔ Hanya Admin dan Developer yang dapat mengubah role!", "error");
@@ -343,7 +352,6 @@ function updateUserRole(uid, newRole) {
         return;
     }
 
-    // Proteksi akun developer
     if (user.role === 'developer') {
         showToast("⛔ Role Developer tidak dapat diubah!", "error");
         return;
@@ -368,13 +376,18 @@ function updateUserRole(uid, newRole) {
         updatedAt: firebase.database.ServerValue.TIMESTAMP
     }).then(() => {
         showToast(`✅ Role ${user.nama} berhasil diubah menjadi ${roleNames[newRole]}`, "success");
+        
+        // LOG: Ubah role user
+        if (typeof logActivity === 'function') {
+            logActivity('update_user_role', `Ubah role ${user.nama} (${user.email}) dari ${user.role} menjadi ${newRole}`);
+        }
+        
         if (currentUser.uid === uid) {
             currentUser.role = newRole;
             if (typeof saveUserToLocalStorage === 'function') saveUserToLocalStorage(currentUser);
             if (typeof applyRolePermissions === 'function') applyRolePermissions();
             if (typeof updateUserInterface === 'function') updateUserInterface();
         }
-        // Refresh tabel user
         renderUsersTable();
     }).catch((err) => {
         console.error("Update role error:", err);
@@ -396,7 +409,7 @@ function renderUsersTable() {
     }
     tbody.innerHTML = '';
     if (typeof dbData === 'undefined' || !dbData.users_auth || dbData.users_auth.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 30px; color:#888;">👥 Belum ada pengguna terdaftar.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 30px; color:#888;">👥 Belum ada pengguna terdaftar.</option></td></tr>`;
         return;
     }
 
@@ -405,7 +418,7 @@ function renderUsersTable() {
     data.sort((a, b) => (roleOrder[a.role] || 4) - (roleOrder[b.role] || 4));
 
     if (data.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 30px; color:#888;">🔍 Tidak ada pengguna yang cocok dengan pencarian.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 30px; color:#888;">🔍 Tidak ada pengguna yang cocok dengan pencarian.</option></td></tr>`;
         return;
     }
 
@@ -474,9 +487,9 @@ function renderUsersTable() {
                 <td style="text-align:center;"><img src="${avatar}" style="width:40px; height:40px; border-radius:50%; object-fit:cover;"></td>
                 <td><strong>${escapeHtmlString(u.nama)}</strong>${isMe ? '<br><small style="color:#4a90e2;">Akun Anda</small>' : ''}</td>
                 <td style="color:#aaa; font-size:0.85rem;">${u.email || '-'}</td>
-                <td>${roleHtml}</div>
+                <td>${roleHtml}</td>
                 <td style="color:#888; font-size:0.8rem;">${detailIcon} ${escapeHtmlString(detailText)}<br><small>📅 ${registeredDate}</small></td>
-                <td style="text-align:center;">${actionsHtml}</div>
+                <td style="text-align:center;">${actionsHtml}</td>
             </tr>
         `;
     });
@@ -486,15 +499,22 @@ function renderUsersTable() {
 function resetUserPassword(email) {
     if (!email) { showToast("❌ Email tidak valid!", "error"); return; }
     if (!confirm(`⚠️ Kirim link reset password ke ${email}?`)) return;
+    
     auth.sendPasswordResetEmail(email)
-        .then(() => showToast(`✅ Link reset password telah dikirim ke ${email}`, "success"))
+        .then(() => {
+            showToast(`✅ Link reset password telah dikirim ke ${email}`, "success");
+            // LOG: Reset password user
+            if (typeof logActivity === 'function') {
+                logActivity('reset_user_password', `Kirim link reset password ke ${email}`);
+            }
+        })
         .catch((err) => {
             if (err.code === 'auth/user-not-found') showToast("❌ Email tersebut tidak terdaftar di Firebase Auth!", "error");
             else showToast("❌ Gagal mengirim: " + err.message, "error");
         });
 }
 
-// ======================= DELETE USER ========================
+// ======================= DELETE USER (DENGAN LOG) ========================
 function deleteUser(uid, nama) {
     if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'developer')) {
         showToast("⛔ Hanya Admin dan Developer yang dapat menghapus user!", "error");
@@ -519,13 +539,19 @@ function deleteUser(uid, nama) {
     db.ref('users_auth/' + uid).remove()
         .then(() => {
             showToast(`✅ User "${nama}" berhasil dihapus dari Database.`, "success");
+            
+            // LOG: Hapus user
+            if (typeof logActivity === 'function') {
+                logActivity('delete_user', `Hapus user: ${nama} (UID: ${uid})`);
+            }
+            
             renderUsersTable();
         })
         .catch((err) => showToast("❌ Gagal menghapus: " + err.message, "error"))
         .finally(() => { if (btn) btn.disabled = false; });
 }
 
-// ======================= RESET SYSTEM DATA ========================
+// ======================= RESET SYSTEM DATA (DENGAN LOG) ========================
 function resetSystemData() {
     if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'developer')) {
         showToast("⛔ Hanya Admin atau Developer yang dapat mereset sistem!", "error");
@@ -568,6 +594,12 @@ function resetSystemData() {
     Promise.all(promises)
         .then(() => {
             showToast("✅ Reset berhasil! Akun " + protectedEmail + " tetap aman.", "success");
+            
+            // LOG: Reset sistem
+            if (typeof logActivity === 'function') {
+                logActivity('reset_system', `Reset semua data sistem oleh ${currentUser.nama} (${currentUser.email})`);
+            }
+            
             setTimeout(() => { auth.signOut().then(() => location.reload()); }, 2000);
         })
         .catch((err) => showToast("❌ Gagal mereset: " + err.message, "error"));
@@ -587,7 +619,6 @@ function escapeHtmlString(str) {
 // ======================= INISIALISASI ========================
 setupUsersDataReadyListener();
 
-// Inisialisasi jika dbData sudah tersedia (gunakan dbData, bukan window.dbData)
 if (typeof dbData !== 'undefined' && dbData.users_auth) {
     setTimeout(() => {
         if (typeof renderUsersTable === 'function') renderUsersTable();
@@ -609,4 +640,4 @@ window.copyToClipboard = copyToClipboard;
 window.resetUserPassword = resetUserPassword;
 window.cleanupUsersSystem = cleanupUsersSystem;
 
-console.log("✅ users.js V4.1 loaded - Statistics fixed (dbData) + management stable");
+console.log("✅ users.js V4.2 loaded - Dengan log aktivitas untuk manajemen user & kode");

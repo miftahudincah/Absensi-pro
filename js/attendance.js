@@ -1,12 +1,8 @@
-// attendance.js - VERSION 4.2 (PENGATURAN JAM EFEKTIF & HARI LIBUR)
+// attendance.js - VERSION 4.3 (DENGAN LOG AKTIVITAS)
 // Mengelola data absensi, filter, validasi delay pulang,
 // serta manual status (sakit, izin, alpha) untuk siswa yang tidak hadir.
-// PERUBAHAN: 
-//   - Filter data absensi berdasarkan hari libur (tidak ditampilkan)
-//   - Status "Terlambat" otomatis jika waktu masuk > batas terlambat
-//   - Peringatan minimal jam pulang (tidak diblokir, hanya peringatan)
-//   - Simulasi scan masuk/pulang dengan pilihan siswa & kondisi
-//   - Akses untuk role developer (sama seperti admin & guru)
+// PERUBAHAN V4.3: 
+//   - Menambahkan logActivity untuk delete, simulasi, dan atur ketidakhadiran
 // ============================================================================
 
 // ======================== GLOBAL VARIABLES ========================
@@ -209,8 +205,6 @@ function populateDateFilter() {
 }
 
 // ======================== UTILITY UNTUK HARI LIBUR ========================
-// Fungsi isHoliday, filterAttendanceByHoliday, getHolidayCountInRange akan didefinisikan di setting.js
-// Kita asumsikan sudah ada. Jika belum, buat fallback sederhana.
 if (typeof isHoliday === 'undefined') {
     window.isHoliday = function(dateStr) { return false; };
 }
@@ -247,7 +241,6 @@ function updateAttendanceDonutChart() {
     
     const today = new Date().toISOString().split('T')[0];
     let todayData = dbData.attendance.filter(r => r.date === today);
-    // Filter libur
     if (typeof filterAttendanceByHoliday === 'function') {
         todayData = filterAttendanceByHoliday(todayData);
     }
@@ -309,7 +302,6 @@ async function renderTable() {
 
     let data = dbData.attendance ? [...dbData.attendance] : [];
     
-    // Filter libur
     if (typeof filterAttendanceByHoliday === 'function') {
         data = filterAttendanceByHoliday(data);
     }
@@ -359,7 +351,6 @@ async function renderTable() {
         }
     }
     
-    // Ambil pengaturan batas terlambat (default 07:30)
     let lateThreshold = '07:30';
     if (window.attendanceSettings && window.attendanceSettings.lateThreshold) {
         lateThreshold = window.attendanceSettings.lateThreshold;
@@ -383,7 +374,6 @@ async function renderTable() {
             else if (manual.status === 'alpha') { icon = '❌'; label = 'Alpha (Bolos)'; color = '#f44336'; }
             statusHtml = `<span style="color:${color}; font-weight:500;">${icon} ${label}</span><br><small class="text-small">(Manual)</small>`;
         } else {
-            // Cek keterlambatan jika status Hadir
             let isLate = false;
             if (row.status === 'Hadir' && row.timeIn && row.timeIn > lateThreshold) {
                 isLate = true;
@@ -434,7 +424,6 @@ function updateAttendanceStatistics(data) {
     
     const today = new Date().toISOString().split('T')[0];
     let todayData = data.filter(r => r.date === today);
-    // Filter libur lagi (untuk statistik)
     if (typeof filterAttendanceByHoliday === 'function') {
         todayData = filterAttendanceByHoliday(todayData);
     }
@@ -451,7 +440,7 @@ function updateAttendanceStatistics(data) {
     `;
 }
 
-// ======================== DELETE ATTENDANCE ========================
+// ======================== DELETE ATTENDANCE (DENGAN LOG) ========================
 
 function deleteAttendance(id) {
     if (!currentUser) {
@@ -468,11 +457,21 @@ function deleteAttendance(id) {
     const date = id.substring(0, lastDashIndex);
     const fpId = id.substring(lastDashIndex + 1);
     
+    // Ambil nama siswa untuk log
+    const attendanceRecord = dbData.attendance.find(a => a.id === id);
+    const studentName = attendanceRecord?.nama || fpId;
+    
     const btns = document.querySelectorAll(`button[onclick="deleteAttendance('${id}')"]`);
     btns.forEach(btn => { btn.disabled = true; btn.textContent = '⏳'; });
     
     db.ref(`absensi/${date}/${fpId}`).remove()
-        .then(() => showToast("✅ Data absensi berhasil dihapus", "success"))
+        .then(() => {
+            showToast("✅ Data absensi berhasil dihapus", "success");
+            // LOG: Hapus absensi
+            if (typeof logActivity === 'function') {
+                logActivity('delete_attendance', `Menghapus absensi ${studentName} (ID: ${fpId}) pada tanggal ${date}`);
+            }
+        })
         .catch((error) => showToast("❌ Gagal menghapus: " + error.message, "error"))
         .finally(() => {
             btns.forEach(btn => { btn.disabled = false; btn.textContent = '🗑️'; });
@@ -544,7 +543,6 @@ function openSimulateInModal() {
     const studentListDiv = document.getElementById('simulateInStudentList');
     const holidayWarningSpan = document.getElementById('simulateInHolidayWarning');
     
-    // Cek apakah hari ini libur
     const todayStr = new Date().toISOString().split('T')[0];
     if (typeof isHoliday === 'function' && isHoliday(todayStr)) {
         holidayWarningSpan.innerHTML = "⚠️ Hari ini adalah hari libur (tidak akan ditampilkan di web, namun tetap bisa disimpan)";
@@ -570,7 +568,6 @@ function openSimulateInModal() {
             `;
         });
         studentListDiv.innerHTML = html;
-        // Attach click event
         document.querySelectorAll('#simulateInStudentList .student-list-item').forEach(el => {
             el.addEventListener('click', () => {
                 const id = el.getAttribute('data-id');
@@ -616,8 +613,7 @@ async function executeSimulateIn() {
         return;
     }
     
-    const statusCondition = selectStatus.value; // hadir, izin, sakit, alpha
-    
+    const statusCondition = selectStatus.value;
     const now = new Date();
     const timeStr = now.toLocaleTimeString('id-ID', {hour: '2-digit', minute:'2-digit'});
     const dateStr = now.toISOString().split('T')[0];
@@ -660,6 +656,13 @@ async function executeSimulateIn() {
         }
         
         showToast(`✅ Simulasi Absen ${statusFinal} berhasil untuk ${nama} (${timeStr})`, "success");
+        
+        // LOG: Simulasi scan masuk
+        if (typeof logActivity === 'function') {
+            const statusText = statusCondition === 'hadir' ? 'Hadir' : statusCondition;
+            logActivity('simulate_attendance_in', `Simulasi masuk: ${nama} (ID: ${studentId}) - Status: ${statusText}, Waktu: ${timeStr}`);
+        }
+        
         closeModal('modal-simulate-in');
         if (typeof renderTable === 'function') setTimeout(() => renderTable(), 500);
     } catch (err) {
@@ -669,7 +672,7 @@ async function executeSimulateIn() {
     }
 }
 
-// ======================== SIMULASI SCAN PULANG (PILIH SISWA YANG SUDAH MASUK) ========================
+// ======================== SIMULASI SCAN PULANG ========================
 
 let currentStudentsListForOut = [];
 
@@ -681,7 +684,6 @@ function openSimulateOutModal() {
     
     const todayStr = new Date().toISOString().split('T')[0];
     let todayAttendance = dbData.attendance.filter(a => a.date === todayStr && a.status === 'Hadir');
-    // Filter libur (jika hari libur, seharusnya tidak ada data, tapi tetap filter)
     if (typeof filterAttendanceByHoliday === 'function') {
         todayAttendance = filterAttendanceByHoliday(todayAttendance);
     }
@@ -757,7 +759,6 @@ function openSimulateOutModal() {
             `;
         });
         studentListDiv.innerHTML = html;
-        // Attach click event
         document.querySelectorAll('#simulateOutStudentList .student-list-item').forEach(el => {
             el.addEventListener('click', () => {
                 const id = el.getAttribute('data-id');
@@ -855,7 +856,6 @@ async function executeSimulateOut() {
         }
     }
     
-    // Peringatan minimal jam pulang
     let minOutTime = '14:00';
     if (window.attendanceSettings && window.attendanceSettings.minOutTime) {
         minOutTime = window.attendanceSettings.minOutTime;
@@ -884,6 +884,12 @@ async function executeSimulateOut() {
             status: 'Pulang'
         });
         showToast(`✅ ${nama} berhasil absen pulang pukul ${timeOutStr}${warningMsg}`, "success");
+        
+        // LOG: Simulasi scan pulang
+        if (typeof logActivity === 'function') {
+            logActivity('simulate_attendance_out', `Simulasi pulang: ${nama} (ID: ${studentId}) - Waktu pulang: ${timeOutStr}${warningMsg}`);
+        }
+        
         closeModal('modal-simulate-out');
         if (typeof renderTable === 'function') setTimeout(() => renderTable(), 500);
     } catch (err) {
@@ -906,7 +912,6 @@ function exportToExcel() {
     }
     let csv = "\uFEFFTanggal,Waktu Masuk,Waktu Pulang,ID,Nama,Kelas,Jurusan,Status\n";
     dbData.attendance.forEach(r => {
-        // Filter libur? Boleh juga diekspor semua, tapi lebih baik filter sesuai kebijakan. Kita ekspor semua.
         csv += `"${r.date || '-'}","${r.timeIn || '-'}","${r.timeOut || '-'}","${r.studentId}","${escapeCsv(r.nama)}","${r.kelas || '-'}","${r.jurusan || '-'}","${r.status}"\n`;
     });
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -919,6 +924,11 @@ function exportToExcel() {
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
     showToast("📥 Laporan Excel berhasil diunduh", "success");
+    
+    // LOG: Ekspor Excel (opsional)
+    if (typeof logActivity === 'function') {
+        logActivity('export_attendance_excel', `Ekspor ${dbData.attendance.length} data absensi ke Excel`);
+    }
 }
 
 function escapeCsv(str) {
@@ -960,7 +970,7 @@ function renderFilteredTable(filteredData) {
     filteredData.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
     tbody.innerHTML = '';
     if (filteredData.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:20px; color:#888;">📭 Tidak ada data dalam rentang tanggal tersebut.<\/td><\/tr>`;
+        tbody.innerHTML = `<table><td colspan="7" style="text-align:center; padding:20px; color:#888;">📭 Tidak ada data dalam rentang tanggal tersebut.<\/td><\/tr>`;
         return;
     }
     let rows = [];
@@ -981,7 +991,7 @@ function renderFilteredTable(filteredData) {
     tbody.innerHTML = rows.join('');
 }
 
-// ======================== MANUAL ATTENDANCE STATUS ========================
+// ======================== MANUAL ATTENDANCE STATUS (DENGAN LOG) ========================
 
 function openAbsenceModal() {
     if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'guru' && currentUser.role !== 'developer')) {
@@ -1112,12 +1122,23 @@ async function saveAllAbsenceStatus() {
         const refPath = `attendance_status/${date}`;
         const currentData = (await db.ref(refPath).once('value')).val() || {};
         const finalUpdates = {};
+        let updatedCount = 0;
         for (const [id, value] of Object.entries(updates)) {
             if (value === null) { if (currentData[id]) finalUpdates[id] = null; }
-            else { finalUpdates[id] = value; }
+            else { finalUpdates[id] = value; updatedCount++; }
         }
         if (Object.keys(finalUpdates).length > 0) await db.ref(refPath).update(finalUpdates);
         showToast(`✅ Berhasil menyimpan data ketidakhadiran.`, "success");
+        
+        // LOG: Simpan manual attendance status
+        if (typeof logActivity === 'function' && updatedCount > 0) {
+            let statusSummary = [];
+            for (const [id, val] of Object.entries(finalUpdates)) {
+                if (val && val.status) statusSummary.push(`ID ${id}: ${val.status}`);
+            }
+            logActivity('save_manual_attendance', `Tanggal ${date} - ${updatedCount} perubahan: ${statusSummary.slice(0, 5).join(', ')}${statusSummary.length > 5 ? '...' : ''}`);
+        }
+        
         if (typeof renderTable === 'function') renderTable();
         closeModal('modal-absence');
     } catch (err) {
@@ -1205,4 +1226,4 @@ window.populateFilters = populateFilters;
 window.populateDateFilter = populateDateFilter;
 window.waitForAttendanceElements = waitForAttendanceElements;
 
-console.log("✅ attendance.js V4.2 loaded - Pengaturan jam efektif & hari libur");
+console.log("✅ attendance.js V4.3 loaded - Dengan log aktivitas untuk absensi");

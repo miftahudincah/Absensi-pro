@@ -1,6 +1,7 @@
-// announcement.js - VERSION 3.1 (DEVELOPER ACCESS ADDED)
+// announcement.js - VERSION 3.2 (DENGAN LOG AKTIVITAS)
 // Fitur Pengumuman dengan Timer Otomatis, Real-time Updates, dan Notifikasi
 // Sekarang role 'developer' memiliki akses penuh seperti admin & guru
+// PERUBAHAN V3.2: Menambahkan logActivity untuk create, edit, delete announcement
 // ============================================================================
 
 let announcementCheckInterval = null;
@@ -36,7 +37,6 @@ function setupAnnouncementUiReadyListener() {
 
     window.addEventListener('uiReady', (e) => {
         const user = e.detail.currentUser;
-        // Izinkan developer, admin, dan guru
         if (user && (user.role === 'admin' || user.role === 'guru' || user.role === 'developer')) {
             console.log("📢 announcement.js: uiReady received, checking permissions for floating button");
             const floatingBtn = document.getElementById('floatingAnnouncementBtn');
@@ -111,7 +111,6 @@ function renderAnnouncement() {
             const createdAtDate = ann.createdAt ? new Date(ann.createdAt).toLocaleString('id-ID') : '';
             
             let actionButtons = '';
-            // Izinkan developer, admin, guru untuk edit/hapus
             if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'guru' || currentUser.role === 'developer')) {
                 actionButtons = `
                     <span class="announcement-edit" onclick="editAnnouncement('${ann.id}')" title="Edit Pengumuman" style="cursor:pointer; margin-left:8px;">✏️</span>
@@ -352,12 +351,12 @@ function toggleExpiryInput() {
     }
 }
 
+// ======================= SAVE ANNOUNCEMENT (DENGAN LOG) =======================
 function saveAnnouncement() {
     if (!currentUser) {
         showToast("Anda harus login!", "error");
         return;
     }
-    // Izinkan developer, admin, dan guru
     if (currentUser.role !== 'admin' && currentUser.role !== 'guru' && currentUser.role !== 'developer') {
         showToast("⛔ Hanya Admin, Guru, dan Developer yang dapat membuat pengumuman!", "error");
         return;
@@ -406,9 +405,18 @@ function saveAnnouncement() {
         db.ref('announcements/active').push(announcementData);
     
     promise.then(() => {
+        const action = announcementId ? 'update' : 'create';
         showToast(announcementId ? "✅ Pengumuman berhasil diupdate!" : "✅ Pengumuman berhasil dibuat!");
         closeModal('modal-announcement');
         showAnnouncementNotification(title, message);
+        
+        // LOG: Simpan pengumuman
+        if (typeof logActivity === 'function') {
+            const expiryInfo = expiryDate ? ` (Berakhir: ${expiryDate}${expiryTime ? ' ' + expiryTime : ''})` : '';
+            logActivity(action === 'create' ? 'create_announcement' : 'update_announcement', 
+                       `"${title}" - Prioritas: ${priority}${expiryInfo}`);
+        }
+        
         setTimeout(() => renderAnnouncement(), 100);
     }).catch(err => {
         console.error("Save announcement error:", err);
@@ -433,6 +441,7 @@ function showAnnouncementNotification(title, message) {
     }
 }
 
+// ======================= DELETE ANNOUNCEMENT (DENGAN LOG) =======================
 function deleteAnnouncement(announcementId) {
     if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'guru' && currentUser.role !== 'developer')) {
         showToast("⛔ Anda tidak memiliki akses!", "error");
@@ -446,6 +455,12 @@ function deleteAnnouncement(announcementId) {
         db.ref(`announcements/active/${announcementId}`).remove()
             .then(() => { 
                 showToast(`✅ Pengumuman "${title}" berhasil dihapus`);
+                
+                // LOG: Hapus pengumuman
+                if (typeof logActivity === 'function') {
+                    logActivity('delete_announcement', `Menghapus pengumuman: "${title}"`);
+                }
+                
                 setTimeout(() => renderAnnouncement(), 100);
             })
             .catch(err => {
@@ -569,6 +584,12 @@ function createTestAnnouncement() {
         .then((result) => {
             console.log("Test announcement berhasil dibuat, key:", result.key);
             showToast("✅ Test pengumuman berhasil dibuat!");
+            
+            // LOG: Test announcement
+            if (typeof logActivity === 'function') {
+                logActivity('create_test_announcement', `Membuat test pengumuman: "🧪 TEST PENGUMUMAN"`);
+            }
+            
             setTimeout(() => renderAnnouncement(), 100);
         })
         .catch(err => {
@@ -639,4 +660,4 @@ window.debugCheckAnnouncements = debugCheckAnnouncements;
 window.cleanupAnnouncementSystem = cleanupAnnouncementSystem;
 window.initAnnouncementSystem = initAnnouncementSystem; // alias
 
-console.log("✅ announcement.js V3.1 loaded - Developer role now has full access");
+console.log("✅ announcement.js V3.2 loaded - Dengan log aktivitas untuk pengumuman");

@@ -1,6 +1,7 @@
 // auth.js - VERSI REGISTRASI LANGSUNG (QR SCANNER IMPROVED v2)
 // DENGAN DUKUNGAN ROLE DEVELOPER UNTUK zaki5go@gmail.com
 // DAN UPLOAD FOTO PROFIL KE SUPABASE (DELETE FOTO LAMA OTOMATIS)
+// DILENGKAPI DENGAN LOG AKTIVITAS (AUDIT TRAIL)
 
 let lastRegisterAttempt = 0;
 const REGISTER_COOLDOWN = 30000;
@@ -203,6 +204,12 @@ function handleLogin(e) {
                     // ========================================
                     
                     currentUser = { uid: user.uid, email: user.email, ...userData };
+                    
+                    // LOG: Login berhasil
+                    if (typeof logActivity === 'function') {
+                        logActivity('login', `Login berhasil sebagai ${userData.role} (${userData.nama || userData.email})`);
+                    }
+                    
                     initApp();
                     showToast(`Selamat datang, ${userData.nama}`);
                 } else {
@@ -289,6 +296,7 @@ async function handleRegister(e) {
         const user = userCredential.user;
 
         let userData = { uid: user.uid, email, role: regType, registeredAt: firebase.database.ServerValue.TIMESTAMP };
+        let userName = '';
         if (regType === 'siswa') {
             const fpId = extraData.fpId;
             const studentSnap = await db.ref(`users/${fpId}`).once('value');
@@ -301,13 +309,32 @@ async function handleRegister(e) {
             userData.kelas = student.kelas;
             userData.jurusan = student.jurusan;
             userData.fpId = fpId;
+            userName = student.nama;
         } else {
             userData.nama = extraData.nama;
             userData.subject = extraData.subject || '';
+            userName = extraData.nama;
         }
 
         await db.ref(`users_auth/${user.uid}`).set(userData);
         await db.ref(`codes/${codeInput}`).update({ used: true, userId: user.uid, usedAt: firebase.database.ServerValue.TIMESTAMP });
+
+        // LOG: Registrasi berhasil (tanpa currentUser, langsung tulis ke Firebase)
+        try {
+            const logEntry = {
+                action: 'register',
+                userId: user.uid,
+                userName: userName,
+                userRole: regType,
+                details: `Registrasi berhasil sebagai ${regType} dengan email ${email}`,
+                timestamp: firebase.database.ServerValue.TIMESTAMP,
+                userAgent: navigator.userAgent.substring(0, 200)
+            };
+            await db.ref('logs').push(logEntry);
+            console.log(`📝 Log activity: register - ${regType} ${email}`);
+        } catch (logErr) {
+            console.warn("Gagal menyimpan log registrasi:", logErr);
+        }
 
         showToast("Pendaftaran Berhasil! Silakan Login.", "success");
         toggleAuth('login');
@@ -328,6 +355,11 @@ async function handleRegister(e) {
 }
 
 function handleLogout() {
+    // LOG: Logout sebelum cleanup
+    if (typeof logActivity === 'function' && currentUser) {
+        logActivity('logout', `Logout dari akun ${currentUser.nama || currentUser.email}`);
+    }
+    
     const cleanups = [
         'cleanupAttendanceListeners', 'cleanupStudentsSystem', 'cleanupUsersSystem',
         'cleanupChatSystem', 'cleanupFriendsSystem', 'cleanupStatusSystem',
@@ -346,8 +378,29 @@ function processForgot() {
     const btn = document.querySelector('#modal-forgot .btn-save');
     if (btn) { btn.innerText = '📧 Mengirim...'; btn.disabled = true; }
     auth.sendPasswordResetEmail(email)
-        .then(() => { showToast(`✅ Link reset password telah dikirim ke ${email}`, 'success'); closeModal('modal-forgot'); })
-        .catch(error => { let msg = error.code === 'auth/user-not-found' ? '❌ Email belum terdaftar!' : error.message; showToast(msg, 'error'); })
+        .then(() => {
+            showToast(`✅ Link reset password telah dikirim ke ${email}`, 'success');
+            closeModal('modal-forgot');
+            // LOG: Kirim link reset password
+            if (typeof logActivity === 'function' && currentUser) {
+                logActivity('forgot_password', `Link reset password dikirim ke ${email}`);
+            } else {
+                // Jika belum login, catat log dengan email saja
+                db.ref('logs').push({
+                    action: 'forgot_password',
+                    userId: 'unknown',
+                    userName: email,
+                    userRole: 'unknown',
+                    details: `Link reset password dikirim ke ${email}`,
+                    timestamp: firebase.database.ServerValue.TIMESTAMP,
+                    userAgent: navigator.userAgent.substring(0, 200)
+                }).catch(e => console.warn(e));
+            }
+        })
+        .catch(error => { 
+            let msg = error.code === 'auth/user-not-found' ? '❌ Email belum terdaftar!' : error.message; 
+            showToast(msg, 'error'); 
+        })
         .finally(() => { if (btn) { btn.innerText = 'Kirim Link'; btn.disabled = false; } });
 }
 
@@ -370,6 +423,10 @@ async function handleChangePassword(e) {
         closeModal('modal-change-pass');
         document.getElementById('cpNew').value = '';
         document.getElementById('cpConfirm').value = '';
+        // LOG: Ganti password berhasil
+        if (typeof logActivity === 'function' && currentUser) {
+            logActivity('change_password', 'Password berhasil diubah');
+        }
     } catch (err) {
         if (err.code === 'auth/wrong-password') showToast("Password lama salah!", "error");
         else if (err.code === 'auth/requires-recent-login') showToast("Silakan logout dan login kembali.", "error");
@@ -463,6 +520,11 @@ async function uploadProfilePhoto(input) {
         const fallbackMsg = result.isFallback ? ' (via ImgBB fallback)' : '';
         showToast(`✅ Foto profil berhasil diperbarui!${fallbackMsg}`, 'success');
         
+        // LOG: Upload foto profil
+        if (typeof logActivity === 'function') {
+            logActivity('upload_profile_photo', `Upload foto profil ${result.isFallback ? '(fallback ImgBB)' : '(Supabase)'}`);
+        }
+        
         // Optional: Tampilkan info jika menggunakan fallback
         if (result.isFallback) {
             console.warn('Supabase gagal, menggunakan ImgBB sebagai fallback');
@@ -494,4 +556,4 @@ window.processForgot = processForgot;
 window.handleChangePassword = handleChangePassword;
 window.uploadProfilePhoto = uploadProfilePhoto;
 
-console.log("✅ auth.js (dengan role developer dan upload profile ke Supabase) loaded");
+console.log("✅ auth.js (dengan role developer, upload profile ke Supabase, dan log aktivitas) loaded");

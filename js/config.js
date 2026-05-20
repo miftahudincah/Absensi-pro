@@ -1,7 +1,7 @@
 // ================== KONFIGURASI FIREBASE (AMAN) ==================
 // Peringatan: API Key tetap terekspos di client-side.
 // Untuk keamanan production, WAJIB mengaktifkan:
-// 1. Firebase App Check (ReCaptcha v3)
+// 1. Firebase App Check (ReCaptcha v3) - tapi jangan gunakan kunci dummy!
 // 2. Security Rules yang ketat
 // 3. Cloud Functions untuk operasi sensitif (registrasi, hapus data)
 
@@ -19,18 +19,40 @@ const firebaseConfig = {
 // PERINGATAN: Di production, pindahkan upload ke Cloud Function
 const IMGBB_KEY = "67650d8ee67ebb8bba94f3bb2c72eb4f";
 
+// Pastikan Firebase SDK sudah dimuat sebelum inisialisasi
+if (typeof firebase === 'undefined') {
+  console.error("❌ Firebase SDK tidak dimuat! Periksa koneksi internet dan urutan script.");
+} else {
+  console.log("🔥 Firebase SDK terdeteksi, menginisialisasi...");
+}
+
 // Initialize Firebase
-firebase.initializeApp(firebaseConfig);
+try {
+  firebase.initializeApp(firebaseConfig);
+  console.log("✅ Firebase berhasil diinisialisasi");
+} catch (err) {
+  console.error("❌ Gagal initialize Firebase:", err);
+}
+
 const auth = firebase.auth();
 const db = firebase.database();
+console.log("📡 auth dan db siap:", { auth: !!auth, db: !!db });
 
 // ================== FIREBASE APP CHECK (Keamanan) ==================
-// Aktifkan App Check dengan ReCaptcha v3 (wajib di production)
-// Daftar di: https://console.firebase.google.com/project/_/appcheck
+// PERINGATAN: Jangan aktifkan App Check dengan kunci palsu!
+// Jika ingin mengaktifkan, daftar di https://console.firebase.google.com/project/_/appcheck
+// dan gunakan site key yang valid. Untuk sementara, nonaktifkan dulu.
+/*
 if (typeof firebase.appCheck !== 'undefined') {
-  const appCheck = firebase.appCheck();
-  appCheck.activate('YOUR_RECAPTCHA_SITE_KEY', true);
+  try {
+    const appCheck = firebase.appCheck();
+    appCheck.activate('YOUR_RECAPTCHA_SITE_KEY', true);
+    console.log("✅ App Check diaktifkan");
+  } catch (e) {
+    console.warn("⚠️ App Check gagal diaktifkan:", e);
+  }
 }
+*/
 
 // ================== VALIDASI KONEKSI ==================
 // Cegah penggunaan di luar domain yang diizinkan (opsional)
@@ -40,8 +62,9 @@ if (!allowedDomains.includes(origin) && !origin.endsWith('.web.app')) {
   console.warn('⚠️ Domain tidak dikenal, beberapa fitur mungkin dibatasi');
   // Bisa juga redirect ke halaman error
   // window.location.href = '/error.html';
+} else {
+  console.log(`✅ Domain diizinkan: ${origin}`);
 }
 
-// ================== EXPORT GLOBAL (TIDAK ADA PERUBAHAN) ==================
-// Tetap export ke global scope seperti semula
-// (fungsi-fungsi lain tetap menggunakan auth dan db)
+// Ekspor ke global (sudah otomatis)
+console.log("✅ config.js loaded - Firebase siap digunakan");

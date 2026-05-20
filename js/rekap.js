@@ -1,11 +1,8 @@
-// rekap.js - VERSION 3.4 (DUKUNGAN HARI LIBUR)
+// rekap.js - VERSION 3.5 (DENGAN LOG AKTIVITAS)
 // Fitur Rekap Absensi per Siswa
 // Mendukung periode: Minggu, Bulan, Semester, dan Custom Range
 // Mendukung status: Hadir, Sakit, Izin, Alpha (termasuk manual dari attendance_status)
-// PERUBAHAN V3.4:
-//   - Menghitung total hari sekolah hanya hari kerja (Senin-Jumat) yang bukan libur
-//   - Data absensi yang diproses hanya yang bukan hari libur
-//   - Mengintegrasikan fungsi isHoliday dan filterAttendanceByHoliday dari setting.js
+// PERUBAHAN V3.5: Menambahkan logActivity untuk export Excel dan PDF
 // ============================================================================
 
 let currentRekapData = [];
@@ -189,7 +186,6 @@ function countSchoolDays(startDate, endDate) {
     while (currentDate <= end) {
         const dayOfWeek = currentDate.getDay();
         const dateStr = currentDate.toISOString().split('T')[0];
-        // Hanya hitung jika hari kerja (Senin-Jumat) dan bukan hari libur
         if (dayOfWeek >= 1 && dayOfWeek <= 5 && !isHoliday(dateStr)) {
             count++;
         }
@@ -206,7 +202,6 @@ async function fetchManualStatusForRange(startDate, endDate) {
     const datePromises = [];
     const dateStrings = [];
     
-    // Kumpulkan semua tanggal yang BUKAN libur
     while (currentDate <= end) {
         const dateStr = currentDate.toISOString().split('T')[0];
         if (!isHoliday(dateStr)) {
@@ -231,26 +226,24 @@ async function fetchManualStatusForRange(startDate, endDate) {
     return manualData;
 }
 
-// ======================= HITUNG REKAP PER SISWA (DENGAN MANUAL STATUS & LIBUR) =======================
+// ======================= HITUNG REKAP PER SISWA =======================
 
 async function calculateStudentRekap(attendanceData, studentsData, startDate, endDate) {
     const studentMap = new Map();
     
-    // Filter absensi berdasarkan rentang dan hari libur
     let filteredAttendance = attendanceData.filter(a => {
         const recordDate = new Date(a.date);
         return recordDate >= startDate && recordDate <= endDate;
     });
-    // Hapus data yang tanggalnya libur
     filteredAttendance = filterAttendanceByHoliday(filteredAttendance);
     
     const totalSchoolDays = countSchoolDays(startDate, endDate);
     const manualStatusMap = await fetchManualStatusForRange(startDate, endDate);
     
     console.log(`📊 Periode: ${startDate.toLocaleDateString()} - ${endDate.toLocaleDateString()}`);
-    console.log(`📊 Total hari sekolah (setelah kurangi libur): ${totalSchoolDays}`);
+    console.log(`📊 Total hari sekolah: ${totalSchoolDays}`);
     console.log(`📊 Total data absensi fisik setelah filter libur: ${filteredAttendance.length}`);
-    console.log(`📊 Total data manual status (non-libur): ${Object.keys(manualStatusMap).length} tanggal`);
+    console.log(`📊 Total data manual status: ${Object.keys(manualStatusMap).length} tanggal`);
     
     studentsData.forEach(student => {
         if (student && student.id) {
@@ -268,7 +261,6 @@ async function calculateStudentRekap(attendanceData, studentsData, startDate, en
         }
     });
     
-    // Proses data absensi fisik (sudah terfilter libur)
     filteredAttendance.forEach(record => {
         const studentId = record.studentId.toString();
         const studentData = studentMap.get(studentId);
@@ -283,18 +275,15 @@ async function calculateStudentRekap(attendanceData, studentsData, startDate, en
         }
     });
     
-    // Proses manual status (hanya tanggal non-libur)
     for (const [dateStr, statuses] of Object.entries(manualStatusMap)) {
-        // Pastikan tanggal masih dalam rentang (redundan, karena sudah difilter)
         const recordDate = new Date(dateStr);
         if (recordDate < startDate || recordDate > endDate) continue;
-        if (isHoliday(dateStr)) continue; // safety, seharusnya sudah tidak ada
+        if (isHoliday(dateStr)) continue;
         
         for (const [studentId, statusInfo] of Object.entries(statuses)) {
             const studentData = studentMap.get(studentId);
             if (!studentData) continue;
             
-            // Cek apakah sudah ada absensi fisik pada tanggal tersebut (hadir/pulang)
             const hasPhysical = filteredAttendance.some(a => a.date === dateStr && a.studentId == studentId && (a.status === 'Hadir' || a.status === 'Pulang'));
             if (hasPhysical) continue;
             
@@ -492,7 +481,6 @@ function renderRekapCharts(data, startDate, endDate) {
         });
     }
     
-    // Bar chart berdasarkan tanggal (hanya non-libur)
     const attendanceByDate = {};
     let filteredAttendance = dbData.attendance.filter(a => {
         const recordDate = new Date(a.date);
@@ -555,7 +543,7 @@ async function loadRekap(retryCount = 0, forceRefresh = false) {
         } else {
             const tbody = document.getElementById('rekapTbody');
             if (tbody) {
-                tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; padding:40px;">❌ Gagal memuat data rekap (database tidak siap).<\/td><\/tr>`;
+                tbody.innerHTML = `<table><td colspan="12" style="text-align:center; padding:40px;">❌ Gagal memuat data rekap (database tidak siap).<\/td><\/tr>`;
             }
             if (typeof showToast === 'function') showToast("❌ Gagal memuat data rekap (database tidak siap)", "error");
         }
@@ -606,7 +594,6 @@ async function loadRekap(retryCount = 0, forceRefresh = false) {
         return;
     }
 
-    // Cek cache di sessionStorage
     const cacheKey = getCacheKey(period, startDate, endDate);
     if (!forceRefresh && sessionStorage.getItem(cacheKey)) {
         try {
@@ -665,7 +652,7 @@ async function loadRekap(retryCount = 0, forceRefresh = false) {
     }
 }
 
-// ======================= EXPORT FUNCTIONS =======================
+// ======================= EXPORT FUNCTIONS (DENGAN LOG) =======================
 
 function exportRekapToExcel() {
     if (!currentRekapData || currentRekapData.length === 0) {
@@ -680,10 +667,12 @@ function exportRekapToExcel() {
     csv += `"LAPORAN REKAP ABSENSI SISWA"\n"${schoolName}"\n"Periode: ${periodText}"\n"Tanggal cetak: ${dateNow}"\n\n`;
     csv += `No,ID FP,Nama Siswa,Kelas,Jurusan,Total Hari,Hadir,Sakit,Izin,Alpha,Persentase,Status\n`;
     let no = 1;
+    let exportedCount = 0;
     currentRekapData.forEach(item => {
         if (item.nama && item.nama !== 'Tidak Diketahui') {
             csv += `${no},${item.id},"${item.nama}",${item.kelas},${item.jurusan},${item.totalDays},${item.hadir},${item.sakit},${item.izin},${item.alpha},${item.percentage}%,${item.status}\n`;
             no++;
+            exportedCount++;
         }
     });
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -696,6 +685,11 @@ function exportRekapToExcel() {
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
     if (typeof showToast === 'function') showToast("📥 Rekap berhasil diekspor ke Excel!", "success");
+    
+    // LOG: Ekspor ke Excel
+    if (typeof logActivity === 'function') {
+        logActivity('export_rekap_excel', `Ekspor rekap absensi ke Excel: ${exportedCount} siswa, periode ${periodText}`);
+    }
 }
 
 function exportRekapToPDF() {
@@ -775,6 +769,11 @@ function exportRekapToPDF() {
     `);
     printWindow.document.close();
     if (typeof showToast === 'function') showToast("📄 Membuka halaman print...", "info");
+    
+    // LOG: Ekspor ke PDF
+    if (typeof logActivity === 'function') {
+        logActivity('export_rekap_pdf', `Ekspor rekap absensi ke PDF: ${validData.length} siswa, periode ${periodText}`);
+    }
 }
 
 // ======================= UTILITY =======================
@@ -819,4 +818,4 @@ window.exportRekapToPDF = exportRekapToPDF;
 window.initRekap = initRekap;
 window.cleanupRekap = cleanupRekap;
 
-console.log("✅ rekap.js V3.4 loaded - Dukungan hari libur untuk rekap absensi");
+console.log("✅ rekap.js V3.5 loaded - Dengan log aktivitas untuk export Excel dan PDF");

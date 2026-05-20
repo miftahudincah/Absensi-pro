@@ -1,15 +1,8 @@
-// setting.js - VERSION 3.6 (PENGATURAN JAM EFEKTIF & HARI LIBUR)
+// setting.js - VERSION 3.7 (DENGAN LOG AKTIVITAS)
 // PENGATURAN SEKOLAH (SCHOOL CONFIG) & DELAY GLOBAL
 // Dengan dukungan manajemen KELAS dan JURUSAN yang bisa diedit
 // SENSOR STATUS: Dipisahkan ke modul sendiri (tetap di sini untuk kemudahan)
-// PERUBAHAN: 
-//   - Menambahkan akses role developer (developer = admin untuk semua fungsi)
-//   - Menambahkan forceReloadSchoolConfig() untuk debugging
-//   - Memperbaiki syncSchoolConfigToWindow() dengan return promise
-//   - Menambahkan retry mechanism untuk populate functions
-//   - Memperkuat event listener untuk school config
-//   - PERBAIKAN: saveSchoolType sekarang menyimpan ke Firebase dengan benar
-//   - FITUR BARU: Pengaturan jam efektif (batas terlambat, minimal pulang, hari libur)
+// PERUBAHAN V3.7: Menambahkan logActivity untuk semua operasi pengaturan
 // ============================================================================
 
 let currentSchoolConfig = {
@@ -41,14 +34,12 @@ function syncSchoolConfigToWindow() {
                 "classes:", window.currentSchoolConfig.classes.length,
                 "majors:", window.currentSchoolConfig.majors.length);
     
-    // Update UI dropdown setelah sync
     const typeSelect = document.getElementById('schoolTypeSelect');
     if (typeSelect && typeSelect.value !== currentSchoolConfig.type) {
         typeSelect.value = currentSchoolConfig.type;
         console.log(`📋 Set schoolTypeSelect to: ${currentSchoolConfig.type}`);
     }
     
-    // Update majors manager visibility
     const majorsDiv = document.getElementById('majorsManager');
     if (majorsDiv) {
         const shouldShow = (currentSchoolConfig.type === 'smk' || currentSchoolConfig.type === 'both');
@@ -62,7 +53,6 @@ function syncSchoolConfigToWindow() {
 function forceReloadSchoolConfig() {
     console.log("🔄 Force reloading school config from Firebase...");
     
-    // Izinkan admin dan developer
     if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'developer')) {
         showToast("⛔ Hanya admin atau developer yang dapat me-refresh config!", "error");
         return;
@@ -85,20 +75,15 @@ function forceReloadSchoolConfig() {
             
             console.log(`🏫 Reloaded config: type=${configType}, classes=${configClasses.length}, majors=${configMajors.length}`);
             
-            // Update local config
             currentSchoolConfig.type = configType;
             currentSchoolConfig.majors = [...configMajors];
             currentSchoolConfig.classes = [...configClasses];
             
-            // Sync ke window
             syncSchoolConfigToWindow();
-            
-            // Update UI
             updateSchoolTypeUI();
             renderClassesList();
             renderMajorsList();
             
-            // Force populate semua dropdown
             setTimeout(() => {
                 console.log("🔄 Force repopulating all dropdowns after force reload...");
                 if (typeof populateKelasOptions === 'function') populateKelasOptions();
@@ -109,12 +94,16 @@ function forceReloadSchoolConfig() {
                 if (typeof populateStudentSelectForCode === 'function') populateStudentSelectForCode();
             }, 100);
             
-            // Refresh rekap jika perlu
             if (typeof loadRekap === 'function' && document.getElementById('tab-rekap')?.classList.contains('active')) {
                 setTimeout(() => loadRekap(), 200);
             }
             
             showToast("✅ Konfigurasi sekolah dimuat ulang!", "success");
+            
+            // LOG: Force reload config
+            if (typeof logActivity === 'function') {
+                logActivity('force_reload_school_config', `Memuat ulang konfigurasi sekolah: tipe=${configType}, kelas=${configClasses.length}, jurusan=${configMajors.length}`);
+            }
         } else {
             console.log("⚠️ No school config found in Firebase");
             showToast("⚠️ Tidak ada konfigurasi di Firebase", "warning");
@@ -143,7 +132,6 @@ function setupSettingDataReadyListener() {
     window.addEventListener('dataReady', (e) => {
         console.log("⚙️ setting.js: dataReady received, updating settings UI");
         
-        // Jangan override config jika sudah dimuat dari Firebase
         if (!isSchoolConfigLoaded && window.currentSchoolConfig) {
             currentSchoolConfig = {
                 type: window.currentSchoolConfig.type || 'smp',
@@ -161,7 +149,6 @@ function setupSettingDataReadyListener() {
             delaySpan.textContent = formatDelayText(window.globalDelayValue);
         }
         
-        // Populate filters with retry
         setTimeout(() => {
             if (typeof populateKelasOptions === 'function') populateKelasOptions();
             if (typeof populateJurusanOptions === 'function') populateJurusanOptions();
@@ -179,7 +166,6 @@ function setupSettingUiReadyListener() {
 
     window.addEventListener('uiReady', (e) => {
         const user = e.detail.currentUser;
-        // Izinkan admin dan developer untuk melihat sensor status
         if (user && (user.role === 'admin' || user.role === 'developer')) {
             console.log("🔍 uiReady: initializing sensor status for admin/developer");
             initSensorStatusListener();
@@ -262,7 +248,6 @@ function setGlobalDelayFormValue(delayMinutes) {
 }
 
 function saveGlobalDelay() {
-    // Izinkan admin dan developer
     if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'developer')) {
         showToast("⛔ Hanya admin dan developer yang dapat mengubah delay global.", "error");
         return;
@@ -272,6 +257,7 @@ function saveGlobalDelay() {
         showToast("⚠️ Delay harus lebih dari 0 menit!", "error");
         return;
     }
+    const oldDelay = window.globalDelayValue || 60;
     const btn = document.getElementById('btnSaveGlobalDelay');
     if (btn) {
         btn.disabled = true;
@@ -282,6 +268,11 @@ function saveGlobalDelay() {
             showToast(`✅ Delay global berhasil diupdate menjadi ${formatDelayText(delayMinutes)}`);
             const displaySpan = document.getElementById('globalDelayDisplay');
             if (displaySpan) displaySpan.textContent = formatDelayText(delayMinutes);
+            
+            // LOG: Ubah delay global
+            if (typeof logActivity === 'function') {
+                logActivity('update_global_delay', `Mengubah delay pulang global dari ${formatDelayText(oldDelay)} menjadi ${formatDelayText(delayMinutes)}`);
+            }
         })
         .catch(err => showToast("❌ Gagal menyimpan: " + err.message, "error"))
         .finally(() => {
@@ -391,7 +382,6 @@ function removeClass(index) {
 }
 
 function saveClasses() {
-    // Izinkan admin dan developer
     if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'developer')) {
         showToast("⛔ Hanya admin dan developer yang dapat mengubah daftar kelas.", "error");
         return;
@@ -400,6 +390,7 @@ function saveClasses() {
         showToast("⚠️ Minimal harus ada 1 kelas!", "error");
         return;
     }
+    const oldClasses = [...(window.currentSchoolConfig?.classes || [])];
     const btn = document.getElementById('btnSaveClasses');
     if (btn) {
         btn.disabled = true;
@@ -409,6 +400,17 @@ function saveClasses() {
         .then(() => {
             showToast(`✅ Daftar kelas berhasil disimpan (${currentSchoolConfig.classes.length} kelas).`);
             syncSchoolConfigToWindow();
+            
+            // LOG: Simpan daftar kelas
+            if (typeof logActivity === 'function') {
+                const added = currentSchoolConfig.classes.filter(c => !oldClasses.includes(c));
+                const removed = oldClasses.filter(c => !currentSchoolConfig.classes.includes(c));
+                let logDetail = `Jumlah kelas: ${currentSchoolConfig.classes.length}`;
+                if (added.length) logDetail += `, ditambah: ${added.join(', ')}`;
+                if (removed.length) logDetail += `, dihapus: ${removed.join(', ')}`;
+                logActivity('save_classes', logDetail);
+            }
+            
             setTimeout(() => {
                 if (typeof populateKelasOptions === 'function') populateKelasOptions();
                 if (typeof populateStudentFilters === 'function') populateStudentFilters();
@@ -467,12 +469,12 @@ function escapeHtmlStr(str) {
 }
 
 function saveSchoolType() {
-    // Izinkan admin dan developer
     if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'developer')) {
         showToast("⛔ Hanya admin dan developer yang dapat mengubah tipe sekolah.", "error");
         return;
     }
     
+    const oldType = currentSchoolConfig.type;
     const newType = document.getElementById('schoolTypeSelect').value;
     console.log("📝 saveSchoolType dipanggil dengan tipe:", newType);
     
@@ -519,6 +521,11 @@ function saveSchoolType() {
             updateSchoolTypeUI();
             renderClassesList();
             renderMajorsList();
+            
+            // LOG: Ubah tipe sekolah
+            if (typeof logActivity === 'function') {
+                logActivity('update_school_type', `Mengubah tipe sekolah dari ${oldType} menjadi ${newType}`);
+            }
             
             setTimeout(() => {
                 console.log("🔄 Populating all dropdowns after save...");
@@ -581,11 +588,11 @@ function removeMajor(index) {
 }
 
 function saveMajors() {
-    // Izinkan admin dan developer
     if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'developer')) {
         showToast("⛔ Hanya admin dan developer yang dapat mengubah jurusan.", "error");
         return;
     }
+    const oldMajors = [...(window.currentSchoolConfig?.majors || [])];
     const btn = document.getElementById('btnSaveMajors');
     if (btn) {
         btn.disabled = true;
@@ -595,6 +602,17 @@ function saveMajors() {
         .then(() => {
             showToast(`✅ Daftar jurusan berhasil disimpan (${currentSchoolConfig.majors.length} jurusan).`);
             syncSchoolConfigToWindow();
+            
+            // LOG: Simpan daftar jurusan
+            if (typeof logActivity === 'function') {
+                const added = currentSchoolConfig.majors.filter(m => !oldMajors.includes(m));
+                const removed = oldMajors.filter(m => !currentSchoolConfig.majors.includes(m));
+                let logDetail = `Jumlah jurusan: ${currentSchoolConfig.majors.length}`;
+                if (added.length) logDetail += `, ditambah: ${added.join(', ')}`;
+                if (removed.length) logDetail += `, dihapus: ${removed.join(', ')}`;
+                logActivity('save_majors', logDetail);
+            }
+            
             setTimeout(() => {
                 if (typeof populateJurusanOptions === 'function') populateJurusanOptions();
                 if (typeof populateStudentFilters === 'function') populateStudentFilters();
@@ -619,7 +637,6 @@ function getDefaultClasses(schoolType) {
 // ======================= RESET, EXPORT, IMPORT =======================
 
 function resetAllSettings() {
-    // Izinkan admin dan developer
     if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'developer')) {
         showToast("⛔ Hanya admin dan developer yang dapat mereset pengaturan!", "error");
         return;
@@ -647,6 +664,12 @@ function resetAllSettings() {
         updateSchoolTypeUI();
         const typeSelect = document.getElementById('schoolTypeSelect');
         if (typeSelect) typeSelect.value = 'smp';
+        
+        // LOG: Reset semua pengaturan
+        if (typeof logActivity === 'function') {
+            logActivity('reset_all_settings', 'Meriset semua pengaturan ke default (delay global 60 menit, tipe SMP, kelas VII-IX, jurusan kosong)');
+        }
+        
         setTimeout(() => {
             if (typeof populateKelasOptions === 'function') populateKelasOptions();
             if (typeof populateJurusanOptions === 'function') populateJurusanOptions();
@@ -672,6 +695,11 @@ function exportSchoolConfig() {
     link.click();
     URL.revokeObjectURL(link.href);
     showToast("📥 Konfigurasi sekolah berhasil diekspor", "success");
+    
+    // LOG: Ekspor konfigurasi
+    if (typeof logActivity === 'function') {
+        logActivity('export_school_config', `Ekspor konfigurasi sekolah (tipe: ${currentSchoolConfig.type})`);
+    }
 }
 
 function importSchoolConfig(file) {
@@ -688,6 +716,11 @@ function importSchoolConfig(file) {
                 };
                 db.ref('school_config').update(updates);
                 showToast("✅ Konfigurasi sekolah berhasil diimpor!", "success");
+                
+                // LOG: Impor konfigurasi
+                if (typeof logActivity === 'function') {
+                    logActivity('import_school_config', `Impor konfigurasi sekolah (tipe: ${config.schoolType}, kelas: ${config.classes?.length || 0}, jurusan: ${config.majors?.length || 0})`);
+                }
             } else {
                 showToast("❌ Format file tidak valid!", "error");
             }
@@ -712,7 +745,6 @@ function loadAttendanceSettings() {
                 dateHolidays: data.dateHolidays || []
             };
         } else {
-            // Default
             attendanceSettings = {
                 lateThreshold: '07:30',
                 minOutTime: '14:00',
@@ -720,13 +752,11 @@ function loadAttendanceSettings() {
                 dateHolidays: []
             };
         }
-        // Update UI
         const lateInput = document.getElementById('lateThresholdInput');
         const minOutInput = document.getElementById('minOutTimeInput');
         if (lateInput) lateInput.value = attendanceSettings.lateThreshold;
         if (minOutInput) minOutInput.value = attendanceSettings.minOutTime;
         
-        // Update checkboxes
         const checkboxes = document.querySelectorAll('#tab-config input[type="checkbox"][value]');
         checkboxes.forEach(cb => {
             const val = parseInt(cb.value);
@@ -734,7 +764,6 @@ function loadAttendanceSettings() {
         });
         renderHolidayDatesList();
         
-        // Simpan ke window global agar bisa diakses modul lain
         window.attendanceSettings = attendanceSettings;
     });
 }
@@ -782,6 +811,11 @@ function addHolidayDate() {
     attendanceSettings.dateHolidays.push(date);
     saveAttendanceSettingsToFirebase();
     dateInput.value = '';
+    
+    // LOG: Tambah tanggal libur
+    if (typeof logActivity === 'function') {
+        logActivity('add_holiday_date', `Menambah tanggal libur: ${formatIndonesianDate(date)}`);
+    }
 }
 
 function removeHolidayDate(date) {
@@ -791,6 +825,11 @@ function removeHolidayDate(date) {
     }
     attendanceSettings.dateHolidays = attendanceSettings.dateHolidays.filter(d => d !== date);
     saveAttendanceSettingsToFirebase();
+    
+    // LOG: Hapus tanggal libur
+    if (typeof logActivity === 'function') {
+        logActivity('remove_holiday_date', `Menghapus tanggal libur: ${formatIndonesianDate(date)}`);
+    }
 }
 
 function saveAttendanceSettingsToFirebase() {
@@ -801,7 +840,9 @@ function saveAttendanceSettingsToFirebase() {
         dateHolidays: attendanceSettings.dateHolidays
     };
     db.ref('school_config/attendance_settings').set(settings)
-        .then(() => showToast("✅ Pengaturan jam efektif & hari libur disimpan", "success"))
+        .then(() => {
+            showToast("✅ Pengaturan jam efektif & hari libur disimpan", "success");
+        })
         .catch(err => showToast("❌ Gagal menyimpan: " + err.message, "error"));
 }
 
@@ -810,6 +851,10 @@ function saveAttendanceSettings() {
         showToast("⛔ Hanya admin yang dapat mengubah pengaturan!", "error");
         return;
     }
+    const oldLateThreshold = attendanceSettings.lateThreshold;
+    const oldMinOutTime = attendanceSettings.minOutTime;
+    const oldWeeklyHolidays = [...attendanceSettings.weeklyHolidays];
+    
     const lateThreshold = document.getElementById('lateThresholdInput').value;
     const minOutTime = document.getElementById('minOutTimeInput').value;
     const weeklyHolidays = [];
@@ -820,29 +865,40 @@ function saveAttendanceSettings() {
     attendanceSettings.lateThreshold = lateThreshold;
     attendanceSettings.minOutTime = minOutTime;
     attendanceSettings.weeklyHolidays = weeklyHolidays;
-    // dateHolidays tidak diubah di sini, hanya dari add/remove
     saveAttendanceSettingsToFirebase();
+    
+    // LOG: Simpan pengaturan jam efektif
+    if (typeof logActivity === 'function') {
+        const changes = [];
+        if (oldLateThreshold !== lateThreshold) changes.push(`batas terlambat: ${oldLateThreshold} → ${lateThreshold}`);
+        if (oldMinOutTime !== minOutTime) changes.push(`minimal pulang: ${oldMinOutTime} → ${minOutTime}`);
+        const addedHolidays = weeklyHolidays.filter(h => !oldWeeklyHolidays.includes(h));
+        const removedHolidays = oldWeeklyHolidays.filter(h => !weeklyHolidays.includes(h));
+        if (addedHolidays.length) changes.push(`libur mingguan tambah: ${addedHolidays.join(',')}`);
+        if (removedHolidays.length) changes.push(`libur mingguan hapus: ${removedHolidays.join(',')}`);
+        if (changes.length) {
+            logActivity('save_attendance_settings', `Perubahan pengaturan jam efektif: ${changes.join('; ')}`);
+        } else {
+            logActivity('save_attendance_settings', 'Menyimpan pengaturan jam efektif (tanpa perubahan)');
+        }
+    }
 }
 
 // Fungsi pengecekan hari libur (digunakan di attendance.js dan rekap.js)
 function isHoliday(dateStr) {
     if (!attendanceSettings) return false;
     const date = new Date(dateStr);
-    const dayOfWeek = date.getDay(); // 0 Minggu, 6 Sabtu
-    // Cek weekly holidays
+    const dayOfWeek = date.getDay();
     if (attendanceSettings.weeklyHolidays && attendanceSettings.weeklyHolidays.includes(dayOfWeek)) return true;
-    // Cek date holidays
     if (attendanceSettings.dateHolidays && attendanceSettings.dateHolidays.includes(dateStr)) return true;
     return false;
 }
 
-// Filter attendance records to exclude holidays
 function filterAttendanceByHoliday(attendanceArray) {
     if (!attendanceArray || !attendanceArray.length) return attendanceArray || [];
     return attendanceArray.filter(record => !isHoliday(record.date));
 }
 
-// Fungsi untuk mendapatkan hari libur dalam rentang (digunakan rekap)
 function getHolidayCountInRange(startDate, endDate) {
     let count = 0;
     let current = new Date(startDate);
@@ -860,7 +916,6 @@ function getHolidayCountInRange(startDate, endDate) {
 let sensorStatusListener = null;
 
 function initSensorStatusListener() {
-    // Izinkan admin dan developer
     if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'developer')) {
         const panel = document.getElementById('sensorStatusPanel');
         if (panel) panel.style.display = 'none';
@@ -1005,7 +1060,6 @@ function initAllSettings() {
         const displaySpan = document.getElementById('globalDelayDisplay');
         if (displaySpan) displaySpan.textContent = formatDelayText(delay || 60);
     });
-    // Load attendance settings (jam efektif & hari libur)
     loadAttendanceSettings();
     console.log("✅ initAllSettings - Selesai");
 }
@@ -1046,7 +1100,6 @@ window.cleanupSensorStatus = cleanupSensorStatus;
 window.syncSchoolConfigToWindow = syncSchoolConfigToWindow;
 window.forceReloadSchoolConfig = forceReloadSchoolConfig;
 
-// Export fungsi pengaturan jam efektif & hari libur
 window.loadAttendanceSettings = loadAttendanceSettings;
 window.addHolidayDate = addHolidayDate;
 window.removeHolidayDate = removeHolidayDate;
@@ -1056,4 +1109,4 @@ window.filterAttendanceByHoliday = filterAttendanceByHoliday;
 window.getHolidayCountInRange = getHolidayCountInRange;
 window.renderHolidayDatesList = renderHolidayDatesList;
 
-console.log("✅ setting.js V3.6 loaded - Developer role fully supported + pengaturan jam efektif & hari libur");
+console.log("✅ setting.js V3.7 loaded - Dengan log aktivitas untuk pengaturan");
