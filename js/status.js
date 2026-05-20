@@ -1,8 +1,8 @@
-// status.js - VERSION 4.5 (RESPONSIVE VIEWERS BUTTON, LANGSUNG AMBIL DATA)
+// status.js - VERSION 4.6 (VIEWER COUNT BADGE ON BUTTON, REAL-TIME UPDATE)
 // Fitur Status: upload teks/gambar, auto-delete 24 jam, reply/balas status,
 // daftar orang yang melihat (viewers), notifikasi.
-// PERBAIKAN: Tombol mata sekarang lebih responsif - langsung menampilkan viewer
-// tanpa menunggu status berganti, dengan mengambil data langsung dari Firebase.
+// PERBAIKAN: Tombol mata sekarang menampilkan jumlah viewer (misal 👁️ 3) jika ada,
+// jika tidak ada viewer tampil 👁️ 0 atau hanya ikon. Jumlah diperbarui real-time.
 // ============================================================================
 
 let statusesListener = null;
@@ -13,6 +13,8 @@ let statusViewerInterval = null;
 let statusExpiryInterval = null;
 let statusUiReadyListenerAdded = false;
 let lastStatusCount = 0;
+let currentViewerCount = 0;
+let viewerCountListener = null;
 
 // ======================= EVENT LISTENER ========================
 function setupStatusUiReadyListener() {
@@ -303,6 +305,31 @@ async function createStatus() {
     }
 }
 
+// ======================= GET VIEWER COUNT ========================
+async function getViewerCount(userId, statusId) {
+    try {
+        const snapshot = await db.ref(`statuses/${userId}/${statusId}/viewedBy`).once('value');
+        const viewers = snapshot.val() || {};
+        return Object.keys(viewers).length;
+    } catch (err) {
+        console.error("Error getting viewer count:", err);
+        return 0;
+    }
+}
+
+// ======================= UPDATE VIEWER COUNT ON BUTTON ========================
+function updateViewerCountButton(buttonElement, count) {
+    if (!buttonElement) return;
+    // Simpan teks asli jika belum ada data count
+    if (count > 0) {
+        buttonElement.innerHTML = `👁️ <span style="font-size: 14px; background: rgba(255,255,255,0.3); border-radius: 20px; padding: 2px 6px; margin-left: 4px;">${count}</span> <span style="font-size: 14px;">Lihat yang melihat</span>`;
+        buttonElement.title = `${count} orang telah melihat status ini`;
+    } else {
+        buttonElement.innerHTML = `👁️ <span style="font-size: 14px;">Lihat yang melihat (0)</span>`;
+        buttonElement.title = "Belum ada yang melihat status ini";
+    }
+}
+
 // ======================= STATUS VIEWER (DENGAN REPLY & VIEWERS) ========================
 async function openStatusViewer(userId) {
     console.log("📸 openStatusViewer called for userId:", userId);
@@ -357,12 +384,50 @@ function showStatusViewerModal(status) {
     const content = document.getElementById('statusViewerContent');
     if (!content) return;
     if (statusViewerInterval) clearInterval(statusViewerInterval);
+    if (viewerCountListener) {
+        // Hentikan listener lama
+        if (currentStatusOwnerId && currentStatusList[currentStatusIndex]) {
+            const oldStatusId = currentStatusList[currentStatusIndex].id;
+            db.ref(`statuses/${currentStatusOwnerId}/${oldStatusId}/viewedBy`).off('value', viewerCountListener);
+        }
+    }
     
     const isOwner = (currentStatusOwnerId === currentUser.uid);
     
-    const updateContent = () => {
+    // Fungsi untuk memperbarui jumlah viewer pada tombol
+    const updateViewerCount = async (statusId) => {
+        const count = await getViewerCount(currentStatusOwnerId, statusId);
+        currentViewerCount = count;
+        const viewersBtn = document.querySelector('.status-viewers-btn');
+        if (viewersBtn) {
+            updateViewerCountButton(viewersBtn, count);
+        }
+    };
+    
+    // Pasang listener realtime untuk perubahan viewer
+    const setupViewerListener = (statusId) => {
+        if (viewerCountListener) {
+            db.ref(`statuses/${currentStatusOwnerId}/${statusId}/viewedBy`).off('value', viewerCountListener);
+        }
+        viewerCountListener = db.ref(`statuses/${currentStatusOwnerId}/${statusId}/viewedBy`).on('value', async (snap) => {
+            const count = snap.val() ? Object.keys(snap.val()).length : 0;
+            currentViewerCount = count;
+            const viewersBtn = document.querySelector('.status-viewers-btn');
+            if (viewersBtn) {
+                updateViewerCountButton(viewersBtn, count);
+            }
+        });
+    };
+    
+    const updateContent = async () => {
         const s = currentStatusList[currentStatusIndex];
         if (!s) { closeModal('modal-status-viewer'); return; }
+        
+        // Setup listener untuk status ini
+        setupViewerListener(s.id);
+        // Ambil jumlah viewer awal
+        const viewerCount = await getViewerCount(currentStatusOwnerId, s.id);
+        currentViewerCount = viewerCount;
         
         let mediaHtml = '';
         if (s.type === 'image' && s.mediaUrl) {
@@ -375,10 +440,10 @@ function showStatusViewerModal(status) {
                          </div>`;
         }
         
-        // --- TOMBOL MATA SELALU TAMPIL, LANGSUNG PANGGIL showStatusViewersWithId ---
+        // Tombol mata dengan jumlah viewer
         let viewersButton = `
             <button class="status-viewers-btn" onclick="showStatusViewersWithId('${currentStatusOwnerId}', '${s.id}')" style="background: rgba(0,0,0,0.6); border: none; font-size: 32px; cursor: pointer; color: white; padding: 12px 20px; border-radius: 60px; backdrop-filter: blur(8px); transition: transform 0.1s; display: inline-flex; align-items: center; gap: 8px;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'" title="Dilihat oleh">
-                👁️ <span style="font-size: 14px;">Lihat yang melihat</span>
+                👁️ <span style="font-size: 14px;">${viewerCount > 0 ? `<span style="background: rgba(255,255,255,0.3); border-radius: 20px; padding: 2px 6px; margin-left: 4px;">${viewerCount}</span> ` : ''}Lihat yang melihat${viewerCount === 0 ? ' (0)' : ''}</span>
             </button>
         `;
         
@@ -804,6 +869,13 @@ function cleanupStatusSystem() {
         clearInterval(statusViewerInterval);
         statusViewerInterval = null;
     }
+    if (viewerCountListener && currentStatusOwnerId && currentStatusList[currentStatusIndex]) {
+        const statusId = currentStatusList[currentStatusIndex]?.id;
+        if (statusId) {
+            db.ref(`statuses/${currentStatusOwnerId}/${statusId}/viewedBy`).off('value', viewerCountListener);
+        }
+        viewerCountListener = null;
+    }
     const container = document.getElementById('statusBar');
     if (container) container.removeEventListener('click', handleStatusClick);
     lastStatusCount = 0;
@@ -835,4 +907,4 @@ window.sendStatusReply = sendStatusReply;
 window.showStatusRepliesModal = showStatusRepliesModal;
 window.cleanupStatusSystem = cleanupStatusSystem;
 
-console.log("✅ status.js V4.5 loaded - Responsive viewers button with direct Firebase fetch");
+console.log("✅ status.js V4.6 loaded - Viewer count badge on button, real-time update");
