@@ -1,6 +1,7 @@
-// ui.js - VERSION 5.6 (SUPABASE INTEGRATION FOR SCHOOL LOGO)
+// ui.js - VERSION 5.7 (FIXED: TAB CHAT NOW RENDERS INTERFACE)
 // Berisi fungsi-fungsi antarmuka pengguna, modal, profil, dan inisialisasi dashboard
-// PERUBAHAN TERBARU:
+// PERUBAHAN:
+//   - Menambahkan renderChatInterface('chatPanel') di switchTab untuk tab chat
 //   - Upload logo sekolah ke Supabase dengan delete logo lama
 //   - Floating buttons untuk semua user
 //   - Sidebar dan role permissions
@@ -389,6 +390,12 @@ window.addEventListener('uiReady', (e) => {
         console.log("💬 uiReady received, initializing chat system");
         window._chatInitialized = true;
         initChatSystem();
+        // Render chat interface for the main chat panel after init
+        setTimeout(() => {
+            if (typeof renderChatInterface === 'function') {
+                renderChatInterface('chatPanel');
+            }
+        }, 500);
     }
 });
 
@@ -849,8 +856,21 @@ function switchTab(tabId) {
         } else if (tabId === 'friends') {
             if (typeof loadFriendRequests === 'function') loadFriendRequests();
             if (typeof loadFriendsList === 'function') loadFriendsList();
-        } else if (tabId === 'chat' && typeof loadChatList === 'function') {
-            loadChatList();
+        } else if (tabId === 'chat') {
+            // FIX: Render chat interface for the main panel
+            if (typeof renderChatInterface === 'function') {
+                renderChatInterface('chatPanel');
+            } else {
+                console.warn("renderChatInterface not available yet, will retry...");
+                setTimeout(() => {
+                    if (typeof renderChatInterface === 'function') {
+                        renderChatInterface('chatPanel');
+                    }
+                }, 500);
+            }
+            if (typeof loadChatList === 'function') {
+                loadChatList();
+            }
         }
     }, 50);
 }
@@ -1482,8 +1502,8 @@ function renderUsersTable() {
             <td><strong>${escapeHtmlString(u.nama)}</strong>${isMe ? '<br><small style="color:#4a90e2;">Akun Anda</small>' : ''}</td>
             <td style="color:#aaa; font-size:0.9rem;">${u.email || '-'}</td>
             <td>${roleHtml}</td>
-            <td style="color:#888; font-size:0.85rem;">${escapeHtmlString(detailText)}</td>
-            <td style="text-align:center;">${actionsHtml}</td>
+            <td style="color:#888; font-size:0.85rem;">${escapeHtmlString(detailText)}</div>
+            <td style="text-align:center;">${actionsHtml}</div>
         </tr>`;
     });
     console.log(`📊 renderUsersTable: ${data.length} users displayed`);
@@ -1569,4 +1589,4 @@ window.applySidebarRolePermissions = applySidebarRolePermissions;
 // Debug function
 window.debugAttendanceData = debugAttendanceData;
 
-console.log("✅ ui.js V5.6 loaded - Supabase integration for school logo");
+console.log("✅ ui.js V5.7 loaded - Fixed tab chat rendering");
