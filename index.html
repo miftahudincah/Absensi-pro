@@ -418,7 +418,7 @@
                 </div>
             </div>
             <div class="table-container">
-                <table>
+                </table>
                     <thead>
                         <tr><th>No</th><th>ID FP</th><th>Nama</th><th>Kelas</th><th>Jurusan</th><th>Total Hari</th><th>Hadir</th><th>Sakit</th><th>Izin</th><th>Alpha</th><th>Persentase</th><th>Status</th></tr>
                     </thead>
@@ -477,6 +477,47 @@
                 <hr>
                 <div class="form-group"><label>⏰ Delay Pulang Global</label><div style="display:flex; gap:10px; flex-wrap:wrap;"><select id="globalDelayUnit"><option value="minutes">Menit</option><option value="hours">Jam</option></select><div id="globalDelayMinutesGroup"><input type="number" id="globalDelayMinutesValue" value="60" style="width:80px;"> menit</div><div id="globalDelayHoursGroup" style="display:none;"><select id="globalDelayHoursValue" style="width:80px;"></select> jam</div><button class="btn-action btn-primary role-admin" onclick="saveGlobalDelay()">Simpan</button></div><div><small>Delay saat ini: <strong id="globalDelayDisplay">60 menit</strong></small></div></div>
                 
+                <!-- ======================= PENGATURAN JAM EFEKTIF & HARI LIBUR ======================= -->
+                <hr>
+                <h4>⏰ Pengaturan Jam Efektif & Hari Libur</h4>
+                <div class="form-group">
+                    <label>🕒 Batas Waktu Terlambat (Jam Masuk)</label>
+                    <div style="display:flex; gap:10px; align-items:center;">
+                        <input type="time" id="lateThresholdInput" value="07:30" style="width:120px;">
+                        <span>Siswa yang scan setelah jam ini akan dianggap TERLAMBAT</span>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>🏠 Minimal Jam Pulang</label>
+                    <div style="display:flex; gap:10px; align-items:center;">
+                        <input type="time" id="minOutTimeInput" value="14:00" style="width:120px;">
+                        <span>Scan pulang sebelum jam ini akan mendapat peringatan (tetap bisa pulang)</span>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>📅 Hari Libur Mingguan</label>
+                    <div style="display:flex; gap:15px; flex-wrap:wrap;">
+                        <label><input type="checkbox" value="0"> Minggu</label>
+                        <label><input type="checkbox" value="6"> Sabtu</label>
+                        <label><input type="checkbox" value="1"> Senin</label>
+                        <label><input type="checkbox" value="2"> Selasa</label>
+                        <label><input type="checkbox" value="3"> Rabu</label>
+                        <label><input type="checkbox" value="4"> Kamis</label>
+                        <label><input type="checkbox" value="5"> Jumat</label>
+                    </div>
+                    <small class="text-small">Centang hari yang LIBUR (tidak ada absensi)</small>
+                </div>
+                <div class="form-group">
+                    <label>📆 Tanggal Libur Khusus (Nasional)</label>
+                    <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+                        <input type="date" id="holidayDateInput">
+                        <button class="btn-action btn-secondary" onclick="addHolidayDate()">➕ Tambah</button>
+                    </div>
+                    <div id="holidayDatesList" style="margin-top:10px; display:flex; flex-wrap:wrap; gap:8px;"></div>
+                </div>
+                <button class="btn-action btn-primary role-admin" onclick="saveAttendanceSettings()" id="btnSaveAttendanceSettings">💾 Simpan Pengaturan</button>
+                <!-- ======================= END PENGATURAN JAM EFEKTIF ======================= -->
+
                 <div id="sensorStatusPanel" class="sensor-status-container" style="margin-top: 20px; display: none;">
                     <div class="sensor-header">
                         <h4>🔍 STATUS 16 SENSOR FINGERPRINT</h4>
