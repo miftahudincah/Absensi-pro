@@ -1,12 +1,11 @@
-// rekap.js - VERSION 3.3 (PERBAIKAN KECEPATAN: PARALLEL QUERY + CACHING)
+// rekap.js - VERSION 3.4 (DUKUNGAN HARI LIBUR)
 // Fitur Rekap Absensi per Siswa
 // Mendukung periode: Minggu, Bulan, Semester, dan Custom Range
 // Mendukung status: Hadir, Sakit, Izin, Alpha (termasuk manual dari attendance_status)
-// PERUBAHAN V3.3:
-//   - fetchManualStatusForRange menggunakan Promise.all (paralel) bukan serial loop
-//   - Menambahkan caching hasil rekap di sessionStorage untuk periode yang sama
-//   - Menampilkan loading indicator yang lebih baik
-//   - Optimasi render chart untuk tidak double destroy
+// PERUBAHAN V3.4:
+//   - Menghitung total hari sekolah hanya hari kerja (Senin-Jumat) yang bukan libur
+//   - Data absensi yang diproses hanya yang bukan hari libur
+//   - Mengintegrasikan fungsi isHoliday dan filterAttendanceByHoliday dari setting.js
 // ============================================================================
 
 let currentRekapData = [];
@@ -16,6 +15,19 @@ let rekapBarChart = null;
 let rekapDataReadyListenerAdded = false;
 let rekapUiReadyListenerAdded = false;
 let isLoadingRekap = false;
+
+// ======================= FALLBACK JIKA FUNGSI DARI SETTING.JS BELUM ADA =======================
+if (typeof isHoliday === 'undefined') {
+    window.isHoliday = function(dateStr) { return false; };
+    console.log("⚠️ rekap.js: Fungsi isHoliday tidak ditemukan, menggunakan fallback (tidak ada hari libur)");
+}
+if (typeof filterAttendanceByHoliday === 'undefined') {
+    window.filterAttendanceByHoliday = function(arr) { return arr; };
+    console.log("⚠️ rekap.js: Fungsi filterAttendanceByHoliday tidak ditemukan, menggunakan fallback");
+}
+if (typeof getHolidayCountInRange === 'undefined') {
+    window.getHolidayCountInRange = function(startDate, endDate) { return 0; };
+}
 
 // ======================= EVENT LISTENER ========================
 
@@ -166,21 +178,27 @@ function getCacheKey(period, startDate, endDate) {
     return `rekap_${period}_${startDate.toISOString().split('T')[0]}_${endDate.toISOString().split('T')[0]}`;
 }
 
-// ======================= HITUNG TOTAL HARI SEKOLAH =======================
+// ======================= HITUNG TOTAL HARI SEKOLAH (KURANGI HARI LIBUR) =======================
 
 function countSchoolDays(startDate, endDate) {
     let count = 0;
     let currentDate = new Date(startDate);
-    while (currentDate <= endDate) {
+    const end = new Date(endDate);
+    end.setHours(23, 59, 59, 999);
+    
+    while (currentDate <= end) {
         const dayOfWeek = currentDate.getDay();
-        if (dayOfWeek >= 1 && dayOfWeek <= 5) count++;
+        const dateStr = currentDate.toISOString().split('T')[0];
+        // Hanya hitung jika hari kerja (Senin-Jumat) dan bukan hari libur
+        if (dayOfWeek >= 1 && dayOfWeek <= 5 && !isHoliday(dateStr)) {
+            count++;
+        }
         currentDate.setDate(currentDate.getDate() + 1);
     }
     return count > 0 ? count : 1;
 }
 
-// ======================= AMBIL DATA MANUAL STATUS DALAM RENTANG (PARALLEL) =======================
-// 🔥 PERBAIKAN: gunakan Promise.all untuk query paralel, bukan serial loop
+// ======================= AMBIL DATA MANUAL STATUS DALAM RENTANG (HANYA TANGGAL BUKAN LIBUR) =======================
 async function fetchManualStatusForRange(startDate, endDate) {
     const manualData = {};
     const currentDate = new Date(startDate);
@@ -188,19 +206,20 @@ async function fetchManualStatusForRange(startDate, endDate) {
     const datePromises = [];
     const dateStrings = [];
     
-    // Kumpulkan semua tanggal dan buat promise
+    // Kumpulkan semua tanggal yang BUKAN libur
     while (currentDate <= end) {
         const dateStr = currentDate.toISOString().split('T')[0];
-        dateStrings.push(dateStr);
-        datePromises.push(db.ref(`attendance_status/${dateStr}`).once('value'));
+        if (!isHoliday(dateStr)) {
+            dateStrings.push(dateStr);
+            datePromises.push(db.ref(`attendance_status/${dateStr}`).once('value'));
+        }
         currentDate.setDate(currentDate.getDate() + 1);
     }
     
     if (datePromises.length === 0) return manualData;
     
-    console.log(`📡 Fetching manual status for ${datePromises.length} dates in parallel...`);
+    console.log(`📡 Fetching manual status for ${datePromises.length} non-holiday dates in parallel...`);
     
-    // Eksekusi semua query secara paralel
     const snapshots = await Promise.all(datePromises);
     snapshots.forEach((snapshot, idx) => {
         if (snapshot.exists()) {
@@ -208,25 +227,30 @@ async function fetchManualStatusForRange(startDate, endDate) {
         }
     });
     
-    console.log(`✅ Loaded manual status for ${Object.keys(manualData).length} dates`);
+    console.log(`✅ Loaded manual status for ${Object.keys(manualData).length} non-holiday dates`);
     return manualData;
 }
 
-// ======================= HITUNG REKAP PER SISWA (DENGAN MANUAL STATUS) =======================
+// ======================= HITUNG REKAP PER SISWA (DENGAN MANUAL STATUS & LIBUR) =======================
 
 async function calculateStudentRekap(attendanceData, studentsData, startDate, endDate) {
     const studentMap = new Map();
-    const filteredAttendance = attendanceData.filter(a => {
+    
+    // Filter absensi berdasarkan rentang dan hari libur
+    let filteredAttendance = attendanceData.filter(a => {
         const recordDate = new Date(a.date);
         return recordDate >= startDate && recordDate <= endDate;
     });
+    // Hapus data yang tanggalnya libur
+    filteredAttendance = filterAttendanceByHoliday(filteredAttendance);
+    
     const totalSchoolDays = countSchoolDays(startDate, endDate);
     const manualStatusMap = await fetchManualStatusForRange(startDate, endDate);
     
     console.log(`📊 Periode: ${startDate.toLocaleDateString()} - ${endDate.toLocaleDateString()}`);
-    console.log(`📊 Total hari sekolah: ${totalSchoolDays}`);
-    console.log(`📊 Total data absensi fisik: ${filteredAttendance.length}`);
-    console.log(`📊 Total data manual status: ${Object.keys(manualStatusMap).length} tanggal`);
+    console.log(`📊 Total hari sekolah (setelah kurangi libur): ${totalSchoolDays}`);
+    console.log(`📊 Total data absensi fisik setelah filter libur: ${filteredAttendance.length}`);
+    console.log(`📊 Total data manual status (non-libur): ${Object.keys(manualStatusMap).length} tanggal`);
     
     studentsData.forEach(student => {
         if (student && student.id) {
@@ -244,6 +268,7 @@ async function calculateStudentRekap(attendanceData, studentsData, startDate, en
         }
     });
     
+    // Proses data absensi fisik (sudah terfilter libur)
     filteredAttendance.forEach(record => {
         const studentId = record.studentId.toString();
         const studentData = studentMap.get(studentId);
@@ -258,14 +283,18 @@ async function calculateStudentRekap(attendanceData, studentsData, startDate, en
         }
     });
     
+    // Proses manual status (hanya tanggal non-libur)
     for (const [dateStr, statuses] of Object.entries(manualStatusMap)) {
+        // Pastikan tanggal masih dalam rentang (redundan, karena sudah difilter)
         const recordDate = new Date(dateStr);
         if (recordDate < startDate || recordDate > endDate) continue;
+        if (isHoliday(dateStr)) continue; // safety, seharusnya sudah tidak ada
         
         for (const [studentId, statusInfo] of Object.entries(statuses)) {
             const studentData = studentMap.get(studentId);
             if (!studentData) continue;
             
+            // Cek apakah sudah ada absensi fisik pada tanggal tersebut (hadir/pulang)
             const hasPhysical = filteredAttendance.some(a => a.date === dateStr && a.studentId == studentId && (a.status === 'Hadir' || a.status === 'Pulang'));
             if (hasPhysical) continue;
             
@@ -292,10 +321,9 @@ async function calculateStudentRekap(attendanceData, studentsData, startDate, en
     return results;
 }
 
-// ======================= RENDER REKAP TABLE (DENGAN PEMBUATAN TBODY DINAMIS) =======================
+// ======================= RENDER REKAP TABLE =======================
 
 function renderRekapTable(data) {
-    // Pastikan tbody ada
     let tbody = document.getElementById('rekapTbody');
     if (!tbody) {
         console.warn("⚠️ rekapTbody not found, attempting to create dynamically...");
@@ -329,7 +357,6 @@ function renderRekapTable(data) {
         }
     }
 
-    // Jika data null/undefined
     if (!data || data.length === 0) {
         let message = "📭 Tidak ada data siswa dalam periode yang dipilih.";
         if (typeof dbData !== 'undefined' && dbData.users && dbData.users.length === 0) {
@@ -337,14 +364,14 @@ function renderRekapTable(data) {
         } else if (typeof dbData !== 'undefined' && dbData.attendance && dbData.attendance.length === 0) {
             message = "📭 Belum ada catatan absensi sama sekali.";
         }
-        tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; padding:40px;">${message}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; padding:40px;">${message}<\/td><\/tr>`;
         updateRekapSummary([]);
         return;
     }
     
     const validData = data.filter(item => item.nama && item.nama !== 'Tidak Diketahui');
     if (validData.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; padding:40px;">📭 Tidak ada data absensi dalam periode yang dipilih.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; padding:40px;">📭 Tidak ada data absensi dalam periode yang dipilih.<\/td><\/tr>`;
         updateRekapSummary([]);
         return;
     }
@@ -355,22 +382,22 @@ function renderRekapTable(data) {
         if (item.percentage < 75) persenColor = '#ffc107';
         if (item.percentage < 60) persenColor = '#ff9800';
         if (item.percentage < 40) persenColor = '#f44336';
-        const tooltip = `${item.hadir} hadir dari ${item.totalDays} hari sekolah`;
+        const tooltip = `${item.hadir} hadir dari ${item.totalDays} hari sekolah (setelah dikurangi libur)`;
         tbody.innerHTML += `
             <tr>
-                <td>${index + 1}</td>
-                <td><strong>#${item.id}</strong></td>
-                <td>${escapeHtml(item.nama)}</div>
-                <td>${item.kelas}</div>
-                <td>${item.jurusan}</div>
-                <td style="text-align:center;">${item.totalDays}</div>
-                <td style="color:#4caf50; font-weight:bold; text-align:center;">${item.hadir}</div>
-                <td style="color:#ff9800; text-align:center;">${item.sakit}</div>
-                <td style="color:#2196f3; text-align:center;">${item.izin}</div>
-                <td style="color:#f44336; text-align:center;">${item.alpha}</div>
-                <td style="text-align:center;"><span class="rekap-percentage" style="color:${persenColor}; font-weight:bold; cursor:help;" title="${tooltip}">${item.percentage}%</span></div>
-                <td style="text-align:center;"><span class="rekap-badge ${item.statusClass}">${item.status}</span></div>
-            </tr>
+                <td>${index + 1}<\/td>
+                <td><strong>#${item.id}<\/strong><\/td>
+                <td>${escapeHtml(item.nama)}<\/td>
+                <td>${item.kelas}<\/td>
+                <td>${item.jurusan}<\/td>
+                <td style="text-align:center;">${item.totalDays}<\/td>
+                <td style="color:#4caf50; font-weight:bold; text-align:center;">${item.hadir}<\/td>
+                <td style="color:#ff9800; text-align:center;">${item.sakit}<\/td>
+                <td style="color:#2196f3; text-align:center;">${item.izin}<\/td>
+                <td style="color:#f44336; text-align:center;">${item.alpha}<\/td>
+                <td style="text-align:center;"><span class="rekap-percentage" style="color:${persenColor}; font-weight:bold; cursor:help;" title="${tooltip}">${item.percentage}%<\/span><\/td>
+                <td style="text-align:center;"><span class="rekap-badge ${item.statusClass}">${item.status}<\/span><\/td>
+            <\/tr>
         `;
     });
     updateRekapSummary(validData);
@@ -412,21 +439,21 @@ function updateRekapSummary(data) {
     summaryContainer.innerHTML = `
         <div style="display: flex; gap: 20px; flex-wrap: wrap; justify-content: space-between;">
             <div style="display: flex; gap: 30px; flex-wrap: wrap;">
-                <div><span style="color: #4a90e2;">👥 Total Siswa:</span> <strong>${totalSiswa}</strong></div>
-                <div><span style="color: #4caf50;">✅ Total Hadir:</span> <strong>${totalHadir}</strong></div>
-                <div><span style="color: #ff9800;">🤒 Total Sakit:</span> <strong>${totalSakit}</strong></div>
-                <div><span style="color: #2196f3;">📝 Total Izin:</span> <strong>${totalIzin}</strong></div>
-                <div><span style="color: #f44336;">❌ Total Alpha:</span> <strong>${totalAlpha}</strong></div>
-                <div><span style="color: #4a90e2;">📊 Rata-rata:</span> <strong>${rataRata.toFixed(1)}%</strong></div>
-            </div>
+                <div><span style="color: #4a90e2;">👥 Total Siswa:</span> <strong>${totalSiswa}</strong><\/div>
+                <div><span style="color: #4caf50;">✅ Total Hadir:</span> <strong>${totalHadir}</strong><\/div>
+                <div><span style="color: #ff9800;">🤒 Total Sakit:</span> <strong>${totalSakit}</strong><\/div>
+                <div><span style="color: #2196f3;">📝 Total Izin:</span> <strong>${totalIzin}</strong><\/div>
+                <div><span style="color: #f44336;">❌ Total Alpha:</span> <strong>${totalAlpha}</strong><\/div>
+                <div><span style="color: #4a90e2;">📊 Rata-rata:</span> <strong>${rataRata.toFixed(1)}%</strong><\/div>
+            <\/div>
             <div style="display: flex; gap: 15px; flex-wrap: wrap;">
-                <span class="badge" style="background:#4caf50;">🏆 Sangat Baik: ${sangatBaik}</span>
-                <span class="badge" style="background:#8bc34a; color:#333;">👍 Baik: ${baik}</span>
-                <span class="badge" style="background:#ffc107; color:#333;">📊 Cukup: ${cukup}</span>
-                <span class="badge" style="background:#ff9800;">⚠️ Kurang: ${kurang}</span>
-                <span class="badge" style="background:#f44336;">❗ Buruk: ${buruk}</span>
-            </div>
-        </div>
+                <span class="badge" style="background:#4caf50;">🏆 Sangat Baik: ${sangatBaik}<\/span>
+                <span class="badge" style="background:#8bc34a; color:#333;">👍 Baik: ${baik}<\/span>
+                <span class="badge" style="background:#ffc107; color:#333;">📊 Cukup: ${cukup}<\/span>
+                <span class="badge" style="background:#ff9800;">⚠️ Kurang: ${kurang}<\/span>
+                <span class="badge" style="background:#f44336;">❗ Buruk: ${buruk}<\/span>
+            <\/div>
+        <\/div>
     `;
 }
 
@@ -465,11 +492,13 @@ function renderRekapCharts(data, startDate, endDate) {
         });
     }
     
+    // Bar chart berdasarkan tanggal (hanya non-libur)
     const attendanceByDate = {};
-    const filteredAttendance = dbData.attendance.filter(a => {
+    let filteredAttendance = dbData.attendance.filter(a => {
         const recordDate = new Date(a.date);
         return recordDate >= startDate && recordDate <= endDate;
     });
+    filteredAttendance = filterAttendanceByHoliday(filteredAttendance);
     filteredAttendance.forEach(a => {
         if (!attendanceByDate[a.date]) attendanceByDate[a.date] = 0;
         attendanceByDate[a.date]++;
@@ -526,7 +555,7 @@ async function loadRekap(retryCount = 0, forceRefresh = false) {
         } else {
             const tbody = document.getElementById('rekapTbody');
             if (tbody) {
-                tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; padding:40px;">❌ Gagal memuat data rekap (database tidak siap).</div></div></div></tr>`;
+                tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; padding:40px;">❌ Gagal memuat data rekap (database tidak siap).<\/td><\/tr>`;
             }
             if (typeof showToast === 'function') showToast("❌ Gagal memuat data rekap (database tidak siap)", "error");
         }
@@ -541,7 +570,7 @@ async function loadRekap(retryCount = 0, forceRefresh = false) {
         } else {
             const tbody = document.getElementById('rekapTbody');
             if (tbody) {
-                tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; padding:30px;">⏳ Data siswa belum dimuat. Silakan refresh halaman atau tunggu sebentar.</div></div></div></td>`;
+                tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; padding:30px;">⏳ Data siswa belum dimuat. Silakan refresh halaman atau tunggu sebentar.<\/td><\/tr>`;
             }
             if (typeof showToast === 'function') showToast("⚠️ Data siswa belum tersedia, coba muat ulang halaman", "warning");
             return;
@@ -605,16 +634,14 @@ async function loadRekap(retryCount = 0, forceRefresh = false) {
 
     isLoadingRekap = true;
     
-    // Tampilkan loading indicator di tabel
     const tbody = document.getElementById('rekapTbody');
     if (tbody) {
-        tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; padding:40px;">⏳ Menghitung data rekap... (${periodDisplay})</div></div></div></tr>`;
+        tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; padding:40px;">⏳ Menghitung data rekap... (${periodDisplay})<\/td><\/tr>`;
     }
 
     try {
         currentRekapData = await calculateStudentRekap(dbData.attendance, dbData.users, startDate, endDate);
         
-        // Simpan ke cache
         try {
             sessionStorage.setItem(cacheKey, JSON.stringify({ data: currentRekapData, timestamp: Date.now() }));
         } catch(e) { console.warn("Cache storage error:", e); }
@@ -630,7 +657,7 @@ async function loadRekap(retryCount = 0, forceRefresh = false) {
     } catch (error) {
         console.error("Error calculating rekap:", error);
         if (tbody) {
-            tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; padding:40px;">❌ Gagal menghitung rekap: ${error.message}</div></div></div></td>`;
+            tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; padding:40px;">❌ Gagal menghitung rekap: ${error.message}<\/td><\/tr>`;
         }
         if (typeof showToast === 'function') showToast("❌ Gagal menghitung rekap: " + error.message, "error");
     } finally {
@@ -721,25 +748,25 @@ function exportRekapToPDF() {
         else badgeClass = 'badge-buruk';
         printWindow.document.write(`
             <tr>
-                <td>${no}</td>
-                <td>${item.id}</td>
-                <td class="text-left">${escapeHtml(item.nama)}</div>
-                <td>${item.kelas}</div>
-                <td>${item.jurusan}</div>
-                <td>${item.totalDays}</div>
-                <td>${item.hadir}</div>
-                <td>${item.sakit}</div>
-                <td>${item.izin}</div>
-                <td>${item.alpha}</div>
-                <td>${item.percentage}%</div>
-                <td><span class="${badgeClass}">${item.status}</span></div>
-            </tr>
+                <td>${no}<\/td>
+                <td>${item.id}<\/td>
+                <td class="text-left">${escapeHtml(item.nama)}<\/td>
+                <td>${item.kelas}<\/td>
+                <td>${item.jurusan}<\/td>
+                <td>${item.totalDays}<\/td>
+                <td>${item.hadir}<\/td>
+                <td>${item.sakit}<\/td>
+                <td>${item.izin}<\/td>
+                <td>${item.alpha}<\/td>
+                <td>${item.percentage}%<\/td>
+                <td><span class="${badgeClass}">${item.status}<\/span><\/td>
+            <\/tr>
         `);
         no++;
     });
     printWindow.document.write(`
             </tbody>
-        </table>
+        <\/table>
         <div class="footer"><p>Dicetak oleh: ${escapeHtml(currentUser?.nama || 'Admin')} | Sistem Absensi Terintegrasi - ESP32 Fingerprint</p><p>* Laporan ini dihasilkan secara otomatis oleh sistem</p></div>
         <div class="no-print" style="text-align:center; margin-top:20px;"><button onclick="window.print()" style="padding:10px 20px; background:#00bcd4; color:white; border:none; border-radius:5px; cursor:pointer;">🖨️ Cetak / Simpan PDF</button><button onclick="window.close()" style="padding:10px 20px; background:#666; color:white; border:none; border-radius:5px; cursor:pointer; margin-left:10px;">✖ Tutup</button></div>
         <script>console.log("PDF siap dicetak");<\/script>
@@ -785,11 +812,11 @@ if (typeof window !== 'undefined' && window.dbData && window.dbData.attendance &
     }, 100);
 }
 
-// ======================= EXPORT KE GLOBAL =======================
+// ======================= EKSPOR KE GLOBAL =======================
 window.loadRekap = loadRekap;
 window.exportRekapToExcel = exportRekapToExcel;
 window.exportRekapToPDF = exportRekapToPDF;
 window.initRekap = initRekap;
 window.cleanupRekap = cleanupRekap;
 
-console.log("✅ rekap.js V3.3 loaded - Parallel queries + sessionStorage caching");
+console.log("✅ rekap.js V3.4 loaded - Dukungan hari libur untuk rekap absensi");

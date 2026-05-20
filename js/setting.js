@@ -1,4 +1,4 @@
-// setting.js - VERSION 3.5 (DEVELOPER ACCESS ADDED)
+// setting.js - VERSION 3.6 (PENGATURAN JAM EFEKTIF & HARI LIBUR)
 // PENGATURAN SEKOLAH (SCHOOL CONFIG) & DELAY GLOBAL
 // Dengan dukungan manajemen KELAS dan JURUSAN yang bisa diedit
 // SENSOR STATUS: Dipisahkan ke modul sendiri (tetap di sini untuk kemudahan)
@@ -9,12 +9,21 @@
 //   - Menambahkan retry mechanism untuk populate functions
 //   - Memperkuat event listener untuk school config
 //   - PERBAIKAN: saveSchoolType sekarang menyimpan ke Firebase dengan benar
+//   - FITUR BARU: Pengaturan jam efektif (batas terlambat, minimal pulang, hari libur)
 // ============================================================================
 
 let currentSchoolConfig = {
     type: 'smp',
     majors: [],
     classes: ['VII', 'VIII', 'IX']
+};
+
+// Pengaturan jam efektif & hari libur (default)
+let attendanceSettings = {
+    lateThreshold: '07:30',
+    minOutTime: '14:00',
+    weeklyHolidays: [0], // Minggu
+    dateHolidays: []
 };
 
 let settingDataReadyListenerAdded = false;
@@ -457,7 +466,6 @@ function escapeHtmlStr(str) {
     return str.replace(/[&<>]/g, m => m === '&' ? '&amp;' : m === '<' ? '&lt;' : '&gt;');
 }
 
-// 🔥 PERBAIKAN UTAMA: Fungsi saveSchoolType - Pastikan data tersimpan ke Firebase
 function saveSchoolType() {
     // Izinkan admin dan developer
     if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'developer')) {
@@ -468,7 +476,6 @@ function saveSchoolType() {
     const newType = document.getElementById('schoolTypeSelect').value;
     console.log("📝 saveSchoolType dipanggil dengan tipe:", newType);
     
-    // Tentukan kelas berdasarkan tipe sekolah
     let newClasses;
     if (newType === 'both') {
         newClasses = ['VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
@@ -480,10 +487,9 @@ function saveSchoolType() {
         newClasses = ['VII', 'VIII', 'IX'];
     }
     
-    // Jika tipe bukan SMK atau both, kosongkan jurusan
     let newMajors = [];
     if (newType === 'smk' || newType === 'both') {
-        newMajors = currentSchoolConfig.majors; // pertahankan jurusan yang sudah ada
+        newMajors = currentSchoolConfig.majors;
     }
     
     const btn = document.querySelector('#tab-config button[onclick="saveSchoolType()"]');
@@ -492,7 +498,6 @@ function saveSchoolType() {
         btn.innerHTML = '💾 Menyimpan...';
     }
     
-    // 🔥 Simpan ke Firebase menggunakan update (atomic)
     const updateData = {
         type: newType,
         classes: newClasses,
@@ -506,20 +511,15 @@ function saveSchoolType() {
             console.log("✅ School config saved to Firebase:", updateData);
             showToast("✅ Tipe sekolah berhasil disimpan ke Firebase!");
             
-            // Update local config
             currentSchoolConfig.type = newType;
             currentSchoolConfig.classes = newClasses;
             currentSchoolConfig.majors = newMajors;
             
-            // Sinkronkan ke window
             syncSchoolConfigToWindow();
-            
-            // Update UI
             updateSchoolTypeUI();
             renderClassesList();
             renderMajorsList();
             
-            // Trigger populate functions after save
             setTimeout(() => {
                 console.log("🔄 Populating all dropdowns after save...");
                 if (typeof populateKelasOptions === 'function') populateKelasOptions();
@@ -530,7 +530,6 @@ function saveSchoolType() {
                 if (typeof populateStudentSelectForCode === 'function') populateStudentSelectForCode();
             }, 100);
             
-            // Refresh UI
             setTimeout(() => {
                 if (typeof renderStudentsTable === 'function') renderStudentsTable();
                 if (typeof renderTable === 'function') renderTable();
@@ -699,6 +698,163 @@ function importSchoolConfig(file) {
     reader.readAsText(file);
 }
 
+// ======================= PENGATURAN JAM EFEKTIF & HARI LIBUR =======================
+
+// Load settings from Firebase
+function loadAttendanceSettings() {
+    db.ref('school_config/attendance_settings').on('value', (snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+            attendanceSettings = {
+                lateThreshold: data.lateThreshold || '07:30',
+                minOutTime: data.minOutTime || '14:00',
+                weeklyHolidays: data.weeklyHolidays || [0],
+                dateHolidays: data.dateHolidays || []
+            };
+        } else {
+            // Default
+            attendanceSettings = {
+                lateThreshold: '07:30',
+                minOutTime: '14:00',
+                weeklyHolidays: [0],
+                dateHolidays: []
+            };
+        }
+        // Update UI
+        const lateInput = document.getElementById('lateThresholdInput');
+        const minOutInput = document.getElementById('minOutTimeInput');
+        if (lateInput) lateInput.value = attendanceSettings.lateThreshold;
+        if (minOutInput) minOutInput.value = attendanceSettings.minOutTime;
+        
+        // Update checkboxes
+        const checkboxes = document.querySelectorAll('#tab-config input[type="checkbox"][value]');
+        checkboxes.forEach(cb => {
+            const val = parseInt(cb.value);
+            cb.checked = attendanceSettings.weeklyHolidays.includes(val);
+        });
+        renderHolidayDatesList();
+        
+        // Simpan ke window global agar bisa diakses modul lain
+        window.attendanceSettings = attendanceSettings;
+    });
+}
+
+function renderHolidayDatesList() {
+    const container = document.getElementById('holidayDatesList');
+    if (!container) return;
+    if (!attendanceSettings.dateHolidays || attendanceSettings.dateHolidays.length === 0) {
+        container.innerHTML = '<small class="text-muted">Belum ada tanggal libur khusus</small>';
+        return;
+    }
+    let html = '';
+    attendanceSettings.dateHolidays.forEach(date => {
+        html += `<div style="background: #2c2c3a; padding: 4px 12px; border-radius: 20px; display: inline-flex; align-items: center; gap: 8px;">
+                    📅 ${formatIndonesianDate(date)}
+                    <span class="btn-icon delete" style="font-size: 12px; cursor: pointer;" onclick="removeHolidayDate('${date}')">✖</span>
+                </div>`;
+    });
+    container.innerHTML = html;
+}
+
+function formatIndonesianDate(dateStr) {
+    if (!dateStr) return dateStr;
+    const parts = dateStr.split('-');
+    if (parts.length !== 3) return dateStr;
+    const bulan = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+    return `${parts[2]} ${bulan[parseInt(parts[1]) - 1]} ${parts[0]}`;
+}
+
+function addHolidayDate() {
+    if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'developer')) {
+        showToast("⛔ Hanya admin yang dapat mengubah hari libur!", "error");
+        return;
+    }
+    const dateInput = document.getElementById('holidayDateInput');
+    const date = dateInput.value;
+    if (!date) {
+        showToast("Pilih tanggal terlebih dahulu!", "error");
+        return;
+    }
+    if (attendanceSettings.dateHolidays.includes(date)) {
+        showToast("Tanggal sudah ada dalam daftar libur!", "warning");
+        return;
+    }
+    attendanceSettings.dateHolidays.push(date);
+    saveAttendanceSettingsToFirebase();
+    dateInput.value = '';
+}
+
+function removeHolidayDate(date) {
+    if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'developer')) {
+        showToast("⛔ Hanya admin yang dapat mengubah hari libur!", "error");
+        return;
+    }
+    attendanceSettings.dateHolidays = attendanceSettings.dateHolidays.filter(d => d !== date);
+    saveAttendanceSettingsToFirebase();
+}
+
+function saveAttendanceSettingsToFirebase() {
+    const settings = {
+        lateThreshold: attendanceSettings.lateThreshold,
+        minOutTime: attendanceSettings.minOutTime,
+        weeklyHolidays: attendanceSettings.weeklyHolidays,
+        dateHolidays: attendanceSettings.dateHolidays
+    };
+    db.ref('school_config/attendance_settings').set(settings)
+        .then(() => showToast("✅ Pengaturan jam efektif & hari libur disimpan", "success"))
+        .catch(err => showToast("❌ Gagal menyimpan: " + err.message, "error"));
+}
+
+function saveAttendanceSettings() {
+    if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'developer')) {
+        showToast("⛔ Hanya admin yang dapat mengubah pengaturan!", "error");
+        return;
+    }
+    const lateThreshold = document.getElementById('lateThresholdInput').value;
+    const minOutTime = document.getElementById('minOutTimeInput').value;
+    const weeklyHolidays = [];
+    const checkboxes = document.querySelectorAll('#tab-config input[type="checkbox"][value]');
+    checkboxes.forEach(cb => {
+        if (cb.checked) weeklyHolidays.push(parseInt(cb.value));
+    });
+    attendanceSettings.lateThreshold = lateThreshold;
+    attendanceSettings.minOutTime = minOutTime;
+    attendanceSettings.weeklyHolidays = weeklyHolidays;
+    // dateHolidays tidak diubah di sini, hanya dari add/remove
+    saveAttendanceSettingsToFirebase();
+}
+
+// Fungsi pengecekan hari libur (digunakan di attendance.js dan rekap.js)
+function isHoliday(dateStr) {
+    if (!attendanceSettings) return false;
+    const date = new Date(dateStr);
+    const dayOfWeek = date.getDay(); // 0 Minggu, 6 Sabtu
+    // Cek weekly holidays
+    if (attendanceSettings.weeklyHolidays && attendanceSettings.weeklyHolidays.includes(dayOfWeek)) return true;
+    // Cek date holidays
+    if (attendanceSettings.dateHolidays && attendanceSettings.dateHolidays.includes(dateStr)) return true;
+    return false;
+}
+
+// Filter attendance records to exclude holidays
+function filterAttendanceByHoliday(attendanceArray) {
+    if (!attendanceArray || !attendanceArray.length) return attendanceArray || [];
+    return attendanceArray.filter(record => !isHoliday(record.date));
+}
+
+// Fungsi untuk mendapatkan hari libur dalam rentang (digunakan rekap)
+function getHolidayCountInRange(startDate, endDate) {
+    let count = 0;
+    let current = new Date(startDate);
+    const end = new Date(endDate);
+    while (current <= end) {
+        const dateStr = current.toISOString().split('T')[0];
+        if (isHoliday(dateStr)) count++;
+        current.setDate(current.getDate() + 1);
+    }
+    return count;
+}
+
 // ======================= SENSOR STATUS =======================
 
 let sensorStatusListener = null;
@@ -849,6 +1005,8 @@ function initAllSettings() {
         const displaySpan = document.getElementById('globalDelayDisplay');
         if (displaySpan) displaySpan.textContent = formatDelayText(delay || 60);
     });
+    // Load attendance settings (jam efektif & hari libur)
+    loadAttendanceSettings();
     console.log("✅ initAllSettings - Selesai");
 }
 
@@ -861,7 +1019,7 @@ if (document.readyState === 'loading') {
     setTimeout(initAllSettings, 100);
 }
 
-// ======================= EXPORT KE GLOBAL =======================
+// ======================= EKSPOR KE GLOBAL =======================
 window.formatDelayText = formatDelayText;
 window.toggleGlobalDelayInput = toggleGlobalDelayInput;
 window.updateGlobalDelayFromMinutes = updateGlobalDelayFromMinutes;
@@ -888,4 +1046,14 @@ window.cleanupSensorStatus = cleanupSensorStatus;
 window.syncSchoolConfigToWindow = syncSchoolConfigToWindow;
 window.forceReloadSchoolConfig = forceReloadSchoolConfig;
 
-console.log("✅ setting.js V3.5 loaded - Developer role fully supported");
+// Export fungsi pengaturan jam efektif & hari libur
+window.loadAttendanceSettings = loadAttendanceSettings;
+window.addHolidayDate = addHolidayDate;
+window.removeHolidayDate = removeHolidayDate;
+window.saveAttendanceSettings = saveAttendanceSettings;
+window.isHoliday = isHoliday;
+window.filterAttendanceByHoliday = filterAttendanceByHoliday;
+window.getHolidayCountInRange = getHolidayCountInRange;
+window.renderHolidayDatesList = renderHolidayDatesList;
+
+console.log("✅ setting.js V3.6 loaded - Developer role fully supported + pengaturan jam efektif & hari libur");

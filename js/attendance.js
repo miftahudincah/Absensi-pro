@@ -1,11 +1,12 @@
-// attendance.js - VERSION 4.1 (SIMULASI DENGAN SEARCH SISWA)
+// attendance.js - VERSION 4.2 (PENGATURAN JAM EFEKTIF & HARI LIBUR)
 // Mengelola data absensi, filter, validasi delay pulang,
 // serta manual status (sakit, izin, alpha) untuk siswa yang tidak hadir.
 // PERUBAHAN: 
-//   - Simulasi scan masuk & pulang menggunakan input pencarian + daftar siswa (tanpa dropdown rumit)
-//   - Admin/guru dapat mencari siswa berdasarkan nama atau ID
-//   - Simulasi scan masuk: pilih siswa dan kondisi (Hadir, Izin, Sakit, Alpha)
-//   - Simulasi scan pulang: pilih siswa yang sudah absen masuk
+//   - Filter data absensi berdasarkan hari libur (tidak ditampilkan)
+//   - Status "Terlambat" otomatis jika waktu masuk > batas terlambat
+//   - Peringatan minimal jam pulang (tidak diblokir, hanya peringatan)
+//   - Simulasi scan masuk/pulang dengan pilihan siswa & kondisi
+//   - Akses untuk role developer (sama seperti admin & guru)
 // ============================================================================
 
 // ======================== GLOBAL VARIABLES ========================
@@ -207,6 +208,16 @@ function populateDateFilter() {
     console.log(`✅ populateDateFilter selesai, total options: ${dateSelect.options.length}`);
 }
 
+// ======================== UTILITY UNTUK HARI LIBUR ========================
+// Fungsi isHoliday, filterAttendanceByHoliday, getHolidayCountInRange akan didefinisikan di setting.js
+// Kita asumsikan sudah ada. Jika belum, buat fallback sederhana.
+if (typeof isHoliday === 'undefined') {
+    window.isHoliday = function(dateStr) { return false; };
+}
+if (typeof filterAttendanceByHoliday === 'undefined') {
+    window.filterAttendanceByHoliday = function(arr) { return arr; };
+}
+
 // ======================== INITIALIZATION (UI ONLY) ========================
 
 function initAttendanceUI() {
@@ -235,7 +246,11 @@ function updateAttendanceDonutChart() {
     }
     
     const today = new Date().toISOString().split('T')[0];
-    const todayData = dbData.attendance.filter(r => r.date === today);
+    let todayData = dbData.attendance.filter(r => r.date === today);
+    // Filter libur
+    if (typeof filterAttendanceByHoliday === 'function') {
+        todayData = filterAttendanceByHoliday(todayData);
+    }
     const hadir = todayData.filter(r => r.status === 'Hadir').length;
     const pulang = todayData.filter(r => r.status === 'Pulang').length;
     
@@ -272,7 +287,7 @@ function updateAttendanceDonutChart() {
     }
 }
 
-// ======================== RENDER TABLE ========================
+// ======================== RENDER TABLE (DENGAN STATUS MANUAL & TERLAMBAT) ========================
 
 async function renderTable() {
     console.log("📊 renderTable dipanggil - Total attendance:", dbData.attendance?.length || 0);
@@ -293,6 +308,11 @@ async function renderTable() {
     const fJurusan = document.getElementById('filterJurusan') ? document.getElementById('filterJurusan').value : 'all';
 
     let data = dbData.attendance ? [...dbData.attendance] : [];
+    
+    // Filter libur
+    if (typeof filterAttendanceByHoliday === 'function') {
+        data = filterAttendanceByHoliday(data);
+    }
     
     if (currentUser && currentUser.role === 'siswa') {
         if (currentUser.kelas && currentUser.jurusan) {
@@ -339,6 +359,15 @@ async function renderTable() {
         }
     }
     
+    // Ambil pengaturan batas terlambat (default 07:30)
+    let lateThreshold = '07:30';
+    if (window.attendanceSettings && window.attendanceSettings.lateThreshold) {
+        lateThreshold = window.attendanceSettings.lateThreshold;
+    } else if (window.attendanceSettings === undefined && typeof getAttendanceSettings === 'function') {
+        const settings = getAttendanceSettings();
+        lateThreshold = settings.lateThreshold || '07:30';
+    }
+    
     let rows = [];
     data.forEach((row, index) => {
         const timeDisplay = row.timeIn || '-';
@@ -354,9 +383,18 @@ async function renderTable() {
             else if (manual.status === 'alpha') { icon = '❌'; label = 'Alpha (Bolos)'; color = '#f44336'; }
             statusHtml = `<span style="color:${color}; font-weight:500;">${icon} ${label}</span><br><small class="text-small">(Manual)</small>`;
         } else {
-            const statusColor = row.status === 'Pulang' ? 'var(--danger)' : 'var(--success)';
-            const statusIcon = row.status === 'Pulang' ? '🏠' : '✅';
-            statusHtml = `<span style="color:${statusColor}; font-weight:500;">${statusIcon} ${row.status}</span>`;
+            // Cek keterlambatan jika status Hadir
+            let isLate = false;
+            if (row.status === 'Hadir' && row.timeIn && row.timeIn > lateThreshold) {
+                isLate = true;
+            }
+            if (row.status === 'Pulang') {
+                statusHtml = `<span style="color:var(--danger); font-weight:500;">🏠 Pulang</span>`;
+            } else if (isLate) {
+                statusHtml = `<span style="color:#ff9800; font-weight:500;">⏰ Terlambat (${row.timeIn})</span>`;
+            } else {
+                statusHtml = `<span style="color:var(--success); font-weight:500;">✅ Hadir</span>`;
+            }
         }
         
         rows.push(`
@@ -395,7 +433,11 @@ function updateAttendanceStatistics(data) {
     }
     
     const today = new Date().toISOString().split('T')[0];
-    const todayData = data.filter(r => r.date === today);
+    let todayData = data.filter(r => r.date === today);
+    // Filter libur lagi (untuk statistik)
+    if (typeof filterAttendanceByHoliday === 'function') {
+        todayData = filterAttendanceByHoliday(todayData);
+    }
     const hadirToday = todayData.filter(r => r.status === 'Hadir').length;
     const pulangToday = todayData.filter(r => r.status === 'Pulang').length;
     const totalUnique = [...new Set(data.map(r => r.studentId))].length;
@@ -487,6 +529,7 @@ function openSimulateInModal() {
                         </select>
                     </div>
                     <div id="simulateInWarning" class="text-small" style="color:#ff9800; margin-top: 5px;"></div>
+                    <div id="simulateInHolidayWarning" class="text-small" style="color:#f44336; margin-top: 5px;"></div>
                 </div>
                 <div class="modal-actions">
                     <button class="btn-cancel" onclick="closeModal('${modalId}')">Batal</button>
@@ -499,6 +542,15 @@ function openSimulateInModal() {
     
     const searchInput = document.getElementById('simulateInSearchInput');
     const studentListDiv = document.getElementById('simulateInStudentList');
+    const holidayWarningSpan = document.getElementById('simulateInHolidayWarning');
+    
+    // Cek apakah hari ini libur
+    const todayStr = new Date().toISOString().split('T')[0];
+    if (typeof isHoliday === 'function' && isHoliday(todayStr)) {
+        holidayWarningSpan.innerHTML = "⚠️ Hari ini adalah hari libur (tidak akan ditampilkan di web, namun tetap bisa disimpan)";
+    } else {
+        holidayWarningSpan.innerHTML = "";
+    }
     
     const renderStudentList = (filterText = '') => {
         const filtered = currentStudentsListForIn.filter(s => 
@@ -518,7 +570,7 @@ function openSimulateInModal() {
             `;
         });
         studentListDiv.innerHTML = html;
-        // Attach click event to each item
+        // Attach click event
         document.querySelectorAll('#simulateInStudentList .student-list-item').forEach(el => {
             el.addEventListener('click', () => {
                 const id = el.getAttribute('data-id');
@@ -531,7 +583,6 @@ function openSimulateInModal() {
                 document.getElementById('selectedStudentJurusanIn').value = jurusan;
                 searchInput.value = `${id} - ${nama}`;
                 studentListDiv.innerHTML = `<div class="student-list-item" style="padding: 10px; color: #4caf50;">✅ Dipilih: ${nama} (ID: ${id})</div>`;
-                // Update warning
                 checkExistingAttendanceForIn(id);
             });
         });
@@ -618,7 +669,7 @@ async function executeSimulateIn() {
     }
 }
 
-// ======================== SIMULASI SCAN PULANG (DENGAN SEARCH SISWA) ========================
+// ======================== SIMULASI SCAN PULANG (PILIH SISWA YANG SUDAH MASUK) ========================
 
 let currentStudentsListForOut = [];
 
@@ -629,14 +680,17 @@ function openSimulateOutModal() {
     }
     
     const todayStr = new Date().toISOString().split('T')[0];
-    const todayAttendance = dbData.attendance.filter(a => a.date === todayStr && a.status === 'Hadir');
+    let todayAttendance = dbData.attendance.filter(a => a.date === todayStr && a.status === 'Hadir');
+    // Filter libur (jika hari libur, seharusnya tidak ada data, tapi tetap filter)
+    if (typeof filterAttendanceByHoliday === 'function') {
+        todayAttendance = filterAttendanceByHoliday(todayAttendance);
+    }
     
     if (todayAttendance.length === 0) {
         showToast("⚠️ Tidak ada siswa yang absen masuk hari ini (status Hadir)!", "warning");
         return;
     }
     
-    // Build list of students with their attendance info
     currentStudentsListForOut = todayAttendance.map(a => {
         const student = dbData.users.find(u => u.id == a.studentId);
         return {
@@ -671,6 +725,7 @@ function openSimulateOutModal() {
                         <input type="hidden" id="selectedStudentTimeIn" value="">
                     </div>
                     <div id="simulateOutDelayWarning" class="text-small" style="color:#ff9800; margin-top: 5px;"></div>
+                    <div id="simulateOutMinTimeWarning" class="text-small" style="color:#ff9800; margin-top: 5px;"></div>
                 </div>
                 <div class="modal-actions">
                     <button class="btn-cancel" onclick="closeModal('${modalId}')">Batal</button>
@@ -713,8 +768,8 @@ function openSimulateOutModal() {
                 document.getElementById('selectedStudentTimeIn').value = timeIn;
                 searchInput.value = `${id} - ${nama}`;
                 studentListDiv.innerHTML = `<div class="student-list-item" style="padding: 10px; color: #4caf50;">✅ Dipilih: ${nama} (ID: ${id})</div>`;
-                // Update delay warning
                 updateDelayWarningForOut(id, timeIn);
+                updateMinTimeWarning(timeIn);
             });
         });
     };
@@ -737,6 +792,24 @@ function openSimulateOutModal() {
                 warningSpan.innerHTML = `✅ Sudah memenuhi delay pulang (${delayMinutes} menit).`;
                 warningSpan.style.color = '#4caf50';
             }
+        } else {
+            warningSpan.innerHTML = '';
+        }
+    };
+    
+    const updateMinTimeWarning = (timeIn) => {
+        const warningSpan = document.getElementById('simulateOutMinTimeWarning');
+        let minOutTime = '14:00';
+        if (window.attendanceSettings && window.attendanceSettings.minOutTime) {
+            minOutTime = window.attendanceSettings.minOutTime;
+        }
+        const now = new Date();
+        const currentHour = now.getHours();
+        const currentMinute = now.getMinutes();
+        const [minHour, minMinute] = minOutTime.split(':').map(Number);
+        if (currentHour < minHour || (currentHour === minHour && currentMinute < minMinute)) {
+            warningSpan.innerHTML = `⚠️ Waktu pulang belum mencapai jam minimal (${minOutTime}). Tetap bisa dipulangkan paksa.`;
+            warningSpan.style.color = '#ff9800';
         } else {
             warningSpan.innerHTML = '';
         }
@@ -782,6 +855,20 @@ async function executeSimulateOut() {
         }
     }
     
+    // Peringatan minimal jam pulang
+    let minOutTime = '14:00';
+    if (window.attendanceSettings && window.attendanceSettings.minOutTime) {
+        minOutTime = window.attendanceSettings.minOutTime;
+    }
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
+    const [minHour, minMinute] = minOutTime.split(':').map(Number);
+    if (currentHour < minHour || (currentHour === minHour && currentMinute < minMinute)) {
+        if (!confirm(`⚠️ Waktu pulang saat ini ${timeOutStr} belum mencapai jam minimal ${minOutTime}. Tetap lanjutkan?`)) {
+            return;
+        }
+    }
+    
     const btn = document.querySelector('#modal-simulate-out .btn-save');
     const originalText = btn?.innerHTML;
     if (btn) { btn.disabled = true; btn.innerHTML = '⏳ Memproses...'; }
@@ -819,6 +906,7 @@ function exportToExcel() {
     }
     let csv = "\uFEFFTanggal,Waktu Masuk,Waktu Pulang,ID,Nama,Kelas,Jurusan,Status\n";
     dbData.attendance.forEach(r => {
+        // Filter libur? Boleh juga diekspor semua, tapi lebih baik filter sesuai kebijakan. Kita ekspor semua.
         csv += `"${r.date || '-'}","${r.timeIn || '-'}","${r.timeOut || '-'}","${r.studentId}","${escapeCsv(r.nama)}","${r.kelas || '-'}","${r.jurusan || '-'}","${r.status}"\n`;
     });
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -855,10 +943,13 @@ function filterByDateRange(startDate, endDate) {
     const start = new Date(startDate);
     const end = new Date(endDate);
     end.setHours(23, 59, 59);
-    const filtered = dbData.attendance.filter(r => {
+    let filtered = dbData.attendance.filter(r => {
         const recordDate = new Date(r.date);
         return recordDate >= start && recordDate <= end;
     });
+    if (typeof filterAttendanceByHoliday === 'function') {
+        filtered = filterAttendanceByHoliday(filtered);
+    }
     renderFilteredTable(filtered);
 }
 
@@ -1045,7 +1136,10 @@ function escapeHtml(str) {
 
 function getTodayAttendanceStats() {
     const today = new Date().toISOString().split('T')[0];
-    const todayData = dbData.attendance.filter(r => r.date === today);
+    let todayData = dbData.attendance.filter(r => r.date === today);
+    if (typeof filterAttendanceByHoliday === 'function') {
+        todayData = filterAttendanceByHoliday(todayData);
+    }
     return {
         hadir: todayData.filter(r => r.status === 'Hadir').length,
         pulang: todayData.filter(r => r.status === 'Pulang').length,
@@ -1111,4 +1205,4 @@ window.populateFilters = populateFilters;
 window.populateDateFilter = populateDateFilter;
 window.waitForAttendanceElements = waitForAttendanceElements;
 
-console.log("✅ attendance.js V4.1 loaded - Simulasi dengan search siswa");
+console.log("✅ attendance.js V4.2 loaded - Pengaturan jam efektif & hari libur");
