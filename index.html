@@ -202,6 +202,8 @@
             <div style="display: flex; align-items: center; gap: 20px; flex-wrap: wrap;">
                 <div id="clock" class="clock-display">--:--:--</div>
                 <button id="themeToggleBtn" class="btn-icon" style="background: transparent; font-size: 1.4rem;">🌙</button>
+                <!-- TOMBOL PROFIL KHUSUS DESKTOP -->
+                <button id="desktopProfileBtn" class="btn-icon desktop-only" onclick="openProfileModal()" title="Profil Saya" style="background: transparent; font-size: 1.4rem;">👤</button>
                 <!-- TOMBOL LOGOUT KHUSUS DESKTOP -->
                 <button id="desktopLogoutBtn" class="btn-icon desktop-only" onclick="handleLogout()" title="Logout" style="background: transparent; font-size: 1.4rem;">🚪</button>
             </div>
@@ -323,8 +325,12 @@
             </div>
             <div class="table-container">
                 <table>
-                    <thead><tr><th>Waktu</th><th>ID FP</th><th>Nama</th><th>Kelas</th><th>Jurusan</th><th>Status</th><th>Aksi</th></tr></thead>
-                    <tbody id="tbody-attendance"><tr><td colspan="7">Memuat data...<\/td></tr></tbody>
+                    <thead>
+                        <tr><th>Waktu</th><th>ID FP</th><th>Nama</th><th>Kelas</th><th>Jurusan</th><th>Status</th><th>Aksi</th></tr>
+                    </thead>
+                    <tbody id="tbody-attendance">
+                        <tr><td colspan="7">Memuat data...<\/td></tr>
+                    </tbody>
                 </table>
             </div>
         </div>
@@ -353,8 +359,12 @@
             </div>
             <div class="table-container">
                 <table>
-                    <thead><tr><th>ID FP</th><th>Nama</th><th>Kelas</th><th>Jurusan</th><th>Delay</th><th>Aksi</th></tr></thead>
-                    <tbody id="tbody-students"><tr><td colspan="6">Memuat data...<\/td></tr></tbody>
+                    <thead>
+                        <tr><th>ID FP</th><th>Nama</th><th>Kelas</th><th>Jurusan</th><th>Delay</th><th>Aksi</th></tr>
+                    </thead>
+                    <tbody id="tbody-students">
+                        <tr><td colspan="6">Memuat data...<\/td></tr>
+                    </tbody>
                 </table>
             </div>
         </div>
@@ -377,14 +387,18 @@
             <h4 class="role-admin role-guru">📋 Daftar Kode Aktif</h4>
             <div class="table-container role-admin role-guru">
                 <table>
-                    <thead><tr><th>Kode</th><th>Status</th><th>Dibuat</th><th>Pengguna</th><th>Aksi</th></tr></thead>
+                    <thead>
+                        <tr><th>Kode</th><th>Status</th><th>Dibuat</th><th>Pengguna</th><th>Aksi</th></tr>
+                    </thead>
                     <tbody id="tbody-codes"></tbody>
                 </table>
             </div>
             <div class="controls-bar role-admin role-guru"><h4>👥 Daftar Pengguna</h4><div class="search-box"><input type="text" id="searchUser" placeholder="🔍 Cari user..." oninput="renderUsersTable()"></div></div>
             <div class="table-container role-admin role-guru">
                 <table>
-                    <thead><tr><th>Foto</th><th>Nama</th><th>Email</th><th>Role</th><th>Detail</th><th>Aksi</th></tr></thead>
+                    <thead>
+                        <tr><th>Foto</th><th>Nama</th><th>Email</th><th>Role</th><th>Detail</th><th>Aksi</th></tr>
+                    </thead>
                     <tbody id="tbody-users"></tbody>
                 </table>
             </div>
@@ -405,8 +419,12 @@
             </div>
             <div class="table-container">
                 <table>
-                    <thead><tr><th>No</th><th>ID FP</th><th>Nama</th><th>Kelas</th><th>Jurusan</th><th>Total Hari</th><th>Hadir</th><th>Sakit</th><th>Izin</th><th>Alpha</th><th>Persentase</th><th>Status</th></tr></thead>
-                    <tbody id="rekapTbody"><tr><td colspan="12">Memuat data...<\/td></tr></tbody>
+                    <thead>
+                        <tr><th>No</th><th>ID FP</th><th>Nama</th><th>Kelas</th><th>Jurusan</th><th>Total Hari</th><th>Hadir</th><th>Sakit</th><th>Izin</th><th>Alpha</th><th>Persentase</th><th>Status</th></tr>
+                    </thead>
+                    <tbody id="rekapTbody">
+                        <tr><td colspan="12">Memuat data...<\/td></tr>
+                    </tbody>
                 </table>
             </div>
         </div>
@@ -666,4 +684,4 @@
         <span class="branding-text">Dikembangkan oleh CV Haka Jaya</span>
     </div>
 </body>
-</html>r
+</html>
