@@ -1,10 +1,10 @@
-// attendance.js - VERSION 4.4 (FIXED: DEFAULT FILTER TODAY & IMPROVED RENDERING)
+// attendance.js - VERSION 4.5 (FULLY FIXED FOR V2)
 // Mengelola data absensi, filter, validasi delay pulang,
 // serta manual status (sakit, izin, alpha) untuk siswa yang tidak hadir.
-// PERUBAHAN V4.4: 
+// PERUBAHAN V4.5: 
+//   - Kompatibel dengan ID filter 'filterDate' (bukan filterDateRange)
 //   - Set default filter ke 'today' agar langsung menampilkan absensi hari ini
-//   - Perbaikan inisialisasi populateDateFilter
-//   - Debug logging untuk memudahkan troubleshooting
+//   - Debug logging lengkap untuk memudahkan troubleshooting
 // ============================================================================
 
 // ======================== GLOBAL VARIABLES ========================
@@ -177,7 +177,7 @@ function populateFilters() {
     console.log(`✅ populateFilters selesai: ${kelasOptions.length} kelas, ${jurusanOptions.length} jurusan`);
 }
 
-// ======================== POPULATE DATE FILTER (PERBAIKAN UTAMA) ========================
+// ======================== POPULATE DATE FILTER ========================
 function populateDateFilter() {
     console.log("🔧 populateDateFilter dipanggil");
     
@@ -204,8 +204,7 @@ function populateDateFilter() {
         dateSelect.innerHTML += `<option value="${dateStr}">${dayName}, ${dateStr}</option>`;
     }
     
-    // *** PERBAIKAN: Set default ke 'today' ***
-    // Jika tidak ada nilai sebelumnya atau nilai sebelumnya tidak valid, set ke 'today'
+    // Set default ke 'today'
     const isValidPrevious = previousValue && previousValue !== 'all' && previousValue !== 'today' && 
                             Array.from(dateSelect.options).some(opt => opt.value === previousValue);
     
@@ -299,7 +298,7 @@ function updateAttendanceDonutChart() {
     }
 }
 
-// ======================== RENDER TABLE (DENGAN STATUS MANUAL & TERLAMBAT) ========================
+// ======================== RENDER TABLE ========================
 
 async function renderTable() {
     console.log("📊 renderTable dipanggil - Total attendance in dbData:", dbData.attendance?.length || 0);
@@ -309,6 +308,7 @@ async function renderTable() {
         console.log("📊 Sample attendance data (first 3):", dbData.attendance.slice(0, 3));
     } else {
         console.warn("⚠️ No attendance data found in dbData!");
+        console.log("💡 Tip: Pastikan ada data absensi di Firebase Realtime Database pada node 'absensi'");
     }
     
     let tbody = document.getElementById('tbody-attendance');
@@ -322,6 +322,7 @@ async function renderTable() {
         }
     }
     
+    // Gunakan ID yang benar: 'filterDate' (bukan 'filterDateRange')
     const fDate = document.getElementById('filterDate') ? document.getElementById('filterDate').value : 'today';
     const fKelas = document.getElementById('filterKelas') ? document.getElementById('filterKelas').value : 'all';
     const fJurusan = document.getElementById('filterJurusan') ? document.getElementById('filterJurusan').value : 'all';
@@ -485,7 +486,7 @@ function updateAttendanceStatistics(data) {
     `;
 }
 
-// ======================== DELETE ATTENDANCE (DENGAN LOG) ========================
+// ======================== DELETE ATTENDANCE ========================
 
 function deleteAttendance(id) {
     if (!currentUser) {
@@ -522,7 +523,7 @@ function deleteAttendance(id) {
         });
 }
 
-// ======================== SIMULASI SCAN MASUK (DENGAN SEARCH SISWA) ========================
+// ======================== SIMULASI SCAN MASUK ========================
 
 let currentStudentsListForIn = [];
 
@@ -1032,7 +1033,7 @@ function renderFilteredTable(filteredData) {
     tbody.innerHTML = rows.join('');
 }
 
-// ======================== MANUAL ATTENDANCE STATUS (DENGAN LOG) ========================
+// ======================== MANUAL ATTENDANCE STATUS ========================
 
 function openAbsenceModal() {
     if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'guru' && currentUser.role !== 'developer')) {
@@ -1271,4 +1272,4 @@ window.populateFilters = populateFilters;
 window.populateDateFilter = populateDateFilter;
 window.waitForAttendanceElements = waitForAttendanceElements;
 
-console.log("✅ attendance.js V4.4 loaded - Default filter TODAY, improved debugging, dan reset ke Hari Ini");
+console.log("✅ attendance.js V4.5 loaded - FULLY FIXED for V2, menggunakan ID filter 'filterDate'");
