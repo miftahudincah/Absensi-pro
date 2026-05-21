@@ -1,0 +1,167 @@
+/* ==================== RESET & GLOBAL ==================== */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+    transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+:root {
+    --primary: #00bcd4;
+    --primary-dark: #0097a7;
+    --primary-hover: #008ba3;
+    --secondary: #ff9800;
+    --secondary-dark: #f57c00;
+    --success: #4caf50;
+    --danger: #f44336;
+    --warning: #ffc107;
+    --info: #2196f3;
+    
+    --bg-dark: #0a0a0f;
+    --bg-card: #12121a;
+    --bg-sidebar: #16161f;
+    --bg-hover: #1e1e2a;
+    --border: #2a2a35;
+    
+    --text-primary: #ffffff;
+    --text-secondary: #a0a0b0;
+    --text-muted: #6a6a7a;
+    
+    --shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+    --transition: all 0.3s ease;
+}
+
+body {
+    font-family: 'Inter', 'Segoe UI', 'Poppins', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: linear-gradient(135deg, #0a0a0f 0%, #12121a 100%);
+    color: var(--text-primary);
+    min-height: 100vh;
+    line-height: 1.5;
+    padding-bottom: 70px;
+}
+
+/* ==================== LIGHT MODE THEME ==================== */
+body.light-mode {
+    --primary: #0097a7;
+    --primary-dark: #00838f;
+    --primary-hover: #006064;
+    --secondary: #f57c00;
+    --secondary-dark: #ef6c00;
+    --success: #388e3c;
+    --danger: #d32f2f;
+    --warning: #ffa000;
+    --info: #1976d2;
+    
+    --bg-dark: #f5f5f5;
+    --bg-card: #ffffff;
+    --bg-sidebar: #fafafa;
+    --bg-hover: #eeeeee;
+    --border: #dddddd;
+    
+    --text-primary: #212121;
+    --text-secondary: #424242;
+    --text-muted: #757575;
+    
+    --shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+    --shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.05);
+}
+
+body.light-mode .bg-gradient {
+    background: linear-gradient(135deg, #e0e0e0 0%, #f5f5f5 100%);
+}
+
+body.light-mode .header-bar,
+body.light-mode .modal-title,
+body.light-mode .sensor-card,
+body.light-mode .announcement-item,
+body.light-mode .friend-item,
+body.light-mode .friend-request-item,
+body.light-mode .search-result-item,
+body.light-mode .chat-sidebar,
+body.light-mode .chat-header,
+body.light-mode .chat-input-area,
+body.light-mode .key-box,
+body.light-mode .guide-container details,
+body.light-mode .stat-card-new,
+body.light-mode .chart-col,
+body.light-mode .class-col {
+    background: var(--bg-card);
+}
+
+body.light-mode .controls-bar {
+    background: var(--bg-card);
+    border-color: var(--border);
+}
+
+body.light-mode .filter-group select,
+body.light-mode .filter-group input,
+body.light-mode .search-box input,
+body.light-mode .form-group input,
+body.light-mode .form-group select,
+body.light-mode .form-group textarea,
+body.light-mode #tab-users #selectStudentForCode {
+    background: var(--bg-card);
+    border-color: var(--border);
+    color: var(--text-primary);
+}
+
+body.light-mode .btn-icon {
+    background: #e0e0e0;
+    color: var(--text-primary);
+}
+
+body.light-mode .btn-icon:hover {
+    background: #d0d0d0;
+}
+
+body.light-mode .chat-message.friend .chat-message-bubble {
+    background: #e0e0e0;
+    color: var(--text-primary);
+}
+
+body.light-mode .chat-message.me .chat-message-bubble {
+    background: var(--primary);
+    color: white;
+}
+
+body.light-mode .toast {
+    background: var(--bg-card);
+    color: var(--text-primary);
+    border-left-color: var(--primary);
+}
+
+body.light-mode table tr:hover {
+    background: rgba(0, 0, 0, 0.02);
+}
+
+body.light-mode th {
+    background: #f0f0f0;
+    color: var(--primary-dark);
+}
+
+body.light-mode .modal-box {
+    background: var(--bg-card);
+}
+
+body.light-mode .modal-title {
+    background: #f0f0f0;
+    border-bottom-color: var(--border);
+}
+
+body.light-mode .branding-footer {
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(8px);
+    border-color: rgba(0, 188, 212, 0.3);
+}
+
+body.light-mode .branding-text {
+    color: #212121;
+}
+
+/* ==================== TYPOGRAPHY ==================== */
+.text-small {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
