@@ -42,7 +42,6 @@
     <button id="floatingAnnouncementBtn" class="floating-announcement-btn" onclick="openAnnouncementModal()" style="display: none;">✏️</button>
     <button id="floatingChatBtn" class="floating-chat-btn" onclick="openChatModal()" style="display: none;">💬</button>
     <button id="floatingFriendsBtn" class="floating-friends-btn" onclick="toggleFriendsModal()" style="display: none;">👥</button>
-    <!-- FLOATING STATUS BUTTON (BARU) -->
     <button id="floatingStatusBtn" class="floating-status-btn" onclick="openCreateStatusModal()" style="display: none;">📸</button>
 
     <!-- AUTH SECTION -->
@@ -158,6 +157,10 @@
                     <span class="sidebar-icon">💬</span>
                     <span class="sidebar-text">Chat</span>
                 </button>
+                <button class="sidebar-btn" data-tab="logs">
+                    <span class="sidebar-icon">📋</span>
+                    <span class="sidebar-text">Log Aktivitas</span>
+                </button>
                 <button class="sidebar-btn" data-tab="config">
                     <span class="sidebar-icon">⚙️</span>
                     <span class="sidebar-text">Pengaturan</span>
@@ -218,6 +221,7 @@
             <button class="tab-btn" onclick="switchTab('rekap')">📊 Rekap Absensi</button>
             <button class="tab-btn" onclick="switchTab('friends')">👥 Teman</button>
             <button class="tab-btn" onclick="switchTab('chat')">💬 Chat</button>
+            <button class="tab-btn" onclick="switchTab('logs')">📋 Log Aktivitas</button>
             <button class="tab-btn" onclick="switchTab('config')">⚙️ Pengaturan</button>
             <button class="tab-btn" onclick="switchTab('guide')">📘 Panduan</button>
         </div>
@@ -451,6 +455,83 @@
             </div>
         </div>
 
+        <!-- TAB LOGS (AKTIVITAS) -->
+        <div id="tab-logs" class="tab-content">
+            <div class="controls-bar">
+                <div class="filter-group">
+                    <label>🔍 Filter Aksi:</label>
+                    <select id="logActionFilter" onchange="renderLogsTable()">
+                        <option value="all">Semua Aksi</option>
+                        <option value="login">Login</option>
+                        <option value="logout">Logout</option>
+                        <option value="create_announcement">Buat Pengumuman</option>
+                        <option value="update_announcement">Edit Pengumuman</option>
+                        <option value="delete_announcement">Hapus Pengumuman</option>
+                        <option value="delete_attendance">Hapus Absensi</option>
+                        <option value="simulate_attendance_in">Simulasi Masuk</option>
+                        <option value="simulate_attendance_out">Simulasi Pulang</option>
+                        <option value="save_manual_attendance">Atur Ketidakhadiran</option>
+                        <option value="add_student">Tambah Siswa</option>
+                        <option value="edit_student">Edit Siswa</option>
+                        <option value="delete_student">Hapus Siswa</option>
+                        <option value="import_students">Import Siswa</option>
+                        <option value="export_students">Export Siswa</option>
+                        <option value="update_user_role">Ubah Role User</option>
+                        <option value="delete_user">Hapus User</option>
+                        <option value="reset_system">Reset Sistem</option>
+                        <option value="reset_user_password">Reset Password</option>
+                        <option value="create_status">Buat Status</option>
+                        <option value="delete_status">Hapus Status</option>
+                        <option value="send_friend_request">Kirim Permintaan Teman</option>
+                        <option value="accept_friend_request">Terima Teman</option>
+                        <option value="reject_friend_request">Tolak Teman</option>
+                        <option value="remove_friend">Hapus Teman</option>
+                        <option value="delete_chat_message">Hapus Pesan Chat</option>
+                        <option value="clear_chat">Bersihkan Chat</option>
+                        <option value="upload_profile_photo">Upload Foto Profil</option>
+                        <option value="save_school_name">Ubah Nama Sekolah</option>
+                        <option value="upload_school_logo">Upload Logo Sekolah</option>
+                        <option value="remove_school_logo">Hapus Logo Sekolah</option>
+                        <option value="update_global_delay">Ubah Delay Global</option>
+                        <option value="save_classes">Simpan Daftar Kelas</option>
+                        <option value="save_majors">Simpan Daftar Jurusan</option>
+                        <option value="update_school_type">Ubah Tipe Sekolah</option>
+                        <option value="export_attendance_excel">Ekspor Excel Absensi</option>
+                        <option value="export_rekap_excel">Ekspor Rekap Excel</option>
+                        <option value="export_rekap_pdf">Ekspor Rekap PDF</option>
+                        <option value="forgot_password">Lupa Password</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label>📅 Mulai:</label>
+                    <input type="date" id="logStartDate" onchange="renderLogsTable()">
+                </div>
+                <div class="filter-group">
+                    <label>📅 Sampai:</label>
+                    <input type="date" id="logEndDate" onchange="renderLogsTable()">
+                </div>
+                <button class="btn-action btn-secondary" onclick="renderLogsTable()" style="margin-left: auto;">🔄 Refresh</button>
+            </div>
+            <div class="table-container">
+                <table id="logsTable">
+                    <thead>
+                        <tr>
+                            <th>🕒 Waktu</th>
+                            <th>👤 Pengguna</th>
+                            <th>🎭 Role</th>
+                            <th>📌 Aksi</th>
+                            <th>📝 Detail</th>
+                            <th>🌐 IP</th>
+                        </tr>
+                    </thead>
+                    <tbody id="logsTbody">
+                        <tr><td colspan="6" style="text-align:center; padding:40px;">⏳ Memuat log aktivitas...</td><\/tr>
+                    </tbody>
+                </table>
+                <div id="logsPagination" style="display: flex; justify-content: center; gap: 10px; margin-top: 20px;"></div>
+            </div>
+        </div>
+
         <!-- TAB CONFIG -->
         <div id="tab-config" class="tab-content">
             <div class="guide-container">
@@ -477,7 +558,7 @@
                 <hr>
                 <div class="form-group"><label>⏰ Delay Pulang Global</label><div style="display:flex; gap:10px; flex-wrap:wrap;"><select id="globalDelayUnit"><option value="minutes">Menit</option><option value="hours">Jam</option></select><div id="globalDelayMinutesGroup"><input type="number" id="globalDelayMinutesValue" value="60" style="width:80px;"> menit</div><div id="globalDelayHoursGroup" style="display:none;"><select id="globalDelayHoursValue" style="width:80px;"></select> jam</div><button class="btn-action btn-primary role-admin" onclick="saveGlobalDelay()">Simpan</button></div><div><small>Delay saat ini: <strong id="globalDelayDisplay">60 menit</strong></small></div></div>
                 
-                <!-- ======================= PENGATURAN JAM EFEKTIF & HARI LIBUR ======================= -->
+                <!-- PENGATURAN JAM EFEKTIF & HARI LIBUR -->
                 <hr>
                 <h4>⏰ Pengaturan Jam Efektif & Hari Libur</h4>
                 <div class="form-group">
@@ -516,7 +597,6 @@
                     <div id="holidayDatesList" style="margin-top:10px; display:flex; flex-wrap:wrap; gap:8px;"></div>
                 </div>
                 <button class="btn-action btn-primary role-admin" onclick="saveAttendanceSettings()" id="btnSaveAttendanceSettings">💾 Simpan Pengaturan</button>
-                <!-- ======================= END PENGATURAN JAM EFEKTIF ======================= -->
 
                 <div id="sensorStatusPanel" class="sensor-status-container" style="margin-top: 20px; display: none;">
                     <div class="sensor-header">
@@ -583,20 +663,13 @@
     </div>
 
     <!-- SCRIPTS - URUTAN SANGAT PENTING! -->
-    <!-- 1. Konfigurasi Firebase -->
     <script src="js/config.js"></script>
-    <!-- 2. Supabase Config (SETELAH config.js, SEBELUM db.js dan auth.js) -->
     <script src="js/supabase-config.js"></script>
-    <!-- 3. Database & Auth -->
     <script src="js/db.js"></script>
     <script src="js/auth.js"></script>
-    <!-- 3.5 Logger (Audit Trail) -->
     <script src="js/logger.js"></script>
-    <!-- 4. UI Components -->
     <script src="js/ui.js"></script>
-    <!-- 5. Init & Data Listeners -->
     <script src="js/init.js"></script>
-    <!-- 6. Feature Modules -->
     <script src="js/attendance.js"></script>
     <script src="js/students.js"></script>
     <script src="js/users.js"></script>
@@ -605,7 +678,7 @@
     <script src="js/friends.js"></script>
     <script src="js/status.js"></script>
     <script src="js/chat.js"></script>
-    <!-- 7. Main & Rekap -->
+    <script src="js/logs.js"></script>
     <script src="js/main.js"></script>
     <script src="js/rekap.js"></script>
 
