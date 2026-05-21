@@ -1,6 +1,6 @@
-// ui.js - VERSION 5.8 (DENGAN LOG AKTIVITAS)
+// ui.js - VERSION 5.9 (FIXED: No auto-render chat on page load)
 // Berisi fungsi-fungsi antarmuka pengguna, modal, profil, dan inisialisasi dashboard
-// PERUBAHAN V5.8: Menambahkan logActivity untuk update profil, upload/remove logo, simpan nama sekolah
+// PERUBAHAN V5.9: Menghapus auto-render chat saat uiReady, chat hanya dirender saat tab chat dipilih
 // ============================================================================
 
 // ======================== GLOBAL UI STATE ========================
@@ -255,6 +255,7 @@ function initApp() {
         });
     }
     
+    // PERBAIKAN: Pastikan dashboard yang ditampilkan, BUKAN chat
     switchTab('dashboard');
     
     setTimeout(() => {
@@ -350,6 +351,7 @@ if (typeof window !== 'undefined') {
     });
 }
 
+// PERBAIKAN: Hapus auto-render chat di sini! Chat hanya dirender saat tab dipilih
 window.addEventListener('uiReady', (e) => {
     if (e.detail.currentUser && typeof initFriendsSystem === 'function' && !window._friendsInitialized) {
         console.log("👥 uiReady received, initializing friends system");
@@ -360,14 +362,11 @@ window.addEventListener('uiReady', (e) => {
 
 window.addEventListener('uiReady', (e) => {
     if (e.detail.currentUser && typeof initChatSystem === 'function' && !window._chatInitialized) {
-        console.log("💬 uiReady received, initializing chat system");
+        console.log("💬 uiReady received, initializing chat system (listeners only, no render)");
         window._chatInitialized = true;
         initChatSystem();
-        setTimeout(() => {
-            if (typeof renderChatInterface === 'function') {
-                renderChatInterface('chatPanel');
-            }
-        }, 500);
+        // PERBAIKAN: HAPUS renderChatInterface('chatPanel') dari sini!
+        // Chat hanya akan dirender ketika user mengklik tab Chat
     }
 });
 
@@ -603,7 +602,6 @@ async function uploadSchoolLogo(input) {
         const fallbackMsg = result.isFallback ? ' (via ImgBB fallback)' : '';
         showToast(`✅ Logo sekolah berhasil diperbarui!${fallbackMsg}`, 'success');
         
-        // LOG: Upload logo sekolah
         if (typeof logActivity === 'function') {
             logActivity('upload_school_logo', `Upload logo sekolah${result.isFallback ? ' (fallback ImgBB)' : ' (Supabase)'}`);
         }
@@ -658,7 +656,6 @@ async function removeSchoolLogo() {
         
         showToast('✅ Logo sekolah berhasil dihapus', 'success');
         
-        // LOG: Hapus logo sekolah
         if (typeof logActivity === 'function') {
             logActivity('remove_school_logo', 'Menghapus logo sekolah');
         }
@@ -725,7 +722,7 @@ function openChatModal() {
     const modal = document.getElementById('modal-chat');
     if (modal) {
         modal.classList.add('open');
-        if (typeof renderChatInterface === 'function') renderChatInterface();
+        if (typeof renderChatInterface === 'function') renderChatInterface('chatModalPanel');
         else console.warn("renderChatInterface not found");
     }
 }
@@ -827,6 +824,8 @@ function switchTab(tabId) {
             if (typeof loadFriendRequests === 'function') loadFriendRequests();
             if (typeof loadFriendsList === 'function') loadFriendsList();
         } else if (tabId === 'chat') {
+            // PERBAIKAN: Render chat ONLY when tab is clicked
+            console.log("💬 Switching to chat tab, rendering chat interface...");
             if (typeof renderChatInterface === 'function') {
                 renderChatInterface('chatPanel');
             } else {
@@ -1220,7 +1219,6 @@ function handleUpdateProfileInfo() {
     btn.innerText = '💾 Menyimpan...';
     btn.disabled = true;
     
-    // Simpan data lama untuk log
     const oldNama = currentUser.nama;
     const oldKelas = currentUser.kelas;
     const oldJurusan = currentUser.jurusan;
@@ -1236,7 +1234,6 @@ function handleUpdateProfileInfo() {
             if (typeof saveUserToLocalStorage === 'function') saveUserToLocalStorage(currentUser);
             showToast('✅ Profil berhasil diperbarui');
             
-            // LOG: Update profil
             if (typeof logActivity === 'function') {
                 let changes = [];
                 if (oldNama !== newNama) changes.push(`nama: ${oldNama} → ${newNama}`);
@@ -1283,7 +1280,6 @@ function handleChangePassword(e) {
             closeModal('modal-change-pass'); 
             document.getElementById('cpNew').value = ''; 
             document.getElementById('cpConfirm').value = '';
-            // LOG sudah ada di auth.js
         })
         .catch(err => {
             console.error('Change password error:', err);
@@ -1349,7 +1345,6 @@ async function uploadProfilePhoto(input) {
         const fallbackMsg = result.isFallback ? ' (via ImgBB fallback)' : '';
         showToast(`✅ Foto profil berhasil diperbarui!${fallbackMsg}`, 'success');
         
-        // LOG: Upload foto profil
         if (typeof logActivity === 'function') {
             logActivity('upload_profile_photo', `Upload foto profil${result.isFallback ? ' (fallback ImgBB)' : ' (Supabase)'}`);
         }
@@ -1438,7 +1433,6 @@ function saveSchoolName() {
         return;
     }
     
-    // Ambil nama lama untuk log
     let oldSchoolName = '';
     const schoolNameRef = db.ref('system_config/schoolName');
     schoolNameRef.once('value').then(snapshot => {
@@ -1453,7 +1447,6 @@ function saveSchoolName() {
             const headerTitle = document.getElementById('schoolNameDisplay'); 
             if (headerTitle) headerTitle.textContent = newSchoolName;
             
-            // LOG: Simpan nama sekolah
             if (typeof logActivity === 'function') {
                 logActivity('save_school_name', `Mengubah nama sekolah dari "${oldSchoolName}" menjadi "${newSchoolName}"`);
             }
@@ -1608,4 +1601,4 @@ window.applySidebarRolePermissions = applySidebarRolePermissions;
 // Debug function
 window.debugAttendanceData = debugAttendanceData;
 
-console.log("✅ ui.js V5.8 loaded - Dengan log aktivitas untuk update profil, logo sekolah, dan nama sekolah");
+console.log("✅ ui.js V5.9 loaded - FIXED: Chat hanya dirender saat tab Chat dipilih, tidak otomatis saat load");
