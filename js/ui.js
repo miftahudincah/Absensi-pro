@@ -1,6 +1,6 @@
-// ui.js - VERSION 5.8 (DENGAN LOG AKTIVITAS)
+// ui.js - VERSION 5.15 (FIX: FLOATING BUTTONS & MENU PENGATURAN)
 // Berisi fungsi-fungsi antarmuka pengguna, modal, profil, dan inisialisasi dashboard
-// PERUBAHAN V5.8: Menambahkan logActivity untuk update profil, upload/remove logo, simpan nama sekolah
+// PERUBAHAN V5.15: Memastikan tombol floating chat, friends, status muncul untuk semua user
 // ============================================================================
 
 // ======================== GLOBAL UI STATE ========================
@@ -158,6 +158,7 @@ function updateMobileNavTitle(tabId) {
         'rekap': '📊 Rekap Absensi',
         'friends': '👥 Teman',
         'chat': '💬 Chat',
+        'logs': '📋 Log Aktivitas',
         'config': '⚙️ Pengaturan',
         'guide': '📘 Panduan'
     };
@@ -176,16 +177,63 @@ function applySidebarRolePermissions() {
     
     const sidebarBtns = document.querySelectorAll('.sidebar-btn');
     sidebarBtns.forEach(btn => {
+        const btnTab = btn.getAttribute('data-tab');
         const hasRoleAdmin = btn.classList.contains('role-admin');
         const hasRoleGuru = btn.classList.contains('role-guru');
+        const hasRoleDeveloper = btn.classList.contains('role-developer');
         
+        // ========== PERBAIKAN UTAMA: Gunakan data-tab untuk identifikasi ==========
+        
+        // Tombol Pengaturan (config)
+        if (btnTab === 'config') {
+            if (isGuruOrDev) {
+                btn.style.display = 'flex';
+            } else {
+                btn.style.display = 'none';
+            }
+            return;
+        }
+        
+        // Tombol Log Aktivitas (logs)
+        if (btnTab === 'logs') {
+            if (isGuruOrDev) {
+                btn.style.display = 'flex';
+            } else {
+                btn.style.display = 'none';
+            }
+            return;
+        }
+        
+        // Tombol Manajemen User (users)
+        if (btnTab === 'users') {
+            if (isGuruOrDev) {
+                btn.style.display = 'flex';
+            } else {
+                btn.style.display = 'none';
+            }
+            return;
+        }
+        
+        // Tombol dengan class role-developer
+        if (hasRoleDeveloper && role === 'developer') {
+            btn.style.display = 'flex';
+            return;
+        }
+        
+        // Tombol dengan class role-admin
         if (hasRoleAdmin && !isAdminOrDev) {
             btn.style.display = 'none';
-        } else if (hasRoleGuru && !isGuruOrDev) {
-            btn.style.display = 'none';
-        } else {
-            btn.style.display = 'flex';
+            return;
         }
+        
+        // Tombol dengan class role-guru
+        if (hasRoleGuru && !isGuruOrDev) {
+            btn.style.display = 'none';
+            return;
+        }
+        
+        // Default: tampilkan semua tombol lainnya
+        btn.style.display = 'flex';
     });
 }
 
@@ -257,18 +305,38 @@ function initApp() {
     
     switchTab('dashboard');
     
+    // ========== FLOATING BUTTONS - PASTIKAN MUNCUL UNTUK SEMUA USER ==========
     setTimeout(() => {
-        if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'guru' || currentUser.role === 'developer')) {
-            const floatingBtn = document.getElementById('floatingAnnouncementBtn');
-            if (floatingBtn) floatingBtn.style.display = 'flex';
-        }
-        const floatingFriendsBtn = document.getElementById('floatingFriendsBtn');
-        if (floatingFriendsBtn) floatingFriendsBtn.style.display = 'flex';
+        // Tombol Chat - selalu tampil untuk semua user yang login
         const floatingChatBtn = document.getElementById('floatingChatBtn');
-        if (floatingChatBtn) floatingChatBtn.style.display = 'flex';
+        if (floatingChatBtn) {
+            floatingChatBtn.style.display = 'flex';
+            console.log("✅ Floating chat button shown");
+        }
+        
+        // Tombol Friends - selalu tampil untuk semua user yang login
+        const floatingFriendsBtn = document.getElementById('floatingFriendsBtn');
+        if (floatingFriendsBtn) {
+            floatingFriendsBtn.style.display = 'flex';
+            console.log("✅ Floating friends button shown");
+        }
+        
+        // Tombol Status - selalu tampil untuk semua user yang login
         const floatingStatusBtn = document.getElementById('floatingStatusBtn');
-        if (floatingStatusBtn) floatingStatusBtn.style.display = 'flex';
-    }, 1000);
+        if (floatingStatusBtn) {
+            floatingStatusBtn.style.display = 'flex';
+            console.log("✅ Floating status button shown");
+        }
+        
+        // Tombol Pengumuman - hanya untuk admin, guru, developer
+        if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'guru' || currentUser.role === 'developer')) {
+            const floatingAnnouncementBtn = document.getElementById('floatingAnnouncementBtn');
+            if (floatingAnnouncementBtn) {
+                floatingAnnouncementBtn.style.display = 'flex';
+                console.log("✅ Floating announcement button shown");
+            }
+        }
+    }, 500);
     
     if (typeof initAnnouncementSystem === 'function') {
         setTimeout(() => initAnnouncementSystem(), 500);
@@ -730,7 +798,7 @@ function openChatModal() {
     }
 }
 
-// ======================== ROLE PERMISSIONS ========================
+// ======================== ROLE PERMISSIONS (DIPERBAIKI UNTUK DESKTOP) ========================
 function applyRolePermissions() {
     if (!currentUser) return;
     const role = currentUser.role;
@@ -739,43 +807,150 @@ function applyRolePermissions() {
     const isAdminOrDev = (role === 'admin' || role === 'developer');
     const isGuruOrDev = (role === 'admin' || role === 'guru' || role === 'developer');
     
+    // ========== UNTUK ELEMEN DENGAN CLASS role-admin ==========
     document.querySelectorAll('.role-admin').forEach(el => {
         if (isAdminOrDev) {
             el.style.display = '';
             el.style.visibility = 'visible';
             el.style.opacity = '1';
-        } else el.style.display = 'none';
+        } else {
+            el.style.display = 'none';
+        }
     });
     
+    // ========== UNTUK ELEMEN DENGAN CLASS role-guru ==========
     document.querySelectorAll('.role-guru').forEach(el => {
         if (isGuruOrDev) {
             el.style.display = '';
             el.style.visibility = 'visible';
             el.style.opacity = '1';
-        } else el.style.display = 'none';
+        } else {
+            el.style.display = 'none';
+        }
     });
     
+    // ========== BUTTON PENGUMUMAN ==========
     const btnAnnouncement = document.querySelector('.btn-announcement');
-    if (btnAnnouncement) btnAnnouncement.style.display = isGuruOrDev ? 'inline-flex' : 'none';
-    
-    const floatingBtn = document.getElementById('floatingAnnouncementBtn');
-    if (floatingBtn) floatingBtn.style.display = isGuruOrDev ? 'flex' : 'none';
-    
-    const floatingFriendsBtn = document.getElementById('floatingFriendsBtn');
-    if (floatingFriendsBtn) floatingFriendsBtn.style.display = 'flex';
-    
-    const floatingChatBtn = document.getElementById('floatingChatBtn');
-    if (floatingChatBtn) floatingChatBtn.style.display = 'flex';
-    
-    const navTabs = document.getElementById('nav-tabs-container');
-    if (navTabs && role === 'siswa') {
-        const configBtn = Array.from(document.querySelectorAll('.tab-btn')).find(b => b.textContent.includes('Pengaturan') || b.textContent.includes('Config'));
-        if (configBtn) configBtn.style.display = 'none';
-        const usersBtn = Array.from(document.querySelectorAll('.tab-btn')).find(b => b.textContent.includes('Manajemen Pengguna'));
-        if (usersBtn) usersBtn.style.display = 'none';
-    } else if (navTabs) {
-        document.querySelectorAll('.tab-btn').forEach(btn => btn.style.display = '');
+    if (btnAnnouncement) {
+        btnAnnouncement.style.display = isGuruOrDev ? 'inline-flex' : 'none';
     }
+    
+    // ========== FLOATING BUTTONS - TAMPILKAN SEMUA UNTUK USER YANG LOGIN ==========
+    // Tombol Chat - selalu tampil untuk semua user
+    const floatingChatBtn = document.getElementById('floatingChatBtn');
+    if (floatingChatBtn) {
+        floatingChatBtn.style.display = 'flex';
+    }
+    
+    // Tombol Friends - selalu tampil untuk semua user
+    const floatingFriendsBtn = document.getElementById('floatingFriendsBtn');
+    if (floatingFriendsBtn) {
+        floatingFriendsBtn.style.display = 'flex';
+    }
+    
+    // Tombol Status - selalu tampil untuk semua user
+    const floatingStatusBtn = document.getElementById('floatingStatusBtn');
+    if (floatingStatusBtn) {
+        floatingStatusBtn.style.display = 'flex';
+    }
+    
+    // Tombol Pengumuman - hanya untuk admin, guru, developer
+    const floatingAnnouncementBtn = document.getElementById('floatingAnnouncementBtn');
+    if (floatingAnnouncementBtn) {
+        floatingAnnouncementBtn.style.display = isGuruOrDev ? 'flex' : 'none';
+    }
+    
+    // ========== NAV TABS (DESKTOP) - PERBAIKAN UTAMA ==========
+    const navTabs = document.getElementById('nav-tabs-container');
+    if (navTabs) {
+        const allTabBtns = document.querySelectorAll('.tab-btn');
+        
+        if (role === 'siswa') {
+            // Siswa: sembunyikan tab yang tidak boleh diakses
+            allTabBtns.forEach(btn => {
+                const btnText = btn.textContent || '';
+                if (btnText.includes('Pengaturan') || 
+                    btnText.includes('Config') || 
+                    btnText.includes('Manajemen User') ||
+                    btnText.includes('Log Aktivitas')) {
+                    btn.style.display = 'none';
+                } else {
+                    btn.style.display = '';
+                }
+            });
+        } else {
+            // Admin, Guru, Developer: tampilkan SEMUA tab, tetapi perhatikan class role-* yang melekat
+            allTabBtns.forEach(btn => {
+                // Cek apakah tombol memiliki class role-developer
+                const hasRoleDeveloper = btn.classList.contains('role-developer');
+                const hasRoleAdmin = btn.classList.contains('role-admin');
+                const hasRoleGuru = btn.classList.contains('role-guru');
+                
+                let shouldShow = true;
+                
+                // Jika tombol punya class role-developer dan user BUKAN developer -> sembunyikan
+                if (hasRoleDeveloper && role !== 'developer') {
+                    shouldShow = false;
+                }
+                // Jika tombol punya class role-admin dan user BUKAN admin/developer -> sembunyikan
+                else if (hasRoleAdmin && !isAdminOrDev) {
+                    shouldShow = false;
+                }
+                // Jika tombol punya class role-guru dan user BUKAN guru/admin/developer -> sembunyikan
+                else if (hasRoleGuru && !isGuruOrDev) {
+                    shouldShow = false;
+                }
+                
+                btn.style.display = shouldShow ? '' : 'none';
+            });
+        }
+    }
+    
+    // ========== FORCE SHOW UNTUK CONFIG DAN LOGS DI DESKTOP ==========
+    // Ini memastikan tombol Config dan Logs tetap muncul meskipun ada konflik
+    setTimeout(() => {
+        if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'guru' || currentUser.role === 'developer')) {
+            // Cari tombol Config
+            const configBtn = document.querySelector('.tab-btn[onclick*="switchTab(\'config\')"]');
+            if (configBtn) {
+                configBtn.style.display = '';
+                configBtn.style.visibility = 'visible';
+                configBtn.style.opacity = '1';
+                console.log("✅ Config button force shown");
+            } else {
+                // Alternatif selector
+                const configBtnAlt = document.querySelector('.tab-btn[onclick*="config"]');
+                if (configBtnAlt) {
+                    configBtnAlt.style.display = '';
+                    configBtnAlt.style.visibility = 'visible';
+                    console.log("✅ Config button (alt) force shown");
+                }
+            }
+            
+            // Cari tombol Logs
+            const logsBtn = document.querySelector('.tab-btn[onclick*="switchTab(\'logs\')"]');
+            if (logsBtn) {
+                logsBtn.style.display = '';
+                logsBtn.style.visibility = 'visible';
+                logsBtn.style.opacity = '1';
+                console.log("✅ Logs button force shown");
+            } else {
+                // Alternatif selector
+                const logsBtnAlt = document.querySelector('.tab-btn[onclick*="logs"]');
+                if (logsBtnAlt) {
+                    logsBtnAlt.style.display = '';
+                    logsBtnAlt.style.visibility = 'visible';
+                    console.log("✅ Logs button (alt) force shown");
+                }
+            }
+        }
+    }, 200);
+    
+    // ========== SIDEBAR BUTTONS ==========
+    if (typeof applySidebarRolePermissions === 'function') {
+        applySidebarRolePermissions();
+    }
+    
     updateSchoolLogoUI();
     updateUserInterface();
 }
@@ -839,6 +1014,32 @@ function switchTab(tabId) {
             }
             if (typeof loadChatList === 'function') {
                 loadChatList();
+            }
+        } else if (tabId === 'logs') {
+            if (typeof initLogsSystem === 'function') {
+                initLogsSystem();
+            } else {
+                console.warn("initLogsSystem not available yet");
+            }
+            if (typeof renderLogsTable === 'function') {
+                renderLogsTable();
+            } else {
+                console.warn("renderLogsTable not available yet, will retry...");
+                setTimeout(() => {
+                    if (typeof renderLogsTable === 'function') {
+                        renderLogsTable();
+                    }
+                }, 500);
+            }
+        } else if (tabId === 'config') {
+            if (typeof initAllSettings === 'function') {
+                initAllSettings();
+            }
+            if (typeof renderClassesList === 'function') {
+                renderClassesList();
+            }
+            if (typeof renderMajorsList === 'function') {
+                renderMajorsList();
             }
         }
     }, 50);
@@ -1220,7 +1421,6 @@ function handleUpdateProfileInfo() {
     btn.innerText = '💾 Menyimpan...';
     btn.disabled = true;
     
-    // Simpan data lama untuk log
     const oldNama = currentUser.nama;
     const oldKelas = currentUser.kelas;
     const oldJurusan = currentUser.jurusan;
@@ -1236,7 +1436,6 @@ function handleUpdateProfileInfo() {
             if (typeof saveUserToLocalStorage === 'function') saveUserToLocalStorage(currentUser);
             showToast('✅ Profil berhasil diperbarui');
             
-            // LOG: Update profil
             if (typeof logActivity === 'function') {
                 let changes = [];
                 if (oldNama !== newNama) changes.push(`nama: ${oldNama} → ${newNama}`);
@@ -1283,7 +1482,6 @@ function handleChangePassword(e) {
             closeModal('modal-change-pass'); 
             document.getElementById('cpNew').value = ''; 
             document.getElementById('cpConfirm').value = '';
-            // LOG sudah ada di auth.js
         })
         .catch(err => {
             console.error('Change password error:', err);
@@ -1349,7 +1547,6 @@ async function uploadProfilePhoto(input) {
         const fallbackMsg = result.isFallback ? ' (via ImgBB fallback)' : '';
         showToast(`✅ Foto profil berhasil diperbarui!${fallbackMsg}`, 'success');
         
-        // LOG: Upload foto profil
         if (typeof logActivity === 'function') {
             logActivity('upload_profile_photo', `Upload foto profil${result.isFallback ? ' (fallback ImgBB)' : ' (Supabase)'}`);
         }
@@ -1438,7 +1635,6 @@ function saveSchoolName() {
         return;
     }
     
-    // Ambil nama lama untuk log
     let oldSchoolName = '';
     const schoolNameRef = db.ref('system_config/schoolName');
     schoolNameRef.once('value').then(snapshot => {
@@ -1453,7 +1649,6 @@ function saveSchoolName() {
             const headerTitle = document.getElementById('schoolNameDisplay'); 
             if (headerTitle) headerTitle.textContent = newSchoolName;
             
-            // LOG: Simpan nama sekolah
             if (typeof logActivity === 'function') {
                 logActivity('save_school_name', `Mengubah nama sekolah dari "${oldSchoolName}" menjadi "${newSchoolName}"`);
             }
@@ -1482,12 +1677,12 @@ function renderUsersTable() {
     const search = searchInput ? searchInput.value.toLowerCase() : '';
     tbody.innerHTML = '';
     if (!dbData.users_auth || dbData.users_auth.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:20px; color:#888;">📭 Tidak ada pengguna ditemukan.${search ? '<br><small>Coba kata kunci lain</small>' : ''}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:20px; color:#888;">📭 Tidak ada pengguna ditemukan.${search ? '<br><small>Coba kata kunci lain</small>' : ''}NonNull</td></tr>`;
         return;
     }
     let data = dbData.users_auth.filter(u => u.nama && u.nama.toLowerCase().includes(search));
     if (data.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:20px; color:#888;">🔍 Tidak ada pengguna yang cocok dengan pencarian.${search ? '<br><small>Coba kata kunci lain</small>' : ''}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:20px; color:#888;">🔍 Tidak ada pengguna yang cocok dengan pencarian.${search ? '<br><small>Coba kata kunci lain</small>' : ''}NonNull</td></tr>`;
         return;
     }
     data.forEach(u => {
@@ -1520,10 +1715,10 @@ function renderUsersTable() {
             <td style="text-align:center;"><img src="${avatar}" style="width:32px; height:32px; border-radius:50%; object-fit:cover;"></td>
             <td><strong>${escapeHtmlString(u.nama)}</strong>${isMe ? '<br><small style="color:#4a90e2;">Akun Anda</small>' : ''}</td>
             <td style="color:#aaa; font-size:0.9rem;">${u.email || '-'}</td>
-            <td>${roleHtml}</td>
-            <td style="color:#888; font-size:0.85rem;">${escapeHtmlString(detailText)}</td>
-            <td style="text-align:center;">${actionsHtml}</td>
-        </tr>`;
+            <td>${roleHtml}</div>
+            <td style="color:#888; font-size:0.85rem;">${escapeHtmlString(detailText)}</div></td>
+            <td style="text-align:center;">${actionsHtml}</div></tr>
+        `;
     });
     console.log(`📊 renderUsersTable: ${data.length} users displayed`);
 }
@@ -1608,4 +1803,4 @@ window.applySidebarRolePermissions = applySidebarRolePermissions;
 // Debug function
 window.debugAttendanceData = debugAttendanceData;
 
-console.log("✅ ui.js V5.8 loaded - Dengan log aktivitas untuk update profil, logo sekolah, dan nama sekolah");
+console.log("✅ ui.js V5.15 loaded - Floating buttons fixed for all users");
