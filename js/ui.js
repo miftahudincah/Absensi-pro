@@ -1,6 +1,9 @@
-// ui.js - VERSION 5.16 (FIX: CHAT RENDER ISSUE FROM SIDEBAR)
+// ui.js - VERSION 5.17 (FIX: PROFILE PHOTO & CHAT RENDER ISSUE)
 // Berisi fungsi-fungsi antarmuka pengguna, modal, profil, dan inisialisasi dashboard
-// PERUBAHAN V5.16: Memperbaiki chat yang tidak tampil saat diklik dari sidebar/menu bawah
+// PERUBAHAN V5.17: 
+//   - Menambahkan fungsi refreshAllAvatars() untuk force refresh semua avatar
+//   - Memperbaiki updateUserInterface() untuk update semua elemen avatar
+//   - Menambahkan listener realtime untuk perubahan foto profil
 // ============================================================================
 
 // ======================== GLOBAL UI STATE ========================
@@ -12,6 +15,7 @@ let populateRetryCount = 0;
 const MAX_POPULATE_RETRY = 20;
 let chatRenderRetryCount = 0;
 const MAX_CHAT_RENDER_RETRY = 10;
+let photoRefreshListenerAttached = false;
 
 // ======================== HELPER FUNCTIONS ========================
 
@@ -32,6 +36,86 @@ function getClassIconForHeader(className) {
     if (className.includes('XI')) return '🔧';
     if (className.includes('XII')) return '🚀';
     return '🏫';
+}
+
+/**
+ * REFRESH ALL AVATARS - Fungsi untuk memaksa refresh semua avatar
+ * dengan timestamp untuk bypass cache browser
+ */
+function refreshAllAvatars() {
+    if (!currentUser) return;
+    
+    console.log("🖼️ refreshAllAvatars called - Current photoUrl:", currentUser.photoUrl);
+    
+    // Gunakan timestamp untuk bypass cache browser
+    const timestamp = Date.now();
+    let photoUrl = currentUser.photoUrl;
+    
+    // Jika tidak ada foto, gunakan avatar default dari UI Avatars
+    if (!photoUrl) {
+        photoUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser.nama || 'User')}&background=00bcd4&color=fff&size=100`;
+    } else {
+        // Tambahkan timestamp ke URL untuk force refresh
+        const separator = photoUrl.includes('?') ? '&' : '?';
+        photoUrl = photoUrl.split('?')[0] + separator + 't=' + timestamp;
+    }
+    
+    // Update semua element avatar yang ada
+    const avatarElements = [
+        'headerAvatar',
+        'navbarAvatar', 
+        'sidebarAvatar',
+        'profileImg'
+    ];
+    
+    avatarElements.forEach(id => {
+        const el = document.getElementById(id);
+        if (el && photoUrl) {
+            el.src = photoUrl;
+            console.log(`✅ Avatar updated for: ${id}`);
+        }
+    });
+    
+    // Update juga gambar di sidebar user info jika ada struktur berbeda
+    const sidebarUserImg = document.querySelector('#sidebarUserInfo img');
+    if (sidebarUserImg && photoUrl) {
+        sidebarUserImg.src = photoUrl;
+    }
+    
+    // Update navbar user image jika ada
+    const navbarUserImg = document.querySelector('.navbar-user img');
+    if (navbarUserImg && photoUrl) {
+        navbarUserImg.src = photoUrl;
+    }
+    
+    // Update header user image jika ada struktur berbeda
+    const headerUserImg = document.querySelector('.header-user img');
+    if (headerUserImg && photoUrl) {
+        headerUserImg.src = photoUrl;
+    }
+}
+
+/**
+ * Setup realtime listener untuk perubahan foto profil
+ */
+function setupPhotoRealtimeListener() {
+    if (photoRefreshListenerAttached) return;
+    if (!currentUser || !currentUser.uid) return;
+    
+    photoRefreshListenerAttached = true;
+    console.log("📡 Setting up realtime photo listener for user:", currentUser.uid);
+    
+    db.ref(`users_auth/${currentUser.uid}/photoUrl`).on('value', (snapshot) => {
+        const newPhotoUrl = snapshot.val();
+        if (newPhotoUrl && currentUser.photoUrl !== newPhotoUrl) {
+            console.log("🖼️ Photo URL changed in Firebase, updating UI...");
+            currentUser.photoUrl = newPhotoUrl;
+            if (typeof saveUserToLocalStorage === 'function') {
+                saveUserToLocalStorage(currentUser);
+            }
+            refreshAllAvatars();
+        }
+    });
 }
 
 // ======================== SIDEBAR FUNCTIONS ========================
@@ -126,7 +210,8 @@ function updateSidebarUserInfo() {
     const sidebarClassInfo = document.getElementById('sidebarClassInfo');
     
     if (sidebarAvatar) {
-        sidebarAvatar.src = currentUser.photoUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser.nama || 'User')}&background=00bcd4&color=fff&size=100`;
+        const photoUrl = currentUser.photoUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser.nama || 'User')}&background=00bcd4&color=fff&size=100`;
+        sidebarAvatar.src = photoUrl;
     }
     if (sidebarUserName) {
         sidebarUserName.textContent = currentUser.nama || currentUser.email;
@@ -346,6 +431,9 @@ function initApp() {
     updateSchoolLogoUI();
     setupChartYearListener();
     
+    // Setup realtime listener untuk foto profil
+    setupPhotoRealtimeListener();
+    
     console.log("🔧 Starting to populate all filters (with improved retry)...");
     populateAllFiltersWithRetry();
     
@@ -547,8 +635,13 @@ function setupChartYearListener() {
     }
 }
 
+/**
+ * UPDATE USER INTERFACE - Versi terbaru dengan refresh semua avatar
+ */
 function updateUserInterface() {
     if (!currentUser) return;
+    
+    console.log("🎨 updateUserInterface called for user:", currentUser.nama);
     
     const userProfileDisplay = document.getElementById('userProfileDisplay');
     if (userProfileDisplay) userProfileDisplay.textContent = currentUser.nama;
@@ -578,12 +671,8 @@ function updateUserInterface() {
         }
     }
     
-    const photo = currentUser.photoUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser.nama || 'User')}&background=random`;
-    const headerAvatar = document.getElementById('headerAvatar');
-    if (headerAvatar) headerAvatar.src = photo;
-    
-    const profileImg = document.getElementById('profileImg');
-    if (profileImg) profileImg.src = photo;
+    // Refresh semua avatar
+    refreshAllAvatars();
 }
 
 function initManualDelayListeners() {
@@ -1539,7 +1628,7 @@ function handleChangePassword(e) {
         .finally(() => { if (btn) { btn.disabled = false; btn.textContent = 'Simpan'; } });
 }
 
-// ======================== UPLOAD PROFILE PHOTO (SUPABASE) DENGAN LOG ========================
+// ======================== UPLOAD PROFILE PHOTO (SUPABASE) DENGAN PERBAIKAN ========================
 async function uploadProfilePhoto(input) {
     if (!input.files || !input.files[0]) return;
     
@@ -1575,31 +1664,41 @@ async function uploadProfilePhoto(input) {
         
         if (typeof deleteOldProfilePhoto === 'function') {
             await deleteOldProfilePhoto(currentUser.uid, result.url);
+        } else {
+            console.warn('deleteOldProfilePhoto function not available, skipping old photo deletion');
         }
         
         await db.ref(`users_auth/${currentUser.uid}`).update({ photoUrl: result.url });
+        
+        // Update currentUser object
+        const oldPhotoUrl = currentUser.photoUrl;
         currentUser.photoUrl = result.url;
         
+        // Simpan ke localStorage
         if (typeof saveUserToLocalStorage === 'function') {
             saveUserToLocalStorage(currentUser);
         }
         
-        const headerAvatar = document.getElementById('headerAvatar');
-        if (headerAvatar) headerAvatar.src = result.url;
-        imgEl.src = result.url;
+        // ========== PERBAIKAN: Refresh semua avatar dengan force ==========
+        refreshAllAvatars();
         
-        const sidebarAvatar = document.getElementById('sidebarAvatar');
-        if (sidebarAvatar) sidebarAvatar.src = result.url;
+        // Juga update modal profile image
+        imgEl.src = result.url;
         
         const fallbackMsg = result.isFallback ? ' (via ImgBB fallback)' : '';
         showToast(`✅ Foto profil berhasil diperbarui!${fallbackMsg}`, 'success');
         
+        // LOG: Upload foto profil
         if (typeof logActivity === 'function') {
             logActivity('upload_profile_photo', `Upload foto profil${result.isFallback ? ' (fallback ImgBB)' : ' (Supabase)'}`);
         }
         
+        // Optional: Tampilkan info jika menggunakan fallback
         if (result.isFallback) {
-            setTimeout(() => showToast('ℹ️ Catatan: Gambar disimpan via ImgBB (fallback)', 'info'), 2000);
+            console.warn('Supabase gagal, menggunakan ImgBB sebagai fallback');
+            setTimeout(() => {
+                showToast('ℹ️ Catatan: Gambar disimpan via ImgBB (fallback)', 'info');
+            }, 2000);
         }
         
     } catch (error) {
@@ -1724,12 +1823,12 @@ function renderUsersTable() {
     const search = searchInput ? searchInput.value.toLowerCase() : '';
     tbody.innerHTML = '';
     if (!dbData.users_auth || dbData.users_auth.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:20px; color:#888;">📭 Tidak ada pengguna ditemukan.${search ? '<br><small>Coba kata kunci lain</small>' : ''}NonNull</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:20px; color:#888;">📭 Tidak ada pengguna ditemukan.${search ? '<br><small>Coba kata kunci lain</small>' : ''}NonNull</div></div>`;
         return;
     }
     let data = dbData.users_auth.filter(u => u.nama && u.nama.toLowerCase().includes(search));
     if (data.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:20px; color:#888;">🔍 Tidak ada pengguna yang cocok dengan pencarian.${search ? '<br><small>Coba kata kunci lain</small>' : ''}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:20px; color:#888;">🔍 Tidak ada pengguna yang cocok dengan pencarian.${search ? '<br><small>Coba kata kunci lain</small>' : ''}</div></div>`;
         return;
     }
     data.forEach(u => {
@@ -1759,12 +1858,12 @@ function renderUsersTable() {
         else if (u.role === 'developer') detailText = 'Developer (Paten)';
         else detailText = '-';
         tbody.innerHTML += `<tr>
-            <td style="text-align:center;"><img src="${avatar}" style="width:32px; height:32px; border-radius:50%; object-fit:cover;"></td>
-            <td><strong>${escapeHtmlString(u.nama)}</strong>${isMe ? '<br><small style="color:#4a90e2;">Akun Anda</small>' : ''}</td>
-            <td style="color:#aaa; font-size:0.9rem;">${u.email || '-'}</td>
+            <td style="text-align:center;"><img src="${avatar}" style="width:32px; height:32px; border-radius:50%; object-fit:cover;"></div>
+            <td><strong>${escapeHtmlString(u.nama)}</strong>${isMe ? '<br><small style="color:#4a90e2;">Akun Anda</small>' : ''}</div>
+            <td style="color:#aaa; font-size:0.9rem;">${u.email || '-'}</div>
             <td>${roleHtml}</div>
-            <td style="color:#888; font-size:0.85rem;">${escapeHtmlString(detailText)}</div></td>
-            <td style="text-align:center;">${actionsHtml}</div></tr>
+            <td style="color:#888; font-size:0.85rem;">${escapeHtmlString(detailText)}</div></div>
+            <td style="text-align:center;">${actionsHtml}</div></div>
         `;
     });
     console.log(`📊 renderUsersTable: ${data.length} users displayed`);
@@ -1806,6 +1905,11 @@ function cleanupUI() {
     if (typeof cleanupSensorStatus === 'function') {
         cleanupSensorStatus();
     }
+    // Bersihkan listener foto profil
+    if (photoRefreshListenerAttached && currentUser && currentUser.uid) {
+        db.ref(`users_auth/${currentUser.uid}/photoUrl`).off('value');
+        photoRefreshListenerAttached = false;
+    }
     console.log("🧹 UI cleanup completed");
 }
 
@@ -1840,6 +1944,8 @@ window.updateYearDropdownOptions = updateYearDropdownOptions;
 window.getClassIconForHeader = getClassIconForHeader;
 window.forceRenderChat = forceRenderChat;
 window.ensureChatRendered = ensureChatRendered;
+window.refreshAllAvatars = refreshAllAvatars;
+window.setupPhotoRealtimeListener = setupPhotoRealtimeListener;
 
 // ======================== SIDEBAR EXPORTS ========================
 window.toggleSidebar = toggleSidebar;
@@ -1852,4 +1958,4 @@ window.applySidebarRolePermissions = applySidebarRolePermissions;
 // Debug function
 window.debugAttendanceData = debugAttendanceData;
 
-console.log("✅ ui.js V5.16 loaded - Chat render from sidebar fixed!");
+console.log("✅ ui.js V5.17 loaded - Profile photo refresh fixed!");

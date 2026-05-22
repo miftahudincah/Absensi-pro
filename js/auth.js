@@ -2,6 +2,7 @@
 // DENGAN DUKUNGAN ROLE DEVELOPER UNTUK zaki5go@gmail.com
 // DAN UPLOAD FOTO PROFIL KE SUPABASE (DELETE FOTO LAMA OTOMATIS)
 // DILENGKAPI DENGAN LOG AKTIVITAS (AUDIT TRAIL)
+// PERBAIKAN VERSI: Menambahkan refreshAllAvatars() setelah upload foto
 
 let lastRegisterAttempt = 0;
 const REGISTER_COOLDOWN = 30000;
@@ -453,7 +454,7 @@ function togglePassword(id, icon) {
     if (icon) icon.style.color = input.type === "text" ? "var(--primary)" : "#aaa";
 }
 
-// ======================= FUNGSI UPLOAD FOTO PROFIL (DENGAN DELETE FOTO LAMA) =======================
+// ======================= FUNGSI UPLOAD FOTO PROFIL (DENGAN REFRESH ALL AVATARS) =======================
 
 async function uploadProfilePhoto(input) {
     if (!input.files || !input.files[0]) return;
@@ -508,14 +509,22 @@ async function uploadProfilePhoto(input) {
             saveUserToLocalStorage(currentUser);
         }
         
-        // Update UI
-        const headerAvatar = document.getElementById('headerAvatar');
-        if (headerAvatar) headerAvatar.src = result.url;
-        imgEl.src = result.url;
-        
-        // Update sidebar avatar
-        const sidebarAvatar = document.getElementById('sidebarAvatar');
-        if (sidebarAvatar) sidebarAvatar.src = result.url;
+        // ========== PERBAIKAN: Refresh semua avatar dengan force ==========
+        if (typeof refreshAllAvatars === 'function') {
+            refreshAllAvatars();
+        } else {
+            // Fallback manual update jika fungsi belum ada
+            console.warn("refreshAllAvatars not available, using manual update");
+            const headerAvatar = document.getElementById('headerAvatar');
+            if (headerAvatar) headerAvatar.src = result.url;
+            imgEl.src = result.url;
+            const sidebarAvatar = document.getElementById('sidebarAvatar');
+            if (sidebarAvatar) sidebarAvatar.src = result.url;
+            
+            // Update navbar avatar jika ada
+            const navbarAvatar = document.getElementById('navbarAvatar');
+            if (navbarAvatar) navbarAvatar.src = result.url;
+        }
         
         const fallbackMsg = result.isFallback ? ' (via ImgBB fallback)' : '';
         showToast(`✅ Foto profil berhasil diperbarui!${fallbackMsg}`, 'success');
