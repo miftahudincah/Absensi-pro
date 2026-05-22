@@ -1,9 +1,9 @@
-// ui.js - VERSION 5.17 (FIX: PROFILE PHOTO & CHAT RENDER ISSUE)
+// ui.js - VERSION 5.18 (FIX: USER NAME & ROLE SYNC ISSUE)
 // Berisi fungsi-fungsi antarmuka pengguna, modal, profil, dan inisialisasi dashboard
-// PERUBAHAN V5.17: 
-//   - Menambahkan fungsi refreshAllAvatars() untuk force refresh semua avatar
-//   - Memperbaiki updateUserInterface() untuk update semua elemen avatar
-//   - Menambahkan listener realtime untuk perubahan foto profil
+// PERUBAHAN V5.18: 
+//   - Memperbaiki updateUserInterface() untuk update navbar user (nama & role)
+//   - Menambahkan force update setelah login untuk memastikan data sinkron
+//   - Menambahkan validasi dan perbaikan data user saat login
 // ============================================================================
 
 // ======================== GLOBAL UI STATE ========================
@@ -36,6 +36,51 @@ function getClassIconForHeader(className) {
     if (className.includes('XI')) return '🔧';
     if (className.includes('XII')) return '🚀';
     return '🏫';
+}
+
+/**
+ * VALIDATE AND FIX CURRENT USER DATA
+ * Memastikan currentUser memiliki data yang lengkap dan benar
+ */
+function validateAndFixCurrentUser() {
+    if (!currentUser) return false;
+    
+    let changed = false;
+    
+    // Pastikan nama ada
+    if (!currentUser.nama || currentUser.nama === 'User' || currentUser.nama === 'user' || currentUser.nama === '') {
+        currentUser.nama = currentUser.email?.split('@')[0] || 'User';
+        changed = true;
+        console.log("🔧 Fixed missing nama:", currentUser.nama);
+    }
+    
+    // Pastikan role developer untuk email zaki5go@gmail.com
+    if (currentUser.email === 'zaki5go@gmail.com' && currentUser.role !== 'developer') {
+        currentUser.role = 'developer';
+        changed = true;
+        console.log("🔧 Fixed role to developer for:", currentUser.email);
+        // Update ke Firebase
+        if (currentUser.uid) {
+            db.ref(`users_auth/${currentUser.uid}/role`).set('developer')
+                .catch(err => console.warn("Failed to update role in Firebase:", err));
+        }
+    }
+    
+    // Pastikan role tidak undefined
+    if (!currentUser.role) {
+        currentUser.role = 'siswa';
+        changed = true;
+        console.log("🔧 Fixed missing role to:", currentUser.role);
+    }
+    
+    if (changed) {
+        if (typeof saveUserToLocalStorage === 'function') {
+            saveUserToLocalStorage(currentUser);
+        }
+        updateUserInterface();
+    }
+    
+    return true;
 }
 
 /**
@@ -407,7 +452,7 @@ function ensureChatRendered() {
 // ======================== INISIALISASI DASHBOARD ========================
 
 function initApp() {
-    console.log("🚀 initApp dipanggil - Current user:", currentUser?.nama);
+    console.log("🚀 initApp dipanggil - Current user:", currentUser?.nama, "Role:", currentUser?.role);
     
     if (!currentUser) {
         console.log("❌ No currentUser, showing auth section");
@@ -418,11 +463,15 @@ function initApp() {
         return;
     }
     
+    // ========== VALIDASI DAN PERBAIKAN DATA USER ==========
+    validateAndFixCurrentUser();
+    
     const authSection = document.getElementById('auth-section');
     const dashboardSection = document.getElementById('dashboard-section');
     if (authSection) authSection.style.display = 'none';
     if (dashboardSection) dashboardSection.style.display = 'block';
     
+    // Update UI utama
     updateUserInterface();
     applyRolePermissions();
     initSidebar();
@@ -433,6 +482,25 @@ function initApp() {
     
     // Setup realtime listener untuk foto profil
     setupPhotoRealtimeListener();
+    
+    // ========== FORCE UPDATE SETELAH DELAY ==========
+    setTimeout(() => {
+        console.log("🔄 Force re-update UI after 1 second...");
+        updateUserInterface();
+        if (typeof updateSidebarUserInfo === 'function') {
+            updateSidebarUserInfo();
+        }
+        applyRolePermissions();
+    }, 1000);
+    
+    // ========== FORCE UPDATE SETELAH 3 DETIK (UNTUK JAGA-JAGA) ==========
+    setTimeout(() => {
+        console.log("🔄 Second force re-update UI after 3 seconds...");
+        updateUserInterface();
+        if (typeof updateSidebarUserInfo === 'function') {
+            updateSidebarUserInfo();
+        }
+    }, 3000);
     
     console.log("🔧 Starting to populate all filters (with improved retry)...");
     populateAllFiltersWithRetry();
@@ -636,27 +704,81 @@ function setupChartYearListener() {
 }
 
 /**
- * UPDATE USER INTERFACE - Versi terbaru dengan refresh semua avatar
+ * UPDATE USER INTERFACE - Versi lengkap dengan update navbar user
+ * Memperbaiki masalah nama user dan role yang tidak sinkron
  */
 function updateUserInterface() {
-    if (!currentUser) return;
-    
-    console.log("🎨 updateUserInterface called for user:", currentUser.nama);
-    
-    const userProfileDisplay = document.getElementById('userProfileDisplay');
-    if (userProfileDisplay) userProfileDisplay.textContent = currentUser.nama;
-    
-    const profileEmail = document.getElementById('profileEmail');
-    if (profileEmail) profileEmail.textContent = currentUser.email;
-    
-    const userRoleDisplay = document.getElementById('userRoleDisplay');
-    if (userRoleDisplay) {
-        let roleText = currentUser.role.toUpperCase();
-        if (currentUser.role === 'developer') roleText = '👨‍💻 DEVELOPER';
-        userRoleDisplay.textContent = roleText;
-        userRoleDisplay.className = `role-badge role-${currentUser.role}`;
+    if (!currentUser) {
+        console.warn("updateUserInterface: currentUser is null!");
+        return;
     }
     
+    console.log("🎨 updateUserInterface called for user:", currentUser.nama, "Role:", currentUser.role);
+    
+    // ========== UPDATE USER PROFILE DISPLAY (Header) ==========
+    const userProfileDisplay = document.getElementById('userProfileDisplay');
+    if (userProfileDisplay) {
+        userProfileDisplay.textContent = currentUser.nama || currentUser.email || 'User';
+        console.log("✅ userProfileDisplay updated to:", userProfileDisplay.textContent);
+    }
+    
+    // ========== UPDATE EMAIL DI MODAL PROFIL ==========
+    const profileEmail = document.getElementById('profileEmail');
+    if (profileEmail) {
+        profileEmail.textContent = currentUser.email || '';
+    }
+    
+    // ========== UPDATE ROLE DISPLAY DI HEADER ==========
+    const userRoleDisplay = document.getElementById('userRoleDisplay');
+    if (userRoleDisplay) {
+        let roleText = '';
+        let roleIcon = '';
+        
+        switch(currentUser.role) {
+            case 'developer':
+                roleText = 'DEVELOPER';
+                roleIcon = '👨‍💻';
+                break;
+            case 'admin':
+                roleText = 'ADMIN';
+                roleIcon = '👑';
+                break;
+            case 'guru':
+                roleText = 'GURU';
+                roleIcon = '👨‍🏫';
+                break;
+            default:
+                roleText = 'SISWA';
+                roleIcon = '👨‍🎓';
+                break;
+        }
+        
+        userRoleDisplay.textContent = `${roleIcon} ${roleText}`;
+        userRoleDisplay.className = `role-badge role-${currentUser.role}`;
+        console.log("✅ userRoleDisplay updated to:", roleText);
+    }
+    
+    // ========== UPDATE NAVBAR USER (PENTING UNTUK MENU DROPDOWN) ==========
+    const navbarUserName = document.getElementById('navbarUserName');
+    if (navbarUserName) {
+        navbarUserName.textContent = currentUser.nama || currentUser.email || 'User';
+        console.log("✅ navbarUserName updated to:", navbarUserName.textContent);
+    }
+    
+    const navbarUserRole = document.getElementById('navbarUserRole');
+    if (navbarUserRole) {
+        let roleText = '';
+        switch(currentUser.role) {
+            case 'developer': roleText = 'DEVELOPER'; break;
+            case 'admin': roleText = 'ADMIN'; break;
+            case 'guru': roleText = 'GURU'; break;
+            default: roleText = 'SISWA';
+        }
+        navbarUserRole.textContent = roleText;
+        console.log("✅ navbarUserRole updated to:", roleText);
+    }
+    
+    // ========== UPDATE CLASS DISPLAY ==========
     const userClassDisplay = document.getElementById('userClassDisplay');
     if (userClassDisplay) {
         if (currentUser.role === 'siswa' && currentUser.kelas) {
@@ -671,8 +793,21 @@ function updateUserInterface() {
         }
     }
     
+    // ========== UPDATE NAVBAR AVATAR ==========
+    const navbarAvatar = document.getElementById('navbarAvatar');
+    if (navbarAvatar) {
+        const photoUrl = currentUser.photoUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser.nama || 'User')}&background=00bcd4&color=fff&size=100`;
+        navbarAvatar.src = photoUrl;
+        console.log("✅ navbarAvatar updated");
+    }
+    
     // Refresh semua avatar
     refreshAllAvatars();
+    
+    // Update sidebar user info juga
+    if (typeof updateSidebarUserInfo === 'function') {
+        updateSidebarUserInfo();
+    }
 }
 
 function initManualDelayListeners() {
@@ -1946,6 +2081,7 @@ window.forceRenderChat = forceRenderChat;
 window.ensureChatRendered = ensureChatRendered;
 window.refreshAllAvatars = refreshAllAvatars;
 window.setupPhotoRealtimeListener = setupPhotoRealtimeListener;
+window.validateAndFixCurrentUser = validateAndFixCurrentUser;
 
 // ======================== SIDEBAR EXPORTS ========================
 window.toggleSidebar = toggleSidebar;
@@ -1958,4 +2094,4 @@ window.applySidebarRolePermissions = applySidebarRolePermissions;
 // Debug function
 window.debugAttendanceData = debugAttendanceData;
 
-console.log("✅ ui.js V5.17 loaded - Profile photo refresh fixed!");
+console.log("✅ ui.js V5.18 loaded - User name & role sync fixed!");
