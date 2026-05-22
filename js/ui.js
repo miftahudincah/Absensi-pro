@@ -1,6 +1,6 @@
-// ui.js - VERSION 5.15 (FIX: FLOATING BUTTONS & MENU PENGATURAN)
+// ui.js - VERSION 5.16 (FIX: CHAT RENDER ISSUE FROM SIDEBAR)
 // Berisi fungsi-fungsi antarmuka pengguna, modal, profil, dan inisialisasi dashboard
-// PERUBAHAN V5.15: Memastikan tombol floating chat, friends, status muncul untuk semua user
+// PERUBAHAN V5.16: Memperbaiki chat yang tidak tampil saat diklik dari sidebar/menu bawah
 // ============================================================================
 
 // ======================== GLOBAL UI STATE ========================
@@ -10,6 +10,8 @@ let dashboardChart = null;
 let dashboardChartRetryTimeout = null;
 let populateRetryCount = 0;
 const MAX_POPULATE_RETRY = 20;
+let chatRenderRetryCount = 0;
+const MAX_CHAT_RENDER_RETRY = 10;
 
 // ======================== HELPER FUNCTIONS ========================
 
@@ -182,8 +184,6 @@ function applySidebarRolePermissions() {
         const hasRoleGuru = btn.classList.contains('role-guru');
         const hasRoleDeveloper = btn.classList.contains('role-developer');
         
-        // ========== PERBAIKAN UTAMA: Gunakan data-tab untuk identifikasi ==========
-        
         // Tombol Pengaturan (config)
         if (btnTab === 'config') {
             if (isGuruOrDev) {
@@ -235,6 +235,88 @@ function applySidebarRolePermissions() {
         // Default: tampilkan semua tombol lainnya
         btn.style.display = 'flex';
     });
+}
+
+// ======================== FUNGSI KHUSUS UNTUK CHAT RENDER ========================
+
+/**
+ * Memastikan chat container siap dan merender chat dengan retry mechanism
+ */
+function forceRenderChat() {
+    console.log("💬 forceRenderChat called - Chat render retry count:", chatRenderRetryCount);
+    
+    const chatPanel = document.getElementById('chatPanel');
+    if (!chatPanel) {
+        console.error("❌ chatPanel element not found!");
+        if (chatRenderRetryCount < MAX_CHAT_RENDER_RETRY) {
+            chatRenderRetryCount++;
+            console.log(`⏳ Retrying chat render in 500ms (${chatRenderRetryCount}/${MAX_CHAT_RENDER_RETRY})...`);
+            setTimeout(() => forceRenderChat(), 500);
+        }
+        return;
+    }
+    
+    // Reset retry counter on success
+    chatRenderRetryCount = 0;
+    
+    // Bersihkan container
+    chatPanel.innerHTML = '<div class="chat-loading" style="text-align: center; padding: 40px; color: var(--text-muted);">⏳ Memuat fitur chat...</div>';
+    
+    // Pastikan container terlihat
+    chatPanel.style.display = 'block';
+    chatPanel.style.minHeight = '500px';
+    
+    // Inisialisasi chat system jika belum
+    if (typeof initChatSystem === 'function' && !window._chatInitialized) {
+        console.log("💬 Initializing chat system from forceRenderChat...");
+        window._chatInitialized = true;
+        initChatSystem();
+        // Beri waktu untuk inisialisasi
+        setTimeout(() => {
+            if (typeof renderChatInterface === 'function') {
+                renderChatInterface('chatPanel');
+            }
+            if (typeof loadChatList === 'function') {
+                setTimeout(() => loadChatList(), 300);
+            }
+        }, 500);
+    } else if (typeof renderChatInterface === 'function') {
+        console.log("💬 Rendering chat interface...");
+        renderChatInterface('chatPanel');
+        if (typeof loadChatList === 'function') {
+            setTimeout(() => loadChatList(), 300);
+        }
+    } else {
+        console.warn("❌ renderChatInterface not available yet");
+        chatPanel.innerHTML = '<div class="chat-loading" style="text-align: center; padding: 40px; color: var(--text-muted);">❌ Gagal memuat fitur chat. Silakan refresh halaman.</div>';
+    }
+}
+
+/**
+ * Fungsi untuk memeriksa dan memastikan chat container sudah ter-render dengan benar
+ */
+function ensureChatRendered() {
+    const chatPanel = document.getElementById('chatPanel');
+    if (!chatPanel) return false;
+    
+    // Cek apakah chat container sudah memiliki struktur chat-container
+    const hasChatContainer = chatPanel.querySelector('.chat-container');
+    if (!hasChatContainer) {
+        console.log("⚠️ Chat container not found in chatPanel, forcing render...");
+        forceRenderChat();
+        return false;
+    }
+    
+    // Cek apakah chat list sudah terisi
+    const chatList = document.getElementById('chatList');
+    if (chatList && (chatList.innerHTML.includes('Memuat chat') || chatList.children.length === 0)) {
+        console.log("⚠️ Chat list not loaded, reloading...");
+        if (typeof loadChatList === 'function') {
+            loadChatList();
+        }
+    }
+    
+    return true;
 }
 
 // ======================== INISIALISASI DASHBOARD ========================
@@ -671,7 +753,6 @@ async function uploadSchoolLogo(input) {
         const fallbackMsg = result.isFallback ? ' (via ImgBB fallback)' : '';
         showToast(`✅ Logo sekolah berhasil diperbarui!${fallbackMsg}`, 'success');
         
-        // LOG: Upload logo sekolah
         if (typeof logActivity === 'function') {
             logActivity('upload_school_logo', `Upload logo sekolah${result.isFallback ? ' (fallback ImgBB)' : ' (Supabase)'}`);
         }
@@ -726,7 +807,6 @@ async function removeSchoolLogo() {
         
         showToast('✅ Logo sekolah berhasil dihapus', 'success');
         
-        // LOG: Hapus logo sekolah
         if (typeof logActivity === 'function') {
             logActivity('remove_school_logo', 'Menghapus logo sekolah');
         }
@@ -798,7 +878,7 @@ function openChatModal() {
     }
 }
 
-// ======================== ROLE PERMISSIONS (DIPERBAIKI UNTUK DESKTOP) ========================
+// ======================== ROLE PERMISSIONS ========================
 function applyRolePermissions() {
     if (!currentUser) return;
     const role = currentUser.role;
@@ -835,38 +915,33 @@ function applyRolePermissions() {
         btnAnnouncement.style.display = isGuruOrDev ? 'inline-flex' : 'none';
     }
     
-    // ========== FLOATING BUTTONS - TAMPILKAN SEMUA UNTUK USER YANG LOGIN ==========
-    // Tombol Chat - selalu tampil untuk semua user
+    // ========== FLOATING BUTTONS ==========
     const floatingChatBtn = document.getElementById('floatingChatBtn');
     if (floatingChatBtn) {
         floatingChatBtn.style.display = 'flex';
     }
     
-    // Tombol Friends - selalu tampil untuk semua user
     const floatingFriendsBtn = document.getElementById('floatingFriendsBtn');
     if (floatingFriendsBtn) {
         floatingFriendsBtn.style.display = 'flex';
     }
     
-    // Tombol Status - selalu tampil untuk semua user
     const floatingStatusBtn = document.getElementById('floatingStatusBtn');
     if (floatingStatusBtn) {
         floatingStatusBtn.style.display = 'flex';
     }
     
-    // Tombol Pengumuman - hanya untuk admin, guru, developer
     const floatingAnnouncementBtn = document.getElementById('floatingAnnouncementBtn');
     if (floatingAnnouncementBtn) {
         floatingAnnouncementBtn.style.display = isGuruOrDev ? 'flex' : 'none';
     }
     
-    // ========== NAV TABS (DESKTOP) - PERBAIKAN UTAMA ==========
+    // ========== NAV TABS (DESKTOP) ==========
     const navTabs = document.getElementById('nav-tabs-container');
     if (navTabs) {
         const allTabBtns = document.querySelectorAll('.tab-btn');
         
         if (role === 'siswa') {
-            // Siswa: sembunyikan tab yang tidak boleh diakses
             allTabBtns.forEach(btn => {
                 const btnText = btn.textContent || '';
                 if (btnText.includes('Pengaturan') || 
@@ -879,24 +954,19 @@ function applyRolePermissions() {
                 }
             });
         } else {
-            // Admin, Guru, Developer: tampilkan SEMUA tab, tetapi perhatikan class role-* yang melekat
             allTabBtns.forEach(btn => {
-                // Cek apakah tombol memiliki class role-developer
                 const hasRoleDeveloper = btn.classList.contains('role-developer');
                 const hasRoleAdmin = btn.classList.contains('role-admin');
                 const hasRoleGuru = btn.classList.contains('role-guru');
                 
                 let shouldShow = true;
                 
-                // Jika tombol punya class role-developer dan user BUKAN developer -> sembunyikan
                 if (hasRoleDeveloper && role !== 'developer') {
                     shouldShow = false;
                 }
-                // Jika tombol punya class role-admin dan user BUKAN admin/developer -> sembunyikan
                 else if (hasRoleAdmin && !isAdminOrDev) {
                     shouldShow = false;
                 }
-                // Jika tombol punya class role-guru dan user BUKAN guru/admin/developer -> sembunyikan
                 else if (hasRoleGuru && !isGuruOrDev) {
                     shouldShow = false;
                 }
@@ -907,46 +977,26 @@ function applyRolePermissions() {
     }
     
     // ========== FORCE SHOW UNTUK CONFIG DAN LOGS DI DESKTOP ==========
-    // Ini memastikan tombol Config dan Logs tetap muncul meskipun ada konflik
     setTimeout(() => {
         if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'guru' || currentUser.role === 'developer')) {
-            // Cari tombol Config
             const configBtn = document.querySelector('.tab-btn[onclick*="switchTab(\'config\')"]');
             if (configBtn) {
                 configBtn.style.display = '';
                 configBtn.style.visibility = 'visible';
                 configBtn.style.opacity = '1';
                 console.log("✅ Config button force shown");
-            } else {
-                // Alternatif selector
-                const configBtnAlt = document.querySelector('.tab-btn[onclick*="config"]');
-                if (configBtnAlt) {
-                    configBtnAlt.style.display = '';
-                    configBtnAlt.style.visibility = 'visible';
-                    console.log("✅ Config button (alt) force shown");
-                }
             }
             
-            // Cari tombol Logs
             const logsBtn = document.querySelector('.tab-btn[onclick*="switchTab(\'logs\')"]');
             if (logsBtn) {
                 logsBtn.style.display = '';
                 logsBtn.style.visibility = 'visible';
                 logsBtn.style.opacity = '1';
                 console.log("✅ Logs button force shown");
-            } else {
-                // Alternatif selector
-                const logsBtnAlt = document.querySelector('.tab-btn[onclick*="logs"]');
-                if (logsBtnAlt) {
-                    logsBtnAlt.style.display = '';
-                    logsBtnAlt.style.visibility = 'visible';
-                    console.log("✅ Logs button (alt) force shown");
-                }
             }
         }
     }, 200);
     
-    // ========== SIDEBAR BUTTONS ==========
     if (typeof applySidebarRolePermissions === 'function') {
         applySidebarRolePermissions();
     }
@@ -965,6 +1015,7 @@ function updateClock() {
     }
 }
 
+// ======================== SWITCH TAB (DIPERBAIKI UNTUK CHAT) ========================
 function switchTab(tabId) {
     console.log("📑 Switching to tab:", tabId);
     document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
@@ -1002,19 +1053,15 @@ function switchTab(tabId) {
             if (typeof loadFriendRequests === 'function') loadFriendRequests();
             if (typeof loadFriendsList === 'function') loadFriendsList();
         } else if (tabId === 'chat') {
-            if (typeof renderChatInterface === 'function') {
-                renderChatInterface('chatPanel');
-            } else {
-                console.warn("renderChatInterface not available yet, will retry...");
-                setTimeout(() => {
-                    if (typeof renderChatInterface === 'function') {
-                        renderChatInterface('chatPanel');
-                    }
-                }, 500);
+            // ========== PERBAIKAN UNTUK CHAT ==========
+            console.log("💬 Switching to chat tab, calling forceRenderChat...");
+            // Bersihkan container terlebih dahulu
+            const chatPanel = document.getElementById('chatPanel');
+            if (chatPanel) {
+                chatPanel.innerHTML = '<div class="chat-loading" style="text-align: center; padding: 40px; color: var(--text-muted);">⏳ Memuat fitur chat...</div>';
             }
-            if (typeof loadChatList === 'function') {
-                loadChatList();
-            }
+            // Panggil forceRenderChat untuk memastikan chat tampil
+            forceRenderChat();
         } else if (tabId === 'logs') {
             if (typeof initLogsSystem === 'function') {
                 initLogsSystem();
@@ -1682,7 +1729,7 @@ function renderUsersTable() {
     }
     let data = dbData.users_auth.filter(u => u.nama && u.nama.toLowerCase().includes(search));
     if (data.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:20px; color:#888;">🔍 Tidak ada pengguna yang cocok dengan pencarian.${search ? '<br><small>Coba kata kunci lain</small>' : ''}NonNull</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:20px; color:#888;">🔍 Tidak ada pengguna yang cocok dengan pencarian.${search ? '<br><small>Coba kata kunci lain</small>' : ''}</td></tr>`;
         return;
     }
     data.forEach(u => {
@@ -1791,6 +1838,8 @@ window.updateDashboardChart = updateDashboardChart;
 window.setupChartYearListener = setupChartYearListener;
 window.updateYearDropdownOptions = updateYearDropdownOptions;
 window.getClassIconForHeader = getClassIconForHeader;
+window.forceRenderChat = forceRenderChat;
+window.ensureChatRendered = ensureChatRendered;
 
 // ======================== SIDEBAR EXPORTS ========================
 window.toggleSidebar = toggleSidebar;
@@ -1803,4 +1852,4 @@ window.applySidebarRolePermissions = applySidebarRolePermissions;
 // Debug function
 window.debugAttendanceData = debugAttendanceData;
 
-console.log("✅ ui.js V5.15 loaded - Floating buttons fixed for all users");
+console.log("✅ ui.js V5.16 loaded - Chat render from sidebar fixed!");
