@@ -11,11 +11,12 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
 
     <!-- CSS -->
-<link rel="stylesheet" href="css/base.css">
-<link rel="stylesheet" href="css/layout.css">
-<link rel="stylesheet" href="css/components.css">
-<link rel="stylesheet" href="css/modules.css">
-<link rel="stylesheet" href="css/responsive.css">
+    <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="css/layout.css">
+    <link rel="stylesheet" href="css/components.css">
+    <link rel="stylesheet" href="css/modules.css">
+    <link rel="stylesheet" href="css/responsive.css">
+    
     <!-- Chart.js CDN -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 
@@ -40,9 +41,9 @@
 
     <!-- FLOATING BUTTONS -->
     <button id="floatingAnnouncementBtn" class="floating-announcement-btn" onclick="openAnnouncementModal()" style="display: none;">✏️</button>
-    <button id="floatingChatBtn" class="floating-chat-btn" onclick="openChatModal()" style="display: none;">💬</button>
-    <button id="floatingFriendsBtn" class="floating-friends-btn" onclick="toggleFriendsModal()" style="display: none;">👥</button>
-    <button id="floatingStatusBtn" class="floating-status-btn" onclick="openCreateStatusModal()" style="display: none;">📸</button>
+    <button id="floatingChatBtn" class="floating-chat-btn" onclick="openChatModal()" style="display: flex;">💬</button>
+    <button id="floatingFriendsBtn" class="floating-friends-btn" onclick="toggleFriendsModal()" style="display: flex;">👥</button>
+    <button id="floatingStatusBtn" class="floating-status-btn" onclick="openCreateStatusModal()" style="display: flex;">📸</button>
 
     <!-- AUTH SECTION -->
     <div id="auth-section">
@@ -157,11 +158,11 @@
                     <span class="sidebar-icon">💬</span>
                     <span class="sidebar-text">Chat</span>
                 </button>
-                <button class="sidebar-btn" data-tab="logs">
+                <button class="sidebar-btn role-admin role-guru role-developer" data-tab="logs">
                     <span class="sidebar-icon">📋</span>
                     <span class="sidebar-text">Log Aktivitas</span>
                 </button>
-                <button class="sidebar-btn" data-tab="config">
+                <button class="sidebar-btn role-admin role-guru role-developer" data-tab="config">
                     <span class="sidebar-icon">⚙️</span>
                     <span class="sidebar-text">Pengaturan</span>
                 </button>
@@ -205,6 +206,10 @@
             <div style="display: flex; align-items: center; gap: 20px; flex-wrap: wrap;">
                 <div id="clock" class="clock-display">--:--:--</div>
                 <button id="themeToggleBtn" class="btn-icon" style="background: transparent; font-size: 1.4rem;">🌙</button>
+                <!-- TOMBOL PENGATURAN (CONFIG) KHUSUS DESKTOP -->
+                <button id="desktopConfigBtn" class="btn-icon desktop-only role-admin role-guru role-developer" onclick="switchTab('config')" title="Pengaturan" style="background: transparent; font-size: 1.4rem;">⚙️</button>
+                <!-- TOMBOL PANDUAN (GUIDE) KHUSUS DESKTOP -->
+                <button id="desktopGuideBtn" class="btn-icon desktop-only" onclick="switchTab('guide')" title="Panduan" style="background: transparent; font-size: 1.4rem;">📘</button>
                 <!-- TOMBOL PROFIL KHUSUS DESKTOP -->
                 <button id="desktopProfileBtn" class="btn-icon desktop-only" onclick="openProfileModal()" title="Profil Saya" style="background: transparent; font-size: 1.4rem;">👤</button>
                 <!-- TOMBOL LOGOUT KHUSUS DESKTOP -->
@@ -221,8 +226,8 @@
             <button class="tab-btn" onclick="switchTab('rekap')">📊 Rekap Absensi</button>
             <button class="tab-btn" onclick="switchTab('friends')">👥 Teman</button>
             <button class="tab-btn" onclick="switchTab('chat')">💬 Chat</button>
-            <button class="tab-btn" onclick="switchTab('logs')">📋 Log Aktivitas</button>
-            <button class="tab-btn" onclick="switchTab('config')">⚙️ Pengaturan</button>
+            <button class="tab-btn role-admin role-guru role-developer" onclick="switchTab('logs')">📋 Log Aktivitas</button>
+            <button class="tab-btn role-admin role-guru role-developer" onclick="switchTab('config')">⚙️ Pengaturan</button>
             <button class="tab-btn" onclick="switchTab('guide')">📘 Panduan</button>
         </div>
 
@@ -399,7 +404,7 @@
             </div>
             <div class="controls-bar role-admin role-guru"><h4>👥 Daftar Pengguna</h4><div class="search-box"><input type="text" id="searchUser" placeholder="🔍 Cari user..." oninput="renderUsersTable()"></div></div>
             <div class="table-container role-admin role-guru">
-                <table>
+                </td>
                     <thead>
                         <tr><th>Foto</th><th>Nama</th><th>Email</th><th>Role</th><th>Detail</th><th>Aksi</th></tr>
                     </thead>
@@ -456,7 +461,7 @@
         </div>
 
         <!-- TAB LOGS (AKTIVITAS) -->
-        <div id="tab-logs" class="tab-content">
+        <div id="tab-logs" class="tab-content role-admin role-guru role-developer">
             <div class="controls-bar">
                 <div class="filter-group">
                     <label>🔍 Filter Aksi:</label>
@@ -525,7 +530,7 @@
                         </tr>
                     </thead>
                     <tbody id="logsTbody">
-                        <tr><td colspan="6" style="text-align:center; padding:40px;">⏳ Memuat log aktivitas...</td><\/tr>
+                        <tr><td colspan="6" style="text-align:center; padding:40px;">⏳ Memuat log aktivitas...<\/td></tr>
                     </tbody>
                 </table>
                 <div id="logsPagination" style="display: flex; justify-content: center; gap: 10px; margin-top: 20px;"></div>
@@ -533,7 +538,7 @@
         </div>
 
         <!-- TAB CONFIG -->
-        <div id="tab-config" class="tab-content">
+        <div id="tab-config" class="tab-content role-admin role-guru role-developer">
             <div class="guide-container">
                 <h3>⚙️ Pengaturan Sistem</h3>
                 <div class="form-group" id="logoSettingGroup">
@@ -622,16 +627,293 @@
         <!-- TAB GUIDE -->
         <div id="tab-guide" class="tab-content">
             <div class="guide-container">
-                <h3>📘 Panduan Sistem</h3>
-                <details><summary>1. Pendaftaran Siswa</summary><div class="guide-box">...</div></details>
-                <details><summary>2. Absensi Fingerprint</summary><div class="guide-box">...</div></details>
-                <details><summary>3. Pengaturan Kelas & Jurusan</summary><div class="guide-box">...</div></details>
-                <details><summary>4. Pengumuman</summary><div class="guide-box">...</div></details>
-                <details><summary>5. Logo Sekolah</summary><div class="guide-box">...</div></details>
-                <details><summary>6. Rekap Absensi</summary><div class="guide-box">...</div></details>
-                <details><summary>7. Fitur Pertemanan</summary><div class="guide-box">...</div></details>
-                <details><summary>8. Chat & Status</summary><div class="guide-box">...</div></details>
-                <details><summary>9. ESP32 Config</summary><div class="guide-box">...</div></details>
+                <h3>📘 Panduan Sistem Absensi Fingerprint</h3>
+                <p class="text-small">Sistem Absensi berbasis sidik jari dengan ESP32 dan real-time monitoring</p>
+                
+                <details open>
+                    <summary>1. 📝 Pendaftaran Akun</summary>
+                    <div class="guide-box">
+                        <h4>Cara Mendaftar sebagai Siswa:</h4>
+                        <ol>
+                            <li>Pastikan Anda sudah terdaftar di database siswa (ID Fingerprint sudah ada)</li>
+                            <li>Klik <strong>"Daftar disini"</strong> pada halaman login</li>
+                            <li>Pilih role <strong>"Siswa"</strong></li>
+                            <li>Masukkan <strong>ID Generate</strong> (ID Fingerprint yang diberikan guru)</li>
+                            <li>Masukkan <strong>Email</strong> dan <strong>Password</strong> (minimal 6 karakter)</li>
+                            <li>Masukkan <strong>Kode Pendaftaran</strong> yang diberikan guru (bisa scan QR)</li>
+                            <li>Klik <strong>"DAFTAR"</strong> dan tunggu konfirmasi</li>
+                        </ol>
+                        <h4>Cara Mendaftar sebagai Guru:</h4>
+                        <ol>
+                            <li>Klik <strong>"Daftar disini"</strong> pada halaman login</li>
+                            <li>Pilih role <strong>"Guru"</strong></li>
+                            <li>Masukkan <strong>Nama Lengkap</strong> dan <strong>Mata Pelajaran</strong></li>
+                            <li>Masukkan <strong>Email</strong> dan <strong>Password</strong></li>
+                            <li>Masukkan <strong>Kode Pendaftaran Guru</strong> dari Admin</li>
+                            <li>Klik <strong>"DAFTAR"</strong></li>
+                        </ol>
+                        <div class="guide-note">💡 <strong>Tips:</strong> Simpan kode pendaftaran dengan baik, kode hanya berlaku 5 jam!</div>
+                    </div>
+                </details>
+
+                <details>
+                    <summary>2. 🔐 Login & Keamanan</summary>
+                    <div class="guide-box">
+                        <h4>Cara Login:</h4>
+                        <ol>
+                            <li>Masukkan <strong>Email</strong> dan <strong>Password</strong> yang sudah didaftarkan</li>
+                            <li>Klik tombol <strong>"MASUK"</strong></li>
+                            <li>Setelah login, Anda akan diarahkan ke halaman Dashboard</li>
+                        </ol>
+                        <h4>Lupa Password?</h4>
+                        <ol>
+                            <li>Klik <strong>"Lupa Password?"</strong> di halaman login</li>
+                            <li>Masukkan email yang terdaftar</li>
+                            <li>Klik <strong>"Kirim Link"</strong></li>
+                            <li>Cek email Anda untuk link reset password</li>
+                        </ol>
+                        <h4>Ganti Password:</h4>
+                        <ol>
+                            <li>Klik <strong>"Profil Saya"</strong> → <strong>"Ganti Password"</strong></li>
+                            <li>Masukkan password lama dan password baru</li>
+                            <li>Klik <strong>"Simpan"</strong></li>
+                        </ol>
+                        <div class="guide-warning">⚠️ <strong>Peringatan:</strong> Jangan bagikan password kepada siapapun!</div>
+                    </div>
+                </details>
+
+                <details>
+                    <summary>3. 📸 Absensi Fingerprint</summary>
+                    <div class="guide-box">
+                        <h4>Absensi Masuk:</h4>
+                        <ol>
+                            <li>Siswa menempelkan jari pada sensor fingerprint ESP32</li>
+                            <li>Sistem akan mendeteksi ID dan mencatat waktu masuk</li>
+                            <li>Status akan berubah menjadi <strong>"✅ Hadir"</strong></li>
+                            <li>Jika scan setelah jam batas terlambat, status menjadi <strong>"⏰ Terlambat"</strong></li>
+                        </ol>
+                        <h4>Absensi Pulang:</h4>
+                        <ol>
+                            <li>Siswa menempelkan jari kembali pada sensor</li>
+                            <li>Sistem akan mencatat waktu pulang</li>
+                            <li>Status berubah menjadi <strong>"🏠 Pulang"</strong></li>
+                            <li>Ada minimal delay waktu sebelum bisa pulang (default 60 menit)</li>
+                        </ol>
+                        <h4>Simulasi Absensi (Admin/Guru):</h4>
+                        <ol>
+                            <li>Buka tab <strong>"Absensi"</strong></li>
+                            <li>Klik <strong>"📷 Simulasi Scan Masuk"</strong> atau <strong>"🏠 Simulasi Scan Pulang"</strong></li>
+                            <li>Cari siswa berdasarkan nama atau ID</li>
+                            <li>Pilih status (Hadir/Izin/Sakit/Alpha) jika diperlukan</li>
+                            <li>Klik <strong>"Simpan"</strong></li>
+                        </ol>
+                        <div class="guide-note">💡 <strong>Catatan:</strong> Data absensi dapat diekspor ke Excel dengan klik <strong>"📥 Download Excel"</strong></div>
+                    </div>
+                </details>
+
+                <details>
+                    <summary>4. 👨‍🎓 Manajemen Data Siswa</summary>
+                    <div class="guide-box">
+                        <h4>Tambah Siswa Baru:</h4>
+                        <ol>
+                            <li>Buka tab <strong>"Data Siswa"</strong></li>
+                            <li>Isi form: <strong>ID FP, Nama, Kelas, Jurusan, Delay</strong></li>
+                            <li>Klik <strong>"➕ Simpan Siswa"</strong></li>
+                            <li>Data akan tersinkronisasi dengan ESP32</li>
+                        </ol>
+                        <h4>Edit/Hapus Siswa:</h4>
+                        <ol>
+                            <li>Cari siswa yang ingin diedit/dihapus</li>
+                            <li>Klik tombol <strong>✏️ (Edit)</strong> atau <strong>🗑️ (Hapus)</strong></li>
+                            <li>Konfirmasi penghapusan</li>
+                        </ol>
+                        <h4>Import/Export CSV:</h4>
+                        <ol>
+                            <li>Gunakan tombol <strong>Import CSV</strong> atau <strong>Export CSV</strong></li>
+                            <li>Format CSV: <code>ID,Nama,Kelas,Jurusan,Delay</code></li>
+                        </ol>
+                        <div class="guide-warning">⚠️ <strong>Peringatan:</strong> Menghapus siswa akan menghapus juga akun loginnya jika ada!</div>
+                    </div>
+                </details>
+
+                <details>
+                    <summary>5. 👥 Manajemen User & Kode Registrasi</summary>
+                    <div class="guide-box">
+                        <h4>Generate Kode Registrasi (Admin/Guru):</h4>
+                        <ol>
+                            <li>Buka tab <strong>"Manajemen User"</strong></li>
+                            <li>Pilih target <strong>"Untuk Siswa"</strong> atau <strong>"Untuk Guru"</strong></li>
+                            <li>Jika untuk siswa, pilih siswa dari dropdown</li>
+                            <li>Klik <strong>"✨ Generate Kode"</strong></li>
+                            <li>Kode dan QR Code akan muncul, bagikan ke calon user</li>
+                        </ol>
+                        <h4>Kelola User:</h4>
+                        <ol>
+                            <li>Lihat daftar semua user terdaftar</li>
+                            <li>Admin/Developer dapat mengubah role user</li>
+                            <li>Admin/Developer dapat menghapus user (kecuali akun developer)</li>
+                            <li>Kirim link reset password ke user</li>
+                        </ol>
+                        <div class="guide-note">💡 <strong>Catatan:</strong> Kode registrasi hanya valid 5 jam dan sekali pakai!</div>
+                    </div>
+                </details>
+
+                <details>
+                    <summary>6. 📊 Rekap Absensi</summary>
+                    <div class="guide-box">
+                        <h4>Lihat Rekap Absensi:</h4>
+                        <ol>
+                            <li>Buka tab <strong>"Rekap Absensi"</strong></li>
+                            <li>Pilih periode: <strong>Minggu Ini, Bulan Ini, Semester Ini, atau Custom Range</strong></li>
+                            <li>Sistem akan menampilkan tabel rekap per siswa</li>
+                            <li>Lihat juga chart distribusi status dan absensi per hari</li>
+                        </ol>
+                        <h4>Ekspor Rekap:</h4>
+                        <ol>
+                            <li>Klik <strong>"📥 Excel"</strong> untuk download CSV</li>
+                            <li>Klik <strong>"📄 PDF"</strong> untuk cetak/simpan sebagai PDF</li>
+                        </ol>
+                        <div class="guide-note">💡 <strong>Catatan:</strong> Rekap sudah memperhitungkan hari libur (nasional & mingguan)</div>
+                    </div>
+                </details>
+
+                <details>
+                    <summary>7. 👥 Fitur Pertemanan</summary>
+                    <div class="guide-box">
+                        <h4>Cari & Tambah Teman:</h4>
+                        <ol>
+                            <li>Buka tab <strong>"Teman"</strong></li>
+                            <li>Masukkan email teman yang ingin dicari</li>
+                            <li>Klik <strong>"Cari"</strong></li>
+                            <li>Klik <strong>"➕ Kirim Permintaan"</strong></li>
+                        </ol>
+                        <h4>Kelola Permintaan:</h4>
+                        <ol>
+                            <li>Lihat permintaan masuk di bagian <strong>"Permintaan Pertemanan"</strong></li>
+                            <li>Klik <strong>✅ (Terima)</strong> atau <strong>❌ (Tolak)</strong></li>
+                        </ol>
+                        <h4>Daftar Teman:</h4>
+                        <ol>
+                            <li>Lihat semua teman Anda</li>
+                            <li>Klik <strong>💬 (Chat)</strong> untuk mulai chat</li>
+                            <li>Klik <strong>👤 (Profil)</strong> untuk lihat profil teman</li>
+                            <li>Klik <strong>🗑️ (Hapus)</strong> untuk hapus dari daftar teman</li>
+                        </ol>
+                    </div>
+                </details>
+
+                <details>
+                    <summary>8. 💬 Chat & Status</summary>
+                    <div class="guide-box">
+                        <h4>Chat dengan Teman:</h4>
+                        <ol>
+                            <li>Buka tab <strong>"Chat"</strong></li>
+                            <li>Pilih teman dari daftar kiri</li>
+                            <li>Ketik pesan dan tekan Enter atau klik kirim</li>
+                            <li>Kirim gambar dengan klik ikon 📷</li>
+                            <li>Hapus pesan dengan hover dan klik 🗑️ (hanya untuk pesan Anda)</li>
+                        </ol>
+                        <h4>Buat Status:</h4>
+                        <ol>
+                            <li>Klik tombol <strong>📸 (Status)</strong> di pojok kanan bawah</li>
+                            <li>Masukkan teks atau pilih gambar</li>
+                            <li>Klik <strong>"Upload Status"</strong></li>
+                            <li>Status akan hilang setelah 24 jam</li>
+                        </ol>
+                        <h4>Lihat Status Teman:</h4>
+                        <ol>
+                            <li>Status teman muncul di bar status (atas)</li>
+                            <li>Klik status untuk melihat</li>
+                            <li>Balas status dengan klik <strong>"💬 Balas"</strong></li>
+                        </ol>
+                        <div class="guide-note">💡 <strong>Catatan:</strong> Chat hanya bisa dilakukan dengan teman yang sudah terdaftar!</div>
+                    </div>
+                </details>
+
+                <details>
+                    <summary>9. ⚙️ Pengaturan Sistem (Admin/Developer)</summary>
+                    <div class="guide-box">
+                        <h4>Pengaturan Sekolah:</h4>
+                        <ul>
+                            <li><strong>Logo Sekolah:</strong> Klik logo untuk upload gambar (max 2MB)</li>
+                            <li><strong>Nama Sekolah:</strong> Ubah nama yang tampil di header</li>
+                            <li><strong>Tipe Sekolah:</strong> Pilih SMP, SMK, atau SMP & SMK</li>
+                            <li><strong>Daftar Kelas:</strong> Tambah/edit kelas sesuai jenjang</li>
+                            <li><strong>Daftar Jurusan:</strong> Tambah/edit jurusan (khusus SMK)</li>
+                        </ul>
+                        <h4>Pengaturan Absensi:</h4>
+                        <ul>
+                            <li><strong>Delay Pulang Global:</strong> Waktu minimal sebelum bisa pulang (menit/jam)</li>
+                            <li><strong>Batas Terlambat:</strong> Jam batas siswa dianggap terlambat</li>
+                            <li><strong>Minimal Jam Pulang:</strong> Jam minimal siswa boleh pulang</li>
+                            <li><strong>Hari Libur:</strong> Centang hari libur mingguan</li>
+                            <li><strong>Tanggal Libur Nasional:</strong> Tambah tanggal libur khusus</li>
+                        </ul>
+                        <h4>Status Sensor ESP32:</h4>
+                        <ul>
+                            <li>Lihat status online/offline 16 sensor fingerprint</li>
+                            <li>Lihat jumlah template sidik jari tersimpan</li>
+                        </ul>
+                        <div class="guide-warning">⚠️ <strong>Peringatan:</strong> Reset data akan menghapus SEMUA data kecuali akun developer!</div>
+                    </div>
+                </details>
+
+                <details>
+                    <summary>10. 🔧 ESP32 & Konfigurasi Hardware</summary>
+                    <div class="guide-box">
+                        <h4>Arsitektur Sistem:</h4>
+                        <ul>
+                            <li><strong>ESP32:</strong> Mengelola 16 sensor fingerprint dan mengirim data ke Firebase</li>
+                            <li><strong>Firebase Realtime Database:</strong> Menyimpan data absensi, user, dan konfigurasi</li>
+                            <li><strong>Supabase Storage:</strong> Menyimpan gambar (foto profil, logo, status, chat)</li>
+                            <li><strong>Web Dashboard:</strong> Interface admin/guru/siswa</li>
+                        </ul>
+                        <h4>Struktur Database:</h4>
+                        <ul>
+                            <li><code>/users</code> - Data siswa untuk ESP32</li>
+                            <li><code>/users_auth</code> - Data user login web</li>
+                            <li><code>/absensi/YYYY-MM-DD/ID</code> - Data absensi harian</li>
+                            <li><code>/attendance_status/YYYY-MM-DD/ID</code> - Status manual (izin/sakit/alpha)</li>
+                            <li><code>/announcements/active</code> - Pengumuman aktif</li>
+                            <li><code>/statuses</code> - Status update (expired 24 jam)</li>
+                            <li><code>/chats</code> - Pesan chat antar user</li>
+                            <li><code>/friendships</code> - Data pertemanan</li>
+                            <li><code>/logs</code> - Log aktivitas user</li>
+                        </ul>
+                    </div>
+                </details>
+
+                <details>
+                    <summary>11. 🆘 Tanya Jawab (FAQ)</summary>
+                    <div class="guide-box">
+                        <h4>Q: Kenapa status tidak bisa diupload?</h4>
+                        <p>A: Pastikan file gambar tidak lebih dari 5MB dan formatnya JPG/PNG.</p>
+                        
+                        <h4>Q: Kenapa chat tidak bisa dikirim?</h4>
+                        <p>A: Pastikan Anda dan penerima sudah berteman. Chat hanya bisa ke teman.</p>
+                        
+                        <h4>Q: Bagaimana cara reset password jika lupa?</h4>
+                        <p>A: Klik "Lupa Password?" di halaman login, masukkan email terdaftar.</p>
+                        
+                        <h4>Q: Kenapa data absensi tidak muncul?</h4>
+                        <p>A: Pastikan filter tanggal dan kelas sudah benar. Data mungkin masih kosong.</p>
+                        
+                        <h4>Q: Bagaimana cara menghapus status yang sudah kadaluarsa?</h4>
+                        <p>A: Status akan otomatis dihapus setelah 24 jam oleh sistem.</p>
+                        
+                        <h4>Q: ESP32 tidak terdeteksi?</h4>
+                        <p>A: Pastikan ESP32 terhubung ke internet dan mengirim data ke endpoint yang benar.</p>
+                    </div>
+                </details>
+
+                <div class="guide-footer">
+                    <hr>
+                    <div class="text-small" style="text-align: center; color: var(--text-muted);">
+                        <p>📱 Sistem Absensi IoT - Fingerprint & Real-time</p>
+                        <p>Dikembangkan oleh CV Haka Jaya</p>
+                        <p>Versi 5.15 | © 2026</p>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
