@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+l<!DOCTYPE html>
 <html lang="id">
 <head>
     <meta charset="UTF-8">
@@ -151,10 +151,16 @@
                 right: 10px;
                 width: auto;
             }
-            /* Tabel responsif untuk foto */
             .table-container td img {
                 width: 30px !important;
                 height: 30px !important;
+            }
+            .rekap-per-siswa-section .section-header {
+                flex-direction: column;
+                align-items: stretch !important;
+            }
+            .rekap-per-siswa-section .section-header > div {
+                justify-content: center;
             }
         }
         
@@ -217,12 +223,32 @@
             background: #f1f5f9;
         }
 
-        /* Style untuk gambar di tabel */
         .table-container td img {
             border-radius: 50%;
             object-fit: cover;
             border: 1px solid var(--border-color);
             background: var(--bg-card);
+        }
+        
+        /* Rekap Per Siswa Styles */
+        .rekap-per-siswa-section {
+            scroll-margin-top: 20px;
+        }
+        
+        .rekap-stat-card {
+            transition: transform 0.2s;
+        }
+        
+        .rekap-stat-card:hover {
+            transform: translateY(-2px);
+        }
+        
+        #rekapPerSiswaSelect {
+            cursor: pointer;
+        }
+        
+        #rekapPerSiswaSelect:hover {
+            border-color: var(--primary-color);
         }
     </style>
 </head>
@@ -528,7 +554,7 @@
             </div>
             <div class="controls-bar role-admin role-guru"><h4>👥 Daftar Pengguna</h4><div class="search-box"><input type="text" id="searchUser" placeholder="🔍 Cari user..." oninput="renderUsersTable()"></div></div>
             <div class="table-container role-admin role-guru">
-                <table>
+                </table>
                     <thead><tr><th>Foto</th><th>Nama</th><th>Email</th><th>Role</th><th>Detail</th><th>Aksi</th></tr></thead>
                     <tbody id="tbody-users"></tbody>
                 </table>
@@ -548,6 +574,25 @@
                     <div style="flex:2; min-width:300px;"><canvas id="rekapBarChart" style="max-height:300px;"></canvas><p class="text-small text-center">Absensi per Hari</p></div>
                 </div>
             </div>
+            
+            <!-- REKAP PER SISWA SECTION -->
+            <div class="rekap-per-siswa-section" style="margin-top: 30px; border-top: 1px solid var(--border); padding-top: 20px;">
+                <div class="section-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; margin-bottom: 20px;">
+                    <h3 style="margin: 0;">📋 Detail Rekap per Siswa</h3>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                        <select id="rekapPerSiswaSelect" style="min-width: 250px; padding: 8px 12px; border-radius: 8px; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-primary);">
+                            <option value="">-- Pilih Siswa --</option>
+                        </select>
+                        <button class="btn-action btn-primary" onclick="loadRekapPerSiswa()" style="padding: 8px 16px;">🔍 Tampilkan</button>
+                        <button class="btn-action btn-success" onclick="exportRekapPerSiswaToExcel()" style="padding: 8px 16px;">📥 Export Excel</button>
+                        <button class="btn-action btn-secondary" onclick="exportRekapPerSiswaToPDF()" style="padding: 8px 16px;">📄 Export PDF</button>
+                    </div>
+                </div>
+                <div id="rekapPerSiswaContainer" style="background: var(--bg-card); border-radius: 16px; padding: 20px; display: none;">
+                    <div id="rekapPerSiswaContent"></div>
+                </div>
+            </div>
+            
             <div class="table-container">
                 <table>
                     <thead><tr><th>No</th><th>ID FP</th><th>Nama</th><th>Kelas</th><th>Jurusan</th><th>Total Hari</th><th>Hadir</th><th>Sakit</th><th>Izin</th><th>Alpha</th><th>Persentase</th><th>Status</th></tr></thead>
@@ -673,6 +718,7 @@
     <script src="js/logs.js"></script>
     <script src="js/main.js"></script>
     <script src="js/rekap.js"></script>
+    <script src="js/rekap-per-siswa.js"></script>
 
     <script>
         // Fungsi untuk toggle dropdown (click to open/close)
@@ -760,6 +806,11 @@
             
             var floatingBtns = document.querySelectorAll('.floating-chat-btn, .floating-friends-btn, .floating-status-btn, .floating-announcement-btn');
             floatingBtns.forEach(btn => btn.style.display = 'none');
+            
+            // Inisialisasi Rekap per Siswa setelah data siap
+            if (typeof initRekapPerSiswa === 'function') {
+                setTimeout(initRekapPerSiswa, 1000);
+            }
         });
         
         function showToast(msg,type){ var t=document.getElementById('toast'); if(t){ t.textContent=msg; t.style.borderLeftColor=type==='error'?'#f44336':'#00bcd4'; t.className='toast show'; setTimeout(()=>{t.className=t.className.replace('show','');},3000); } }
