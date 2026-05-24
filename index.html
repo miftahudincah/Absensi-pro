@@ -1,4 +1,4 @@
-l<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="id">
 <head>
     <meta charset="UTF-8">
@@ -82,6 +82,7 @@ l<!DOCTYPE html>
             border-color: var(--primary-color);
         }
         
+        /* Dropdown content - default hidden, akan muncul dengan class .open */
         .dropdown-content {
             position: absolute;
             top: 110%;
@@ -120,18 +121,22 @@ l<!DOCTYPE html>
             color: white;
         }
         
+        /* Sembunyikan sidebar menu dan floating chat button */
         .sidebar-menu, .mobile-navbar, .floating-chat-btn, .floating-friends-btn, .floating-status-btn, .floating-announcement-btn {
             display: none !important;
         }
         
+        /* Nav tabs juga disembunyikan karena sudah pakai dropdown */
         .nav-tabs {
             display: none !important;
         }
         
+        /* Header bar disesuaikan */
         .header-bar {
             margin-top: 0 !important;
         }
         
+        /* Responsive */
         @media (max-width: 768px) {
             .dropdown-navbar {
                 flex-direction: column;
@@ -150,17 +155,6 @@ l<!DOCTYPE html>
                 left: 10px;
                 right: 10px;
                 width: auto;
-            }
-            .table-container td img {
-                width: 30px !important;
-                height: 30px !important;
-            }
-            .rekap-per-siswa-section .section-header {
-                flex-direction: column;
-                align-items: stretch !important;
-            }
-            .rekap-per-siswa-section .section-header > div {
-                justify-content: center;
             }
         }
         
@@ -200,6 +194,7 @@ l<!DOCTYPE html>
             background: #dc2626;
         }
         
+        /* Overlay untuk menutup dropdown saat klik di luar */
         .dropdown-overlay {
             position: fixed;
             top: 0;
@@ -221,34 +216,6 @@ l<!DOCTYPE html>
         
         body.light-mode .dropdown-btn {
             background: #f1f5f9;
-        }
-
-        .table-container td img {
-            border-radius: 50%;
-            object-fit: cover;
-            border: 1px solid var(--border-color);
-            background: var(--bg-card);
-        }
-        
-        /* Rekap Per Siswa Styles */
-        .rekap-per-siswa-section {
-            scroll-margin-top: 20px;
-        }
-        
-        .rekap-stat-card {
-            transition: transform 0.2s;
-        }
-        
-        .rekap-stat-card:hover {
-            transform: translateY(-2px);
-        }
-        
-        #rekapPerSiswaSelect {
-            cursor: pointer;
-        }
-        
-        #rekapPerSiswaSelect:hover {
-            border-color: var(--primary-color);
         }
     </style>
 </head>
@@ -322,9 +289,10 @@ l<!DOCTYPE html>
     <!-- DASHBOARD -->
     <div id="dashboard-section" style="display:none;">
         
-        <!-- DROPDOWN NAVBAR -->
+        <!-- DROPDOWN NAVBAR (Pengganti Sidebar) - Click to Open -->
         <div class="dropdown-navbar">
             <div class="dropdown-menu-container">
+                <!-- Menu Utama -->
                 <div class="dropdown" id="dropdownMain">
                     <button class="dropdown-btn" onclick="toggleDropdown('dropdownMain')">📊 Menu Utama ▼</button>
                     <div class="dropdown-content" id="dropdownMainContent">
@@ -336,6 +304,7 @@ l<!DOCTYPE html>
                     </div>
                 </div>
                 
+                <!-- Sosial & Chat -->
                 <div class="dropdown" id="dropdownSocial">
                     <button class="dropdown-btn" onclick="toggleDropdown('dropdownSocial')">👥 Sosial & Chat ▼</button>
                     <div class="dropdown-content" id="dropdownSocialContent">
@@ -345,6 +314,7 @@ l<!DOCTYPE html>
                     </div>
                 </div>
                 
+                <!-- Manajemen (Admin/Guru/Developer) -->
                 <div class="dropdown" id="dropdownManage">
                     <button class="dropdown-btn" onclick="toggleDropdown('dropdownManage')">⚙️ Manajemen ▼</button>
                     <div class="dropdown-content" id="dropdownManageContent">
@@ -354,6 +324,7 @@ l<!DOCTYPE html>
                     </div>
                 </div>
                 
+                <!-- Profil -->
                 <div class="dropdown" id="dropdownProfile">
                     <button class="dropdown-btn" onclick="toggleDropdown('dropdownProfile')">👤 Profil ▼</button>
                     <div class="dropdown-content" id="dropdownProfileContent">
@@ -374,7 +345,7 @@ l<!DOCTYPE html>
             </div>
         </div>
 
-        <!-- HEADER BAR -->
+        <!-- HEADER BAR (Desktop & Mobile) -->
         <div class="header-bar">
             <div class="header-left">
                 <img id="headerSchoolLogo" class="school-logo" src="" alt="Logo" style="display: none;">
@@ -401,7 +372,7 @@ l<!DOCTYPE html>
             <div id="announcementList"></div>
         </div>
 
-        <!-- STATUS BAR -->
+        <!-- STATUS BAR (DENGAN TOMBOL BUAT STATUS) -->
         <div class="status-bar-container" id="statusBarContainer" style="margin-bottom: 20px;">
             <div class="status-header">
                 <h4>📸 Status Update</h4>
@@ -411,7 +382,7 @@ l<!DOCTYPE html>
             <div id="statusBar" class="status-bar-scroll"></div>
         </div>
 
-        <!-- TAB DASHBOARD -->
+        <!-- SEMUA TAB CONTENT (SAMA PERSIS SEPERTI ASLI) -->
         <div id="tab-dashboard" class="tab-content active">
             <div class="dashboard-modern-new">
                 <div class="stats-grid">
@@ -453,7 +424,6 @@ l<!DOCTYPE html>
             </div>
         </div>
 
-        <!-- TAB ABSENSI (DENGAN KOLOM FOTO & ID) -->
         <div id="tab-attendance" class="tab-content">
             <div class="controls-bar">
                 <div class="filter-group"><label>Kelas:</label><select id="filterKelas" onchange="renderTable()"><option value="all">Semua</option></select></div>
@@ -475,24 +445,12 @@ l<!DOCTYPE html>
                 </div>
             </div>
             <div class="table-container">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Waktu</th>
-                            <th>Foto & ID</th>
-                            <th>Nama</th>
-                            <th>Kelas</th>
-                            <th>Jurusan</th>
-                            <th>Status</th>
-                            <th>Aksi</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tbody-attendance"><tr><td colspan="7">Memuat data...<\/td><\/tr></tbody>
+                <table><thead><tr><th>Waktu</th><th>ID FP</th><th>Nama</th><th>Kelas</th><th>Jurusan</th><th>Status</th><th>Aksi</th></tr></thead>
+                <tbody id="tbody-attendance"><tr><td colspan="7">Memuat data...</td></tr></tbody>
                 </table>
             </div>
         </div>
 
-        <!-- TAB DATA SISWA (DENGAN KOLOM FOTO) -->
         <div id="tab-students" class="tab-content">
             <div class="controls-bar"><div style="display: flex; gap:10px; flex-wrap:wrap; width:100%;">
                 <input type="hidden" id="editMode" value="add">
@@ -513,24 +471,12 @@ l<!DOCTYPE html>
                 <div class="search-box"><input type="text" id="searchStudentName" placeholder="🔍 Cari nama siswa..." oninput="renderStudentsTable()"></div>
             </div>
             <div class="table-container">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Foto</th>
-                            <th>ID FP</th>
-                            <th>Nama</th>
-                            <th>Kelas</th>
-                            <th>Jurusan</th>
-                            <th>Delay</th>
-                            <th>Aksi</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tbody-students"><tr><td colspan="7">Memuat data...<\/td><\/tr></tbody>
+                <tr><thead><tr><th>ID FP</th><th>Nama</th><th>Kelas</th><th>Jurusan</th><th>Delay</th><th>Aksi</th></tr></thead>
+                <tbody id="tbody-students"><tr><td colspan="6">Memuat data...</td></tr></tbody>
                 </table>
             </div>
         </div>
 
-        <!-- TAB USERS -->
         <div id="tab-users" class="tab-content role-admin role-guru">
             <div class="controls-bar"><h4>🔑 Generate Kode Pendaftaran</h4></div>
             <div class="key-box role-admin role-guru">
@@ -547,21 +493,16 @@ l<!DOCTYPE html>
             <div id="generatedKeyDisplay" style="display:none;"></div>
             <h4 class="role-admin role-guru">📋 Daftar Kode Aktif</h4>
             <div class="table-container role-admin role-guru">
-                <table>
-                    <thead><tr><th>Kode</th><th>Status</th><th>Dibuat</th><th>Pengguna</th><th>Aksi</th></tr></thead>
-                    <tbody id="tbody-codes"></tbody>
-                </table>
+                <table><thead><tr><th>Kode</th><th>Status</th><th>Dibuat</th><th>Pengguna</th><th>Aksi</th></tr></thead>
+                <tbody id="tbody-codes"></tbody></table>
             </div>
             <div class="controls-bar role-admin role-guru"><h4>👥 Daftar Pengguna</h4><div class="search-box"><input type="text" id="searchUser" placeholder="🔍 Cari user..." oninput="renderUsersTable()"></div></div>
             <div class="table-container role-admin role-guru">
-                </table>
-                    <thead><tr><th>Foto</th><th>Nama</th><th>Email</th><th>Role</th><th>Detail</th><th>Aksi</th></tr></thead>
-                    <tbody id="tbody-users"></tbody>
-                </table>
+                <table><thead><tr><th>Foto</th><th>Nama</th><th>Email</th><th>Role</th><th>Detail</th><th>Aksi</th></tr></thead>
+                <tbody id="tbody-users"></tbody></table>
             </div>
         </div>
 
-        <!-- TAB REKAP -->
         <div id="tab-rekap" class="tab-content">
             <div class="controls-bar">
                 <div class="filter-group"><label>📅 Periode:</label><select id="rekapPeriod" onchange="loadRekap()"><option value="minggu">Minggu Ini</option><option value="bulan">Bulan Ini</option><option value="semester">Semester Ini</option><option value="custom">Custom Range</option></select></div>
@@ -574,34 +515,13 @@ l<!DOCTYPE html>
                     <div style="flex:2; min-width:300px;"><canvas id="rekapBarChart" style="max-height:300px;"></canvas><p class="text-small text-center">Absensi per Hari</p></div>
                 </div>
             </div>
-            
-            <!-- REKAP PER SISWA SECTION -->
-            <div class="rekap-per-siswa-section" style="margin-top: 30px; border-top: 1px solid var(--border); padding-top: 20px;">
-                <div class="section-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; margin-bottom: 20px;">
-                    <h3 style="margin: 0;">📋 Detail Rekap per Siswa</h3>
-                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                        <select id="rekapPerSiswaSelect" style="min-width: 250px; padding: 8px 12px; border-radius: 8px; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-primary);">
-                            <option value="">-- Pilih Siswa --</option>
-                        </select>
-                        <button class="btn-action btn-primary" onclick="loadRekapPerSiswa()" style="padding: 8px 16px;">🔍 Tampilkan</button>
-                        <button class="btn-action btn-success" onclick="exportRekapPerSiswaToExcel()" style="padding: 8px 16px;">📥 Export Excel</button>
-                        <button class="btn-action btn-secondary" onclick="exportRekapPerSiswaToPDF()" style="padding: 8px 16px;">📄 Export PDF</button>
-                    </div>
-                </div>
-                <div id="rekapPerSiswaContainer" style="background: var(--bg-card); border-radius: 16px; padding: 20px; display: none;">
-                    <div id="rekapPerSiswaContent"></div>
-                </div>
-            </div>
-            
             <div class="table-container">
-                <table>
-                    <thead><tr><th>No</th><th>ID FP</th><th>Nama</th><th>Kelas</th><th>Jurusan</th><th>Total Hari</th><th>Hadir</th><th>Sakit</th><th>Izin</th><th>Alpha</th><th>Persentase</th><th>Status</th></tr></thead>
-                    <tbody id="rekapTbody"><tr><td colspan="12">Memuat data...<\/td><\/tr></tbody>
+                <table><thead><tr><th>No</th><th>ID FP</th><th>Nama</th><th>Kelas</th><th>Jurusan</th><th>Total Hari</th><th>Hadir</th><th>Sakit</th><th>Izin</th><th>Alpha</th><th>Persentase</th><th>Status</th></tr></thead>
+                <tbody id="rekapTbody"><tr><td colspan="12">Memuat data...</td></tr></tbody>
                 </table>
             </div>
         </div>
 
-        <!-- TAB FRIENDS -->
         <div id="tab-friends" class="tab-content">
             <div class="friends-container">
                 <div class="friends-search-section"><h4>🔍 Cari Teman</h4><div class="search-box" style="display:flex; gap:10px;"><input type="email" id="searchFriendEmail" placeholder="Cari berdasarkan email..." style="flex:1;"><button class="btn-action btn-primary" onclick="searchUserByEmail()">Cari</button></div><div id="searchResult" style="margin-top:10px; display:none;"></div></div>
@@ -612,7 +532,6 @@ l<!DOCTYPE html>
             </div>
         </div>
 
-        <!-- TAB CHAT -->
         <div id="tab-chat" class="tab-content">
             <div class="chat-header-info" style="margin-bottom:15px;">
                 <h3>💬 Pesan dengan Teman</h3>
@@ -623,7 +542,6 @@ l<!DOCTYPE html>
             </div>
         </div>
 
-        <!-- TAB LOGS -->
         <div id="tab-logs" class="tab-content role-admin role-guru role-developer">
             <div class="controls-bar">
                 <div class="filter-group"><label>🔍 Filter Aksi:</label><select id="logActionFilter" onchange="renderLogsTable()"><option value="all">Semua Aksi</option></select></div>
@@ -633,13 +551,12 @@ l<!DOCTYPE html>
             </div>
             <div class="table-container">
                 <table id="logsTable"><thead><tr><th>🕒 Waktu</th><th>👤 Pengguna</th><th>🎭 Role</th><th>📌 Aksi</th><th>📝 Detail</th><th>🌐 IP</th></tr></thead>
-                <tbody id="logsTbody"><tr><td colspan="6" style="text-align:center; padding:40px;">⏳ Memuat log aktivitas...<\/td><\/tr></tbody>
+                <tbody id="logsTbody"><tr><td colspan="6" style="text-align:center; padding:40px;">⏳ Memuat log aktivitas...</td></tr></tbody>
                 </table>
                 <div id="logsPagination" style="display: flex; justify-content: center; gap: 10px; margin-top: 20px;"></div>
             </div>
         </div>
 
-        <!-- TAB CONFIG -->
         <div id="tab-config" class="tab-content role-admin role-guru role-developer">
             <div class="guide-container">
                 <h3>⚙️ Pengaturan Sistem</h3>
@@ -675,7 +592,6 @@ l<!DOCTYPE html>
             </div>
         </div>
 
-        <!-- TAB GUIDE -->
         <div id="tab-guide" class="tab-content">
             <div class="guide-container">
                 <h3>📘 Panduan Sistem Absensi Fingerprint</h3>
@@ -687,7 +603,7 @@ l<!DOCTYPE html>
         </div>
     </div>
 
-    <!-- MODALS -->
+    <!-- MODALS (SAMA PERSIS SEPERTI ASLI) -->
     <div id="modal-profile" class="modal-overlay"><div class="modal-box"><div class="modal-title"><span>📸 Profil Saya</span><span onclick="closeModal('modal-profile')">✖</span></div><div class="profile-upload-wrapper" onclick="document.getElementById('profileFileInput').click()"><img id="profileImg" class="avatar-lg"><input type="file" id="profileFileInput" hidden accept="image/*" onchange="uploadProfilePhoto(this)"></div><div class="form-group"><input type="text" id="profileNameInput" placeholder="Nama Lengkap"></div><p id="profileEmail"></p><div class="form-group" id="group-subject"><input type="text" id="profileSubject" placeholder="Mata Pelajaran"></div><div class="form-group"><input type="text" id="profileKelas" placeholder="Kelas"></div><div class="form-group"><input type="text" id="profileJurusan" placeholder="Jurusan"></div><div class="modal-actions"><button class="btn-save" onclick="handleUpdateProfileInfo()">💾 Simpan</button><button class="btn-cancel" onclick="closeModal('modal-profile')">Tutup</button></div><hr><div style="text-align:center;"><button class="btn-action" onclick="openChangePasswordModal()">🔑 Ganti Password</button></div></div></div>
     <div id="modal-change-pass" class="modal-overlay"><div class="modal-box"><div class="modal-title"><span>🔑 Ganti Password</span><span onclick="closeModal('modal-change-pass')">✖</span></div><form onsubmit="handleChangePassword(event)"><div class="form-group"><input type="password" id="cpOld" placeholder="Password Lama" required></div><div class="form-group"><input type="password" id="cpNew" placeholder="Password Baru (min. 6)" required></div><div class="form-group"><input type="password" id="cpConfirm" placeholder="Konfirmasi" required></div><div class="modal-actions"><button type="button" class="btn-cancel" onclick="closeModal('modal-change-pass')">Batal</button><button type="submit" class="btn-save">Simpan</button></div></form></div></div>
     <div id="modal-forgot" class="modal-overlay"><div class="modal-box"><div class="modal-title"><span>🔐 Reset Password</span><span onclick="closeModal('modal-forgot')">✖</span></div><p>Masukkan email Anda</p><div class="form-group"><input type="email" id="forgotEmail" placeholder="Email"></div><div class="modal-actions"><button class="btn-cancel" onclick="closeModal('modal-forgot')">Batal</button><button class="btn-save" onclick="processForgot()">Kirim Link</button></div></div></div>
@@ -699,7 +615,7 @@ l<!DOCTYPE html>
     <div id="modal-absence" class="modal-overlay"><div class="modal-box" style="max-width:700px;"><div class="modal-title"><span>📋 Atur Ketidakhadiran</span><span onclick="closeModal('modal-absence')">✖</span></div><div class="modal-body"><div style="display:flex; gap:10px; flex-wrap:wrap;"><input type="date" id="absenceDate"><select id="absenceKelas"><option value="all">Semua Kelas</option></select><select id="absenceJurusan"><option value="all">Semua Jurusan</option></select><button class="btn-action" onclick="loadAbsenceList()">Tampilkan</button></div><div id="absenceListContainer" style="max-height:55vh; overflow-y:auto;"></div></div><div class="modal-actions"><button class="btn-cancel" onclick="closeModal('modal-absence')">Tutup</button><button class="btn-save" onclick="saveAllAbsenceStatus()">Simpan</button></div></div></div>
     <div id="modal-qr-scanner" class="modal-overlay"><div class="modal-box" style="max-width:500px;"><div class="modal-title"><span>📷 Scan QR Code</span><span onclick="closeModal('modal-qr-scanner')">✖</span></div><div id="qr-reader" style="width:100%;"></div><div id="qr-reader-results" style="margin-top:10px; text-align:center;"></div><div class="modal-actions"><button class="btn-cancel" onclick="closeModal('modal-qr-scanner')">Tutup</button></div></div></div>
 
-    <!-- SCRIPTS -->
+    <!-- SCRIPTS - URUTAN SANGAT PENTING! -->
     <script src="js/config.js"></script>
     <script src="js/supabase-config.js"></script>
     <script src="js/db.js"></script>
@@ -718,7 +634,6 @@ l<!DOCTYPE html>
     <script src="js/logs.js"></script>
     <script src="js/main.js"></script>
     <script src="js/rekap.js"></script>
-    <script src="js/rekap-per-siswa.js"></script>
 
     <script>
         // Fungsi untuk toggle dropdown (click to open/close)
@@ -727,14 +642,17 @@ l<!DOCTYPE html>
             var content = dropdown.querySelector('.dropdown-content');
             var isOpen = content.classList.contains('open');
             
+            // Tutup semua dropdown terlebih dahulu
             closeAllDropdowns();
             
+            // Jika yang diklik belum terbuka, buka
             if (!isOpen) {
                 content.classList.add('open');
                 document.getElementById('dropdownOverlay').classList.add('active');
             }
         }
         
+        // Fungsi untuk menutup semua dropdown
         function closeAllDropdowns() {
             var allContents = document.querySelectorAll('.dropdown-content');
             allContents.forEach(function(content) {
@@ -743,6 +661,7 @@ l<!DOCTYPE html>
             document.getElementById('dropdownOverlay').classList.remove('active');
         }
         
+        // Tutup dropdown saat tombol ESC ditekan
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Escape') {
                 closeAllDropdowns();
@@ -752,6 +671,7 @@ l<!DOCTYPE html>
         document.addEventListener('DOMContentLoaded', function() {
             console.log("DOM Ready - Initializing with Click-to-Open Dropdown Menu...");
             
+            // Populate dropdown options
             var dh = document.getElementById('delayHoursValue');
             if(dh && dh.children.length===0) for(var i=1;i<=24;i++) dh.innerHTML+='<option value="'+i+'">'+i+' Jam</option>';
             var gh = document.getElementById('globalDelayHoursValue');
@@ -804,13 +724,9 @@ l<!DOCTYPE html>
             }
             initTheme();
             
+            // Sembunyikan floating buttons yang tidak diperlukan
             var floatingBtns = document.querySelectorAll('.floating-chat-btn, .floating-friends-btn, .floating-status-btn, .floating-announcement-btn');
             floatingBtns.forEach(btn => btn.style.display = 'none');
-            
-            // Inisialisasi Rekap per Siswa setelah data siap
-            if (typeof initRekapPerSiswa === 'function') {
-                setTimeout(initRekapPerSiswa, 1000);
-            }
         });
         
         function showToast(msg,type){ var t=document.getElementById('toast'); if(t){ t.textContent=msg; t.style.borderLeftColor=type==='error'?'#f44336':'#00bcd4'; t.className='toast show'; setTimeout(()=>{t.className=t.className.replace('show','');},3000); } }
