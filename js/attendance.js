@@ -1,11 +1,8 @@
-// attendance.js - VERSION 4.4 (DENGAN FOTO PROFIL)
+// attendance.js - VERSION 4.3 (DENGAN LOG AKTIVITAS)
 // Mengelola data absensi, filter, validasi delay pulang,
 // serta manual status (sakit, izin, alpha) untuk siswa yang tidak hadir.
-// PERUBAHAN V4.4: 
-//   - Menambahkan kolom foto profil di tabel absensi
-//   - Foto diambil dari users_auth berdasarkan fpId
-//   - Jika tidak ada akun, tampilkan inisial nama
-//   - Menggabungkan kolom ID dan Nama menjadi satu kolom dengan foto
+// PERUBAHAN V4.3: 
+//   - Menambahkan logActivity untuk delete, simulasi, dan atur ketidakhadiran
 // ============================================================================
 
 // ======================== GLOBAL VARIABLES ========================
@@ -13,18 +10,6 @@ let attendanceDonutChart = null;
 let attendanceDataReadyListenerAdded = false;
 let attendanceRetryCount = 0;
 const MAX_ATTENDANCE_RETRY = 15;
-
-// ======================== FUNGSI AMBIL FOTO/AVATAR UNTUK ABSENSI ========================
-function getAttendanceAvatar(studentId, nama) {
-    // Cari user berdasarkan fpId
-    const user = dbData.users_auth?.find(u => u.fpId == studentId);
-    if (user && user.photoUrl) {
-        return user.photoUrl;
-    }
-    // Jika tidak punya akun atau foto, buat inisial (huruf pertama nama)
-    const inisial = nama ? nama.charAt(0).toUpperCase() : '?';
-    return `https://ui-avatars.com/api/?name=${inisial}&background=00bcd4&color=fff&size=100&bold=true`;
-}
 
 // ======================== EVENT LISTENER ========================
 
@@ -112,7 +97,7 @@ function createAttendanceTableDynamic() {
             <thead>
                 <tr>
                     <th>Waktu</th>
-                    <th>Foto & ID</th>
+                    <th>ID FP</th>
                     <th>Nama</th>
                     <th>Kelas</th>
                     <th>Jurusan</th>
@@ -295,7 +280,7 @@ function updateAttendanceDonutChart() {
     }
 }
 
-// ======================== RENDER TABLE (DENGAN FOTO PROFIL) ========================
+// ======================== RENDER TABLE (DENGAN STATUS MANUAL & TERLAMBAT) ========================
 
 async function renderTable() {
     console.log("📊 renderTable dipanggil - Total attendance:", dbData.attendance?.length || 0);
@@ -375,14 +360,10 @@ async function renderTable() {
     }
     
     let rows = [];
-    for (let index = 0; index < data.length; index++) {
-        const row = data[index];
+    data.forEach((row, index) => {
         const timeDisplay = row.timeIn || '-';
         const outDisplay = row.timeOut ? `<br><span class="text-small" style="color:var(--danger)">🏠 Pulang: ${row.timeOut}</span>` : '';
         const isNew = index < 3 && (Date.now() - new Date(row.timestamp).getTime() < 60000);
-        
-        // Ambil foto untuk baris ini
-        const avatarUrl = getAttendanceAvatar(row.studentId, row.nama);
         
         let statusHtml = '';
         const manual = manualStatusMap[row.studentId];
@@ -409,12 +390,7 @@ async function renderTable() {
         rows.push(`
             <tr class="${isNew ? 'attendance-new-row' : ''}">
                 <td>⏰ ${timeDisplay}<br><span class="text-small">📅 ${row.date}</span>${outDisplay}<\/td>
-                <td style="text-align:center;">
-                    <img src="${avatarUrl}" 
-                         style="width:40px; height:40px; border-radius:50%; object-fit:cover; border:1px solid var(--border);"
-                         onerror="this.src='https://ui-avatars.com/api/?name=${row.nama ? row.nama.charAt(0).toUpperCase() : '?'}&background=00bcd4&color=fff&size=100&bold=true'">
-                    <br><strong>#${row.studentId}</strong>
-                <\/td>
+                <td><strong>#${row.studentId}<\/strong><\/td>
                 <td>${escapeHtml(row.nama)}<\/td>
                 <td>${row.kelas || '-'}<\/td>
                 <td>${row.jurusan || '-'}<\/td>
@@ -424,7 +400,7 @@ async function renderTable() {
                 <\/td>
             <\/tr>
         `);
-    }
+    });
     tbody.innerHTML = rows.join('');
     
     updateAttendanceStatistics(data);
@@ -481,6 +457,7 @@ function deleteAttendance(id) {
     const date = id.substring(0, lastDashIndex);
     const fpId = id.substring(lastDashIndex + 1);
     
+    // Ambil nama siswa untuk log
     const attendanceRecord = dbData.attendance.find(a => a.id === id);
     const studentName = attendanceRecord?.nama || fpId;
     
@@ -490,6 +467,7 @@ function deleteAttendance(id) {
     db.ref(`absensi/${date}/${fpId}`).remove()
         .then(() => {
             showToast("✅ Data absensi berhasil dihapus", "success");
+            // LOG: Hapus absensi
             if (typeof logActivity === 'function') {
                 logActivity('delete_attendance', `Menghapus absensi ${studentName} (ID: ${fpId}) pada tanggal ${date}`);
             }
@@ -585,7 +563,6 @@ function openSimulateInModal() {
         filtered.forEach(s => {
             html += `
                 <div class="student-list-item" data-id="${s.id}" data-nama="${escapeHtml(s.nama)}" data-kelas="${s.kelas || ''}" data-jurusan="${s.jurusan || ''}" style="padding: 10px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.2s;" onmouseover="this.style.backgroundColor='var(--bg-hover)'" onmouseout="this.style.backgroundColor='transparent'">
-                    <img src="${getAttendanceAvatar(s.id, s.nama)}" style="width:30px; height:30px; border-radius:50%; object-fit:cover; margin-right:10px;">
                     <strong>${s.id}</strong> - ${escapeHtml(s.nama)} <span style="color: #888;">(${s.kelas || '-'} / ${s.jurusan || '-'})</span>
                 </div>
             `;
@@ -680,6 +657,7 @@ async function executeSimulateIn() {
         
         showToast(`✅ Simulasi Absen ${statusFinal} berhasil untuk ${nama} (${timeStr})`, "success");
         
+        // LOG: Simulasi scan masuk
         if (typeof logActivity === 'function') {
             const statusText = statusCondition === 'hadir' ? 'Hadir' : statusCondition;
             logActivity('simulate_attendance_in', `Simulasi masuk: ${nama} (ID: ${studentId}) - Status: ${statusText}, Waktu: ${timeStr}`);
@@ -776,7 +754,6 @@ function openSimulateOutModal() {
         filtered.forEach(s => {
             html += `
                 <div class="student-list-item" data-id="${s.id}" data-nama="${escapeHtml(s.nama)}" data-timein="${s.timeIn}" style="padding: 10px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.2s;" onmouseover="this.style.backgroundColor='var(--bg-hover)'" onmouseout="this.style.backgroundColor='transparent'">
-                    <img src="${getAttendanceAvatar(s.id, s.nama)}" style="width:30px; height:30px; border-radius:50%; object-fit:cover; margin-right:10px;">
                     <strong>${s.id}</strong> - ${escapeHtml(s.nama)} <span style="color: #888;">Masuk: ${s.timeIn}</span>
                 </div>
             `;
@@ -908,6 +885,7 @@ async function executeSimulateOut() {
         });
         showToast(`✅ ${nama} berhasil absen pulang pukul ${timeOutStr}${warningMsg}`, "success");
         
+        // LOG: Simulasi scan pulang
         if (typeof logActivity === 'function') {
             logActivity('simulate_attendance_out', `Simulasi pulang: ${nama} (ID: ${studentId}) - Waktu pulang: ${timeOutStr}${warningMsg}`);
         }
@@ -947,6 +925,7 @@ function exportToExcel() {
     URL.revokeObjectURL(url);
     showToast("📥 Laporan Excel berhasil diunduh", "success");
     
+    // LOG: Ekspor Excel (opsional)
     if (typeof logActivity === 'function') {
         logActivity('export_attendance_excel', `Ekspor ${dbData.attendance.length} data absensi ke Excel`);
     }
@@ -991,22 +970,16 @@ function renderFilteredTable(filteredData) {
     filteredData.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
     tbody.innerHTML = '';
     if (filteredData.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:20px; color:#888;">📭 Tidak ada data dalam rentang tanggal tersebut.<\/td><\/tr>`;
+        tbody.innerHTML = `<table><td colspan="7" style="text-align:center; padding:20px; color:#888;">📭 Tidak ada data dalam rentang tanggal tersebut.<\/td><\/tr>`;
         return;
     }
     let rows = [];
     filteredData.forEach(row => {
-        const avatarUrl = getAttendanceAvatar(row.studentId, row.nama);
         const outDisplay = row.timeOut ? `<br><span class="text-small" style="color:var(--danger)">🏠 Pulang: ${row.timeOut}</span>` : '';
         rows.push(`
             <tr>
                 <td>⏰ ${row.timeIn || '-'}<br><span class="text-small">📅 ${row.date}</span>${outDisplay}<\/td>
-                <td style="text-align:center;">
-                    <img src="${avatarUrl}" 
-                         style="width:40px; height:40px; border-radius:50%; object-fit:cover; border:1px solid var(--border);"
-                         onerror="this.src='https://ui-avatars.com/api/?name=${row.nama ? row.nama.charAt(0).toUpperCase() : '?'}&background=00bcd4&color=fff&size=100&bold=true'">
-                    <br><strong>#${row.studentId}</strong>
-                <\/td>
+                <td><strong>#${row.studentId}<\/strong><\/td>
                 <td>${escapeHtml(row.nama)}<\/td>
                 <td>${row.kelas || '-'}<\/td>
                 <td>${row.jurusan || '-'}<\/td>
@@ -1106,7 +1079,6 @@ async function loadAbsenceList() {
         html += `
             <div class="absence-student-row" data-id="${student.id}">
                 <div class="absence-student-info">
-                    <img src="${getAttendanceAvatar(student.id, student.nama)}" style="width:32px; height:32px; border-radius:50%; object-fit:cover; margin-right:10px;">
                     <div class="absence-student-name">${escapeHtml(student.nama)}</div>
                     <div class="absence-student-detail">ID: ${student.id} | Kelas: ${student.kelas} | Jurusan: ${student.jurusan}</div>
                     ${note ? `<div class="text-small" style="color:var(--text-muted)">${note}</div>` : ''}
@@ -1158,6 +1130,7 @@ async function saveAllAbsenceStatus() {
         if (Object.keys(finalUpdates).length > 0) await db.ref(refPath).update(finalUpdates);
         showToast(`✅ Berhasil menyimpan data ketidakhadiran.`, "success");
         
+        // LOG: Simpan manual attendance status
         if (typeof logActivity === 'function' && updatedCount > 0) {
             let statusSummary = [];
             for (const [id, val] of Object.entries(finalUpdates)) {
@@ -1234,7 +1207,6 @@ if (typeof window !== 'undefined' && window.dbData && window.dbData.attendance) 
 }
 
 // ======================== EKSPOR KE GLOBAL ========================
-window.getAttendanceAvatar = getAttendanceAvatar;
 window.renderTable = renderTable;
 window.deleteAttendance = deleteAttendance;
 window.simulateAttendance = openSimulateInModal;
@@ -1254,4 +1226,4 @@ window.populateFilters = populateFilters;
 window.populateDateFilter = populateDateFilter;
 window.waitForAttendanceElements = waitForAttendanceElements;
 
-console.log("✅ attendance.js V4.4 loaded - Dengan kolom foto profil di tabel absensi");
+console.log("✅ attendance.js V4.3 loaded - Dengan log aktivitas untuk absensi");

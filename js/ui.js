@@ -1,9 +1,9 @@
-// ui.js - VERSION 5.19 (FIX: REMOVED DUPLICATE renderUsersTable)
+// ui.js - VERSION 5.18 (FIX: USER NAME & ROLE SYNC ISSUE)
 // Berisi fungsi-fungsi antarmuka pengguna, modal, profil, dan inisialisasi dashboard
-// PERUBAHAN V5.19: 
-//   - Menghapus fungsi renderUsersTable() yang duplikat (sudah ada di users.js)
-//   - Menghapus pemanggilan renderUsersTable() yang tidak perlu
-//   - Memastikan tabel User Management menggunakan fungsi dari users.js
+// PERUBAHAN V5.18: 
+//   - Memperbaiki updateUserInterface() untuk update navbar user (nama & role)
+//   - Menambahkan force update setelah login untuk memastikan data sinkron
+//   - Menambahkan validasi dan perbaikan data user saat login
 // ============================================================================
 
 // ======================== GLOBAL UI STATE ========================
@@ -516,9 +516,6 @@ function initApp() {
     
     window.dispatchEvent(new CustomEvent('uiReady', { detail: { currentUser } }));
     
-    // ========== RENDER TABLES - TIDAK TERMASUK renderUsersTable ==========
-    // renderUsersTable() akan dipanggil oleh users.js secara otomatis
-    // melalui event listener dataReady dan uiReady
     const renderTables = () => {
         if (typeof renderTable === 'function') {
             try { renderTable(); } catch(e) { console.warn("renderTable error:", e); }
@@ -529,7 +526,9 @@ function initApp() {
         if (typeof renderCodesTable === 'function') {
             try { renderCodesTable(); } catch(e) { console.warn("renderCodesTable error:", e); }
         }
-        // renderUsersTable dihapus dari sini - akan ditangani oleh users.js
+        if (typeof renderUsersTable === 'function') {
+            try { renderUsersTable(); } catch(e) { console.warn("renderUsersTable error:", e); }
+        }
     };
     
     if (window.dbData && window.dbData.attendance && window.dbData.users) {
@@ -1271,26 +1270,21 @@ function switchTab(tabId) {
             }
             renderStudentsTable();
         } else if (tabId === 'users' && typeof renderUsersTable === 'function') {
-            // renderUsersTable akan dipanggil dari users.js, tapi tetap dipanggil untuk berjaga-jaga
-            // Pastikan fungsi ini merujuk ke users.js, bukan ke ui.js (yang sudah dihapus)
-            if (typeof window.renderUsersTable === 'function') {
-                window.renderUsersTable();
-            } else if (typeof renderUsersTable === 'function') {
-                renderUsersTable();
-            } else {
-                console.warn("⚠️ renderUsersTable function not found - pastikan users.js sudah dimuat");
-            }
+            renderUsersTable();
         } else if (tabId === 'rekap' && typeof loadRekap === 'function') {
             loadRekap();
         } else if (tabId === 'friends') {
             if (typeof loadFriendRequests === 'function') loadFriendRequests();
             if (typeof loadFriendsList === 'function') loadFriendsList();
         } else if (tabId === 'chat') {
+            // ========== PERBAIKAN UNTUK CHAT ==========
             console.log("💬 Switching to chat tab, calling forceRenderChat...");
+            // Bersihkan container terlebih dahulu
             const chatPanel = document.getElementById('chatPanel');
             if (chatPanel) {
                 chatPanel.innerHTML = '<div class="chat-loading" style="text-align: center; padding: 40px; color: var(--text-muted);">⏳ Memuat fitur chat...</div>';
             }
+            // Panggil forceRenderChat untuk memastikan chat tampil
             forceRenderChat();
         } else if (tabId === 'logs') {
             if (typeof initLogsSystem === 'function') {
@@ -1737,6 +1731,9 @@ function handleUpdateProfileInfo() {
             if (typeof renderStudentsTable === 'function') {
                 try { renderStudentsTable(); } catch(e) {}
             }
+            if (typeof renderUsersTable === 'function') {
+                try { renderUsersTable(); } catch(e) {}
+            }
         })
         .catch(err => { console.error('Update profile error:', err); showToast('❌ Gagal update: ' + err.message, 'error'); })
         .finally(() => { btn.innerText = originalText; btn.disabled = false; });
@@ -1953,9 +1950,64 @@ function initSystemConfig() {
     });
 }
 
-// ======================== RENDER TABEL USERS (DIHAPUS - SUDAH ADA DI USERS.JS) ========================
-// Fungsi renderUsersTable() telah dihapus dari file ini untuk mencegah konflik.
-// Silakan gunakan fungsi renderUsersTable() yang ada di users.js untuk menampilkan tabel user management.
+// ======================== RENDER TABEL USERS ========================
+function renderUsersTable() {
+    const tbody = document.getElementById('tbody-users');
+    if (!tbody) return;
+    const searchInput = document.getElementById('searchUser');
+    const search = searchInput ? searchInput.value.toLowerCase() : '';
+    tbody.innerHTML = '';
+    if (!dbData.users_auth || dbData.users_auth.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:20px; color:#888;">📭 Tidak ada pengguna ditemukan.${search ? '<br><small>Coba kata kunci lain</small>' : ''}NonNull</div></div>`;
+        return;
+    }
+    let data = dbData.users_auth.filter(u => u.nama && u.nama.toLowerCase().includes(search));
+    if (data.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:20px; color:#888;">🔍 Tidak ada pengguna yang cocok dengan pencarian.${search ? '<br><small>Coba kata kunci lain</small>' : ''}</div></div>`;
+        return;
+    }
+    data.forEach(u => {
+        const isMe = (currentUser && currentUser.uid === u.uid);
+        const avatar = u.photoUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.nama || 'User')}&background=random&color=fff&size=32`;
+        let roleHtml = '', actionsHtml = '-';
+        const isDeveloper = (u.role === 'developer');
+        
+        if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'developer') && !isMe && !isDeveloper) {
+            roleHtml = `<select class="form-control" onchange="updateUserRole('${u.uid}', this.value)" style="background:#2c2c2c; color:white; border:1px solid #444; padding:5px; border-radius:4px; font-size:0.8rem;">
+                <option value="siswa" ${u.role === 'siswa' ? 'selected' : ''}>📚 Siswa</option>
+                <option value="guru" ${u.role === 'guru' ? 'selected' : ''}>👨‍🏫 Guru</option>
+                <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>👑 Admin</option>
+            </select>`;
+            actionsHtml = `<button class="btn-icon delete" onclick="deleteUser('${u.uid}', '${escapeHtmlString(u.nama)}')" title="Hapus User" style="background:transparent; border:none; cursor:pointer; color:#f44336; font-size:18px;">🗑️</button>`;
+        } else {
+            let roleClass = 'role-siswa', roleIcon = '📚';
+            if (u.role === 'admin') { roleClass = 'role-admin'; roleIcon = '👑'; }
+            else if (u.role === 'guru') { roleClass = 'role-guru'; roleIcon = '👨‍🏫'; }
+            else if (u.role === 'developer') { roleClass = 'role-developer'; roleIcon = '👨‍💻'; }
+            roleHtml = `<span class="role-badge ${roleClass}">${roleIcon} ${u.role.toUpperCase()}</span>`;
+            if (isMe) roleHtml += ` <small style="color:#4a90e2;">(Anda)</small>`;
+        }
+        let detailText = '';
+        if (u.role === 'siswa') detailText = `${u.kelas || '-'} / ${u.jurusan || '-'}`;
+        else if (u.role === 'guru') detailText = u.subject || '-';
+        else if (u.role === 'developer') detailText = 'Developer (Paten)';
+        else detailText = '-';
+        tbody.innerHTML += `<tr>
+            <td style="text-align:center;"><img src="${avatar}" style="width:32px; height:32px; border-radius:50%; object-fit:cover;"></div>
+            <td><strong>${escapeHtmlString(u.nama)}</strong>${isMe ? '<br><small style="color:#4a90e2;">Akun Anda</small>' : ''}</div>
+            <td style="color:#aaa; font-size:0.9rem;">${u.email || '-'}</div>
+            <td>${roleHtml}</div>
+            <td style="color:#888; font-size:0.85rem;">${escapeHtmlString(detailText)}</div></div>
+            <td style="text-align:center;">${actionsHtml}</div></div>
+        `;
+    });
+    console.log(`📊 renderUsersTable: ${data.length} users displayed`);
+}
+
+function escapeHtmlString(str) {
+    if (!str) return '';
+    return str.replace(/[&<>]/g, m => m === '&' ? '&amp;' : m === '<' ? '&lt;' : '&gt;');
+}
 
 // ======================== FUNGSI DELAY UNTUK PROFIL ========================
 function updateProfileDelayDisplay() {
@@ -2011,7 +2063,7 @@ window.processForgot = processForgot;
 window.toggleRegisterInput = toggleRegisterInput;
 window.toggleGenerateInput = toggleGenerateInput;
 window.saveSchoolName = saveSchoolName;
-// window.renderUsersTable = renderUsersTable; // DIHAPUS - gunakan dari users.js
+window.renderUsersTable = renderUsersTable;
 window.updateProfileDelayDisplay = updateProfileDelayDisplay;
 window.cleanupUI = cleanupUI;
 window.loadSchoolLogo = loadSchoolLogo;
@@ -2042,4 +2094,4 @@ window.applySidebarRolePermissions = applySidebarRolePermissions;
 // Debug function
 window.debugAttendanceData = debugAttendanceData;
 
-console.log("✅ ui.js V5.19 loaded - renderUsersTable removed (using users.js version)");
+console.log("✅ ui.js V5.18 loaded - User name & role sync fixed!");
