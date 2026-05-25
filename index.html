@@ -551,7 +551,7 @@
                     <tbody id="tbody-attendance">
                         <tr><td colspan="6">Memuat data...<\/td><\/tr>
                     </tbody>
-                </tr>
+                </table>
             </div>
         </div>
 
@@ -612,15 +612,34 @@
             <div id="generatedKeyDisplay" style="display:none;"></div>
             <h4 class="role-admin role-guru">📋 Daftar Kode Aktif</h4>
             <div class="table-container role-admin role-guru">
-                <td><thead><tr><th>Kode</th><th>Status</th><th>Dibuat</th><th>Pengguna</th><th>Aksi</th></tr></thead>
-                <tbody id="tbody-codes"></tbody>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Kode</th>
+                            <th>Status</th>
+                            <th>Dibuat</th>
+                            <th>Pengguna</th>
+                            <th>Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-codes"></tbody>
                 </table>
             </div>
             <div class="controls-bar role-admin role-guru"><h4>👥 Daftar Pengguna</h4><div class="search-box"><input type="text" id="searchUser" placeholder="🔍 Cari user..." oninput="renderUsersTable()"></div></div>
             <div class="table-container role-admin role-guru">
-                <tr><thead><tr><th>Foto</th><th>Nama</th><th>Email</th><th>Role</th><th>Detail</th><th>Aksi</th></tr></thead>
-                <tbody id="tbody-users"></tbody>
-            </table>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Foto</th>
+                            <th>Nama</th>
+                            <th>Email</th>
+                            <th>Role</th>
+                            <th>Detail</th>
+                            <th>Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-users"></tbody>
+                </table>
             </div>
         </div>
 
@@ -638,9 +657,25 @@
                 </div>
             </div>
             <div class="table-container">
-                <td><thead><tr><th>No</th><th>ID FP</th><th>Nama</th><th>Kelas</th><th>Jurusan</th><th>Total Hari</th><th>Hadir</th><th>Sakit</th><th>Izin</th><th>Alpha</th><th>Persentase</th><th>Status</th></tr></thead>
-                <tbody id="rekapTbody"><tr><td colspan="12">Memuat data...<\/td><\/tr><\/tbody>
-            </table>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>No</th>
+                            <th>ID FP</th>
+                            <th>Nama</th>
+                            <th>Kelas</th>
+                            <th>Jurusan</th>
+                            <th>Total Hari</th>
+                            <th>Hadir</th>
+                            <th>Sakit</th>
+                            <th>Izin</th>
+                            <th>Alpha</th>
+                            <th>Persentase</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="rekapTbody"><tr><td colspan="12">Memuat data...<\/td><\/tr><\/tbody>
+                </table>
             </div>
         </div>
 
@@ -800,8 +835,7 @@
     <script src="js/main.js"></script>
     <script src="js/rekap.js"></script>
     <script src="js/rekap-per-siswa.js"></script>
-<!-- Management JS -->
-<script src="js/management.js"></script>
+    <script src="js/management.js"></script>
     <script>
         // Fungsi untuk toggle dropdown (click to open/close)
         function toggleDropdown(dropdownId) {
