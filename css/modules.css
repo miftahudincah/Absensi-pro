@@ -160,6 +160,131 @@ canvas#weeklyBarChart {
     width: 100%;
 }
 
+/* ==================== ATTENDANCE TABLE WITH STUDENT PHOTO ==================== */
+/* Styling untuk tabel absensi dengan foto siswa */
+.attendance-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.attendance-student-cell {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 200px;
+}
+
+.attendance-student-avatar {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid var(--primary);
+    background: var(--bg-card);
+    transition: transform 0.2s ease, border-color 0.2s ease;
+    flex-shrink: 0;
+}
+
+.attendance-student-avatar:hover {
+    transform: scale(1.05);
+    border-color: var(--secondary);
+}
+
+.attendance-student-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.attendance-student-name {
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.attendance-student-detail {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.attendance-student-detail span {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* ID FP styling */
+.attendance-id-badge {
+    background: var(--bg-hover);
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-family: monospace;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--primary);
+    display: inline-block;
+}
+
+/* Status badges */
+.attendance-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 30px;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.attendance-status.hadir {
+    background: rgba(76, 175, 80, 0.15);
+    color: #4caf50;
+}
+
+.attendance-status.pulang {
+    background: rgba(244, 67, 54, 0.15);
+    color: #f44336;
+}
+
+.attendance-status.terlambat {
+    background: rgba(255, 152, 0, 0.15);
+    color: #ff9800;
+}
+
+.attendance-status.sakit {
+    background: rgba(255, 152, 0, 0.15);
+    color: #ff9800;
+}
+
+.attendance-status.izin {
+    background: rgba(33, 150, 243, 0.15);
+    color: #2196f3;
+}
+
+.attendance-status.alpha {
+    background: rgba(244, 67, 54, 0.15);
+    color: #f44336;
+}
+
+/* Baris baru animasi */
+.attendance-new-row {
+    animation: highlightNew 1s ease-out;
+}
+
+@keyframes highlightNew {
+    0% {
+        background-color: rgba(0, 188, 212, 0.3);
+    }
+    100% {
+        background-color: transparent;
+    }
+}
+
 /* ==================== FRIENDS SYSTEM ==================== */
 .friends-container {
     padding: 10px;
@@ -1229,6 +1354,7 @@ canvas#weeklyBarChart {
     margin: 0 auto;
 }
 
+/* Styling khusus untuk tabel absensi */
 #tab-attendance .table-container {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
@@ -1237,14 +1363,43 @@ canvas#weeklyBarChart {
 }
 
 #tab-attendance table {
-    min-width: 600px;
+    min-width: 650px;
+    width: 100%;
     font-size: 0.75rem;
+    border-collapse: collapse;
 }
 
-#tab-attendance th, 
+#tab-attendance th,
 #tab-attendance td {
-    padding: 10px 8px;
+    padding: 12px 10px;
     white-space: nowrap;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+}
+
+#tab-attendance th {
+    background: var(--bg-sidebar);
+    color: var(--primary);
+    font-weight: 600;
+    font-size: 0.75rem;
+    position: sticky;
+    top: 0;
+}
+
+/* Responsive untuk tabel absensi di mobile */
+@media (max-width: 768px) {
+    #tab-attendance table {
+        min-width: 550px;
+    }
+    #tab-attendance th,
+    #tab-attendance td {
+        padding: 10px 6px;
+        font-size: 0.7rem;
+    }
+    .attendance-student-avatar {
+        width: 32px;
+        height: 32px;
+    }
 }
 
 .btn-icon.delete {
@@ -1404,4 +1559,79 @@ canvas#weeklyBarChart {
         font-size: 0.9rem;
         word-break: break-all;
     }
+}
+
+/* ==================== ABSENCE LIST MODAL ==================== */
+.absence-student-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px;
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.absence-student-info {
+    flex: 1;
+    min-width: 180px;
+}
+
+.absence-student-name {
+    font-weight: 600;
+    font-size: 0.85rem;
+}
+
+.absence-student-detail {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+}
+
+.status-select {
+    padding: 8px 12px;
+    border-radius: 30px;
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+    color: var(--text-primary);
+    font-size: 0.8rem;
+    cursor: pointer;
+    min-width: 130px;
+}
+
+.status-select.hadir {
+    border-color: #4caf50;
+    color: #4caf50;
+}
+
+.status-select.sakit {
+    border-color: #ff9800;
+    color: #ff9800;
+}
+
+.status-select.izin {
+    border-color: #2196f3;
+    color: #2196f3;
+}
+
+.status-select.alpha {
+    border-color: #f44336;
+    color: #f44336;
+}
+
+/* ==================== LIGHT MODE ADJUSTMENTS ==================== */
+body.light-mode .attendance-student-avatar {
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+body.light-mode .attendance-id-badge {
+    background: #e0e0e0;
+    color: #0097a7;
+}
+
+body.light-mode .status-select {
+    background: #ffffff;
+}
+
+body.light-mode .absence-student-row {
+    background: #fafafa;
 }
