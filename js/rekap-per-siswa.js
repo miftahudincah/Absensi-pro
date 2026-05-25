@@ -1,10 +1,61 @@
-// rekap-per-siswa.js - VERSION 1.0
+// rekap-per-siswa.js - VERSION 1.1 (DENGAN FOTO SISWA & LOG AKTIVITAS)
 // Fitur Rekap Absensi per Siswa (Detail Harian)
 // Menampilkan detail kehadiran individual siswa dalam periode tertentu
+// PERUBAHAN V1.1: 
+//   - Menambahkan foto siswa dari akun masing-masing
+//   - Fallback avatar inisial jika belum punya foto
+//   - Sinkronisasi dengan data user auth
 // ============================================================================
 
 let currentRekapPerSiswaData = null;
 let currentSelectedStudent = null;
+
+// Cache untuk foto siswa
+const rekapPhotoCache = new Map();
+
+// ======================= FUNGSI FOTO SISWA ========================
+
+/**
+ * Mendapatkan URL foto siswa berdasarkan ID
+ * @param {string|number} studentId - ID siswa
+ * @param {string} studentName - Nama siswa (fallback)
+ * @returns {string} URL foto atau avatar
+ */
+function getRekapStudentPhotoUrl(studentId, studentName) {
+    if (!studentId) return `https://ui-avatars.com/api/?name=${encodeURIComponent(studentName?.charAt(0) || 'U')}&background=00bcd4&color=fff&size=100&bold=true`;
+    
+    // Cek cache
+    if (rekapPhotoCache.has(studentId)) {
+        return rekapPhotoCache.get(studentId);
+    }
+    
+    // Cari user auth yang memiliki fpId = studentId
+    const userAuth = dbData?.users_auth?.find(u => u.fpId == studentId);
+    
+    let photoUrl;
+    if (userAuth && userAuth.photoUrl) {
+        photoUrl = userAuth.photoUrl;
+    } else {
+        // Fallback: avatar inisial nama
+        const initial = studentName ? studentName.charAt(0).toUpperCase() : 'U';
+        photoUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(initial)}&background=00bcd4&color=fff&size=100&bold=true`;
+    }
+    
+    // Simpan ke cache
+    rekapPhotoCache.set(studentId, photoUrl);
+    return photoUrl;
+}
+
+/**
+ * Refresh cache foto rekap
+ */
+function refreshRekapPhotoCache() {
+    rekapPhotoCache.clear();
+    if (currentRekapPerSiswaData) {
+        renderRekapPerSiswa();
+    }
+    console.log("🖼️ Rekap photo cache cleared");
+}
 
 // ======================= INISIALISASI ========================
 
@@ -41,6 +92,29 @@ function initRekapPerSiswa() {
             loadRekapPerSiswa();
         }
     });
+    
+    // Setup listener untuk perubahan foto
+    setupRekapPhotoListener();
+}
+
+/**
+ * Setup listener untuk perubahan foto dari user auth
+ */
+function setupRekapPhotoListener() {
+    if (!db) return;
+    
+    db.ref('users_auth').on('child_changed', (snapshot) => {
+        const userData = snapshot.val();
+        if (userData && userData.photoUrl && userData.fpId) {
+            console.log(`🖼️ Photo changed for student ID: ${userData.fpId}, clearing cache`);
+            rekapPhotoCache.delete(userData.fpId);
+            
+            // Refresh tampilan jika sedang menampilkan siswa yang sama
+            if (currentRekapPerSiswaData && currentRekapPerSiswaData.student.id == userData.fpId) {
+                renderRekapPerSiswa();
+            }
+        }
+    });
 }
 
 function populateRekapPerSiswaSelect() {
@@ -56,12 +130,11 @@ function populateRekapPerSiswaSelect() {
     }
     
     const students = [...dbData.users].sort((a, b) => a.id - b.id);
-    students.forEach(student => {
-        const avatarUrl = typeof getStudentAvatar === 'function' ? 
-            getStudentAvatar(student.id, student.nama) : 
-            `https://ui-avatars.com/api/?name=${encodeURIComponent(student.nama)}&background=00bcd4&color=fff&size=32`;
-        select.innerHTML += `<option value="${student.id}" data-avatar="${avatarUrl}">${student.id} - ${escapeHtml(student.nama)} (${student.kelas || '-'} / ${student.jurusan || '-'})</option>`;
-    });
+    for (const student of students) {
+        // Gunakan foto dari akun jika ada
+        const photoUrl = getRekapStudentPhotoUrl(student.id, student.nama);
+        select.innerHTML += `<option value="${student.id}" data-avatar="${photoUrl}">${student.id} - ${escapeHtml(student.nama)} (${student.kelas || '-'} / ${student.jurusan || '-'})</option>`;
+    }
     
     if (previousValue && students.some(s => s.id == previousValue)) {
         select.value = previousValue;
@@ -276,7 +349,7 @@ async function loadRekapPerSiswa() {
     }
 }
 
-// ======================= RENDER REKAP PER SISWA ========================
+// ======================= RENDER REKAP PER SISWA (DENGAN FOTO) ========================
 
 function formatDayName(dateStr) {
     const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
@@ -299,17 +372,17 @@ function renderRekapPerSiswa() {
     const data = currentRekapPerSiswaData;
     const student = data.student;
     
-    // Avatar URL
-    let avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(student.nama)}&background=00bcd4&color=fff&size=100&bold=true`;
-    if (typeof getStudentAvatar === 'function') {
-        avatarUrl = getStudentAvatar(student.id, student.nama);
-    }
+    // Dapatkan foto siswa dari akun
+    let avatarUrl = getRekapStudentPhotoUrl(student.id, student.nama);
+    const studentInitial = student.nama ? student.nama.charAt(0).toUpperCase() : 'U';
     
     let html = `
         <div class="rekap-per-siswa-header" style="display: flex; gap: 20px; align-items: center; margin-bottom: 25px; padding-bottom: 20px; border-bottom: 1px solid var(--border); flex-wrap: wrap;">
             <div style="display: flex; align-items: center; gap: 15px;">
-                <img src="${avatarUrl}" style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover; border: 3px solid #00bcd4;" 
-                     onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(student.nama)}&background=00bcd4&color=fff&size=100&bold=true'">
+                <img src="${avatarUrl}" 
+                     class="rekap-student-avatar"
+                     style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover; border: 3px solid #00bcd4; background: var(--bg-card);" 
+                     onerror="this.src='https://ui-avatars.com/api/?name=${studentInitial}&background=00bcd4&color=fff&size=100&bold=true'">
                 <div>
                     <h2 style="margin: 0; color: var(--text-primary);">${escapeHtml(student.nama)}</h2>
                     <div style="color: var(--text-muted); margin-top: 5px;">
@@ -405,7 +478,7 @@ function renderRekapPerSiswa() {
     contentDiv.innerHTML = html;
 }
 
-// ======================= EXPORT FUNCTIONS ========================
+// ======================= EXPORT FUNCTIONS (DENGAN FOTO) ========================
 
 async function exportRekapPerSiswaToExcel() {
     if (!currentRekapPerSiswaData) {
@@ -467,10 +540,8 @@ async function exportRekapPerSiswaToPDF() {
     const timeNow = new Date().toLocaleTimeString('id-ID');
     
     // Dapatkan avatar URL untuk print
-    let avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(student.nama)}&background=00bcd4&color=fff&size=100&bold=true`;
-    if (typeof getStudentAvatar === 'function') {
-        avatarUrl = getStudentAvatar(student.id, student.nama);
-    }
+    let avatarUrl = getRekapStudentPhotoUrl(student.id, student.nama);
+    const studentInitial = student.nama ? student.nama.charAt(0).toUpperCase() : 'U';
     
     const printWindow = window.open('', '_blank');
     printWindow.document.write(`
@@ -486,7 +557,7 @@ async function exportRekapPerSiswaToPDF() {
                 .header h1{color:#00bcd4;font-size:22px}
                 .header h3{color:#666;font-size:14px;margin-top:5px}
                 .student-info{display:flex;gap:20px;margin-bottom:20px;padding:15px;background:#f5f5f5;border-radius:12px;flex-wrap:wrap}
-                .student-info img{width:80px;height:80px;border-radius:50%;object-fit:cover}
+                .student-info img{width:80px;height:80px;border-radius:50%;object-fit:cover;border:2px solid #00bcd4}
                 .student-details h2{color:#333;margin-bottom:8px}
                 .student-details p{color:#666;margin:4px 0}
                 .summary{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:20px}
@@ -518,7 +589,7 @@ async function exportRekapPerSiswaToPDF() {
                 <h3>LAPORAN REKAP ABSENSI PER SISWA</h3>
             </div>
             <div class="student-info">
-                <img src="${avatarUrl}" onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(student.nama)}&background=00bcd4&color=fff&size=100&bold=true'">
+                <img src="${avatarUrl}" onerror="this.src='https://ui-avatars.com/api/?name=${studentInitial}&background=00bcd4&color=fff&size=100&bold=true'">
                 <div class="student-details">
                     <h2>${escapeHtml(student.nama)}</h2>
                     <p>🆔 ID: ${student.id} | 📚 Kelas: ${student.kelas || '-'} | 🎓 Jurusan: ${student.jurusan || '-'}</p>
@@ -599,6 +670,7 @@ function escapeHtml(str) {
 function cleanupRekapPerSiswa() {
     currentRekapPerSiswaData = null;
     currentSelectedStudent = null;
+    rekapPhotoCache.clear();
     console.log("🧹 Rekap per Siswa system cleaned up");
 }
 
@@ -609,5 +681,7 @@ window.loadRekapPerSiswa = loadRekapPerSiswa;
 window.exportRekapPerSiswaToExcel = exportRekapPerSiswaToExcel;
 window.exportRekapPerSiswaToPDF = exportRekapPerSiswaToPDF;
 window.cleanupRekapPerSiswa = cleanupRekapPerSiswa;
+window.getRekapStudentPhotoUrl = getRekapStudentPhotoUrl;
+window.refreshRekapPhotoCache = refreshRekapPhotoCache;
 
-console.log("✅ rekap-per-siswa.js V1.0 loaded");
+console.log("✅ rekap-per-siswa.js V1.1 loaded - Dengan foto siswa & log aktivitas");

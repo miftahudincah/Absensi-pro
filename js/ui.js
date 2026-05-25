@@ -1,9 +1,9 @@
-// ui.js - VERSION 5.18 (FIX: USER NAME & ROLE SYNC ISSUE)
+// ui.js - VERSION 5.19 (FIX: USER NAME & ROLE SYNC ISSUE + PHOTO SYNC)
 // Berisi fungsi-fungsi antarmuka pengguna, modal, profil, dan inisialisasi dashboard
-// PERUBAHAN V5.18: 
-//   - Memperbaiki updateUserInterface() untuk update navbar user (nama & role)
-//   - Menambahkan force update setelah login untuk memastikan data sinkron
-//   - Menambahkan validasi dan perbaikan data user saat login
+// PERUBAHAN V5.19: 
+//   - Menambahkan sinkronisasi foto ke tabel absensi dan siswa
+//   - Fungsi refreshAllAvatars memperbarui semua komponen yang membutuhkan foto
+//   - Menambahkan event listener untuk perubahan foto dari user auth
 // ============================================================================
 
 // ======================== GLOBAL UI STATE ========================
@@ -16,6 +16,9 @@ const MAX_POPULATE_RETRY = 20;
 let chatRenderRetryCount = 0;
 const MAX_CHAT_RENDER_RETRY = 10;
 let photoRefreshListenerAttached = false;
+
+// Cache untuk data user auth (untuk akses cepat)
+let userAuthCache = new Map();
 
 // ======================== HELPER FUNCTIONS ========================
 
@@ -86,6 +89,7 @@ function validateAndFixCurrentUser() {
 /**
  * REFRESH ALL AVATARS - Fungsi untuk memaksa refresh semua avatar
  * dengan timestamp untuk bypass cache browser
+ * Juga memperbarui tabel absensi dan siswa jika diperlukan
  */
 function refreshAllAvatars() {
     if (!currentUser) return;
@@ -138,10 +142,42 @@ function refreshAllAvatars() {
     if (headerUserImg && photoUrl) {
         headerUserImg.src = photoUrl;
     }
+    
+    // ========== PERBARUI TABEL LAINNYA ==========
+    // Refresh tabel siswa (jika ada kolom foto)
+    if (typeof renderStudentsTable === 'function') {
+        setTimeout(() => renderStudentsTable(), 100);
+    }
+    
+    // Refresh tabel absensi (jika ada kolom foto)
+    if (typeof renderTable === 'function') {
+        setTimeout(() => renderTable(), 150);
+    }
+    
+    // Refresh rekap per siswa jika aktif
+    if (typeof loadRekapPerSiswa === 'function' && document.getElementById('tab-rekap')?.classList.contains('active')) {
+        setTimeout(() => loadRekapPerSiswa(), 200);
+    }
+    
+    // Refresh friends list
+    if (typeof loadFriendsList === 'function') {
+        setTimeout(() => loadFriendsList(), 200);
+    }
+    
+    // Refresh chat list
+    if (typeof loadChatList === 'function') {
+        setTimeout(() => loadChatList(), 200);
+    }
+    
+    // Hapus cache user auth untuk foto
+    if (currentUser.uid) {
+        userAuthCache.delete(currentUser.uid);
+    }
 }
 
 /**
  * Setup realtime listener untuk perubahan foto profil
+ * Juga memperbarui tabel absensi dan siswa saat foto berubah
  */
 function setupPhotoRealtimeListener() {
     if (photoRefreshListenerAttached) return;
@@ -161,6 +197,66 @@ function setupPhotoRealtimeListener() {
             refreshAllAvatars();
         }
     });
+}
+
+/**
+ * Setup listener untuk perubahan foto user lain (untuk update tabel)
+ */
+function setupOtherUsersPhotoListener() {
+    if (!db) return;
+    
+    console.log("📡 Setting up photo listener for other users...");
+    
+    db.ref('users_auth').on('child_changed', (snapshot) => {
+        const userData = snapshot.val();
+        if (userData && userData.photoUrl && userData.fpId) {
+            console.log(`🖼️ Photo changed for student ID: ${userData.fpId}`);
+            
+            // Hapus cache
+            userAuthCache.delete(snapshot.key);
+            
+            // Refresh tabel yang membutuhkan foto siswa
+            if (typeof renderStudentsTable === 'function') {
+                renderStudentsTable();
+            }
+            if (typeof renderTable === 'function') {
+                setTimeout(() => renderTable(), 100);
+            }
+            if (typeof loadFriendsList === 'function') {
+                setTimeout(() => loadFriendsList(), 100);
+            }
+            if (typeof loadChatList === 'function') {
+                setTimeout(() => loadChatList(), 100);
+            }
+        }
+    });
+}
+
+/**
+ * Mendapatkan URL foto user dari cache atau Firebase
+ * @param {string} uid - User ID
+ * @param {string} defaultName - Nama untuk fallback avatar
+ * @returns {Promise<string>}
+ */
+async function getUserPhotoUrl(uid, defaultName = 'User') {
+    if (userAuthCache.has(uid)) {
+        return userAuthCache.get(uid);
+    }
+    
+    try {
+        const snapshot = await db.ref(`users_auth/${uid}/photoUrl`).once('value');
+        const photoUrl = snapshot.val();
+        if (photoUrl) {
+            userAuthCache.set(uid, photoUrl);
+            return photoUrl;
+        }
+    } catch (err) {
+        console.warn(`Failed to get photo for ${uid}:`, err);
+    }
+    
+    const defaultUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(defaultName.charAt(0) || 'U')}&background=00bcd4&color=fff&size=100`;
+    userAuthCache.set(uid, defaultUrl);
+    return defaultUrl;
 }
 
 // ======================== SIDEBAR FUNCTIONS ========================
@@ -288,6 +384,7 @@ function updateMobileNavTitle(tabId) {
         'students': '👨‍🎓 Data Siswa',
         'users': '👥 Manajemen User',
         'rekap': '📊 Rekap Absensi',
+        'rekap-per-siswa': '📊 Rekap Per Siswa',
         'friends': '👥 Teman',
         'chat': '💬 Chat',
         'logs': '📋 Log Aktivitas',
@@ -482,6 +579,7 @@ function initApp() {
     
     // Setup realtime listener untuk foto profil
     setupPhotoRealtimeListener();
+    setupOtherUsersPhotoListener();
     
     // ========== FORCE UPDATE SETELAH DELAY ==========
     setTimeout(() => {
@@ -641,6 +739,10 @@ if (typeof window !== 'undefined') {
         if (typeof initRekap === 'function' && !window._rekapInitialized) {
             window._rekapInitialized = true;
             initRekap();
+        }
+        if (typeof initRekapPerSiswa === 'function' && !window._rekapPerSiswaInitialized) {
+            window._rekapPerSiswaInitialized = true;
+            initRekapPerSiswa();
         }
         setTimeout(() => {
             if (typeof window.populateFilters === 'function') {
@@ -1273,6 +1375,8 @@ function switchTab(tabId) {
             renderUsersTable();
         } else if (tabId === 'rekap' && typeof loadRekap === 'function') {
             loadRekap();
+        } else if (tabId === 'rekap-per-siswa' && typeof loadRekapPerSiswa === 'function') {
+            loadRekapPerSiswa();
         } else if (tabId === 'friends') {
             if (typeof loadFriendRequests === 'function') loadFriendRequests();
             if (typeof loadFriendsList === 'function') loadFriendsList();
@@ -1707,6 +1811,9 @@ function handleUpdateProfileInfo() {
             if (typeof saveUserToLocalStorage === 'function') saveUserToLocalStorage(currentUser);
             showToast('✅ Profil berhasil diperbarui');
             
+            // Refresh cache
+            userAuthCache.delete(currentUser.uid);
+            
             if (typeof logActivity === 'function') {
                 let changes = [];
                 if (oldNama !== newNama) changes.push(`nama: ${oldNama} → ${newNama}`);
@@ -1724,12 +1831,14 @@ function handleUpdateProfileInfo() {
             if (currentUser.role === 'siswa' && currentUser.fpId) {
                 db.ref(`users/${currentUser.fpId}`).update({ nama: newNama, kelas: newKelas, jurusan: newJurusan });
             }
+            
+            // Refresh tabel yang menggunakan data siswa
+            if (typeof renderStudentsTable === 'function') renderStudentsTable();
+            if (typeof renderTable === 'function') setTimeout(() => renderTable(), 100);
+            
             closeModal('modal-profile');
             if (typeof window.populateFilters === 'function') {
                 try { window.populateFilters(); } catch(e) {}
-            }
-            if (typeof renderStudentsTable === 'function') {
-                try { renderStudentsTable(); } catch(e) {}
             }
             if (typeof renderUsersTable === 'function') {
                 try { renderUsersTable(); } catch(e) {}
@@ -1814,6 +1923,9 @@ async function uploadProfilePhoto(input) {
             saveUserToLocalStorage(currentUser);
         }
         
+        // Clear cache
+        userAuthCache.delete(currentUser.uid);
+        
         // ========== PERBAIKAN: Refresh semua avatar dengan force ==========
         refreshAllAvatars();
         
@@ -1826,6 +1938,20 @@ async function uploadProfilePhoto(input) {
         // LOG: Upload foto profil
         if (typeof logActivity === 'function') {
             logActivity('upload_profile_photo', `Upload foto profil${result.isFallback ? ' (fallback ImgBB)' : ' (Supabase)'}`);
+        }
+        
+        // Refresh semua tabel yang menggunakan foto
+        if (typeof renderStudentsTable === 'function') {
+            renderStudentsTable();
+        }
+        if (typeof renderTable === 'function') {
+            setTimeout(() => renderTable(), 100);
+        }
+        if (typeof loadFriendsList === 'function') {
+            setTimeout(() => loadFriendsList(), 100);
+        }
+        if (typeof loadChatList === 'function') {
+            setTimeout(() => loadChatList(), 100);
         }
         
         // Optional: Tampilkan info jika menggunakan fallback
@@ -2045,6 +2171,10 @@ function cleanupUI() {
         db.ref(`users_auth/${currentUser.uid}/photoUrl`).off('value');
         photoRefreshListenerAttached = false;
     }
+    // Bersihkan listener user auth
+    db.ref('users_auth').off('child_changed');
+    // Clear cache
+    userAuthCache.clear();
     console.log("🧹 UI cleanup completed");
 }
 
@@ -2082,6 +2212,7 @@ window.ensureChatRendered = ensureChatRendered;
 window.refreshAllAvatars = refreshAllAvatars;
 window.setupPhotoRealtimeListener = setupPhotoRealtimeListener;
 window.validateAndFixCurrentUser = validateAndFixCurrentUser;
+window.getUserPhotoUrl = getUserPhotoUrl;
 
 // ======================== SIDEBAR EXPORTS ========================
 window.toggleSidebar = toggleSidebar;
@@ -2094,4 +2225,4 @@ window.applySidebarRolePermissions = applySidebarRolePermissions;
 // Debug function
 window.debugAttendanceData = debugAttendanceData;
 
-console.log("✅ ui.js V5.18 loaded - User name & role sync fixed!");
+console.log("✅ ui.js V5.19 loaded - User name & role sync + photo sync to attendance table!");

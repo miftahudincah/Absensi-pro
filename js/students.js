@@ -1,10 +1,12 @@
-// students.js - VERSION 3.7 (DENGAN LOG AKTIVITAS)
+// students.js - VERSION 3.8 (DENGAN LOG AKTIVITAS & SINKRONISASI FOTO)
 // ======================= MANAJEMEN DATA SISWA =======================
 // Fitur: CRUD siswa, sinkronisasi dengan ESP32, delay per siswa,
 //        dukungan kelas & jurusan dinamis dari pengaturan sekolah,
 //        real-time update, import/export CSV.
-// PERUBAHAN V3.7: 
-//   - Menambahkan logActivity untuk operasi save, delete, import
+// PERUBAHAN V3.8: 
+//   - Menambahkan sinkronisasi foto siswa ke tabel absensi
+//   - Fungsi refresh foto setelah update data siswa
+//   - Perbaikan render tabel dengan foto
 // ====================================================================
 
 let studentFormResetTimer = null;
@@ -14,6 +16,83 @@ let studentFiltersRetryCount = 0;
 let formDropdownRetryCount = 0;
 const MAX_STUDENT_FILTERS_RETRY = 10;
 const MAX_FORM_DROPDOWN_RETRY = 10;
+
+// Cache untuk data siswa (untuk akses cepat)
+let studentDataCache = new Map();
+
+// ======================= FUNGSI FOTO SISWA ========================
+
+/**
+ * Mendapatkan URL foto siswa berdasarkan ID
+ * @param {string|number} studentId - ID siswa
+ * @param {string} studentName - Nama siswa (fallback)
+ * @returns {string} URL foto atau avatar
+ */
+function getStudentPhotoUrl(studentId, studentName) {
+    if (!studentId) return `https://ui-avatars.com/api/?name=${encodeURIComponent(studentName?.charAt(0) || 'U')}&background=00bcd4&color=fff&size=100&bold=true`;
+    
+    // Cari user auth yang memiliki fpId = studentId
+    const userAuth = dbData?.users_auth?.find(u => u.fpId == studentId);
+    
+    if (userAuth && userAuth.photoUrl) {
+        return userAuth.photoUrl;
+    }
+    
+    // Fallback: avatar inisial nama
+    const initial = studentName ? studentName.charAt(0).toUpperCase() : 'U';
+    return `https://ui-avatars.com/api/?name=${encodeURIComponent(initial)}&background=00bcd4&color=fff&size=100&bold=true`;
+}
+
+/**
+ * Refresh foto di tabel siswa dan absensi
+ */
+function refreshStudentPhotos() {
+    console.log("🖼️ Refreshing student photos...");
+    
+    // Refresh cache
+    studentDataCache.clear();
+    
+    // Refresh tabel siswa
+    if (typeof renderStudentsTable === 'function') {
+        renderStudentsTable();
+    }
+    
+    // Refresh tabel absensi jika fungsi tersedia
+    if (typeof renderTable === 'function') {
+        setTimeout(() => renderTable(), 100);
+    }
+    
+    // Refresh rekap per siswa jika aktif
+    if (typeof loadRekapPerSiswa === 'function' && document.getElementById('tab-rekap')?.classList.contains('active')) {
+        setTimeout(() => loadRekapPerSiswa(), 200);
+    }
+}
+
+/**
+ * Sinkronkan foto siswa dari user auth ke tampilan
+ * Dipanggil saat ada perubahan foto profil
+ */
+function syncStudentPhotoFromAuth(userId, newPhotoUrl) {
+    if (!userId || !newPhotoUrl) return;
+    
+    // Cari user auth berdasarkan uid
+    const userAuth = dbData?.users_auth?.find(u => u.uid === userId);
+    if (!userAuth || !userAuth.fpId) return;
+    
+    const studentId = userAuth.fpId;
+    console.log(`📸 Syncing photo for student ID: ${studentId}`);
+    
+    // Clear cache untuk siswa ini
+    studentDataCache.delete(studentId);
+    
+    // Refresh tabel
+    if (typeof renderStudentsTable === 'function') {
+        renderStudentsTable();
+    }
+    if (typeof renderTable === 'function') {
+        setTimeout(() => renderTable(), 100);
+    }
+}
 
 // ======================= EVENT LISTENER DATA READY ========================
 function setupStudentsDataReadyListener() {
@@ -39,7 +118,23 @@ function setupStudentsDataReadyListener() {
             console.log("📊 students.js: Tab siswa tidak aktif, skip render sementara");
         }
         updateStudentStatistics();
+        
+        // Preload student photos untuk cache
+        setTimeout(() => preloadStudentPhotos(), 500);
     });
+}
+
+/**
+ * Preload semua foto siswa untuk performa lebih baik
+ */
+function preloadStudentPhotos() {
+    if (!dbData?.users) return;
+    
+    console.log(`📸 Preloading photos for ${dbData.users.length} students...`);
+    for (const student of dbData.users) {
+        getStudentPhotoUrl(student.id, student.nama);
+    }
+    console.log("✅ Student photos preloaded");
 }
 
 // Monitor tab aktif
@@ -298,7 +393,7 @@ function formatDelayDisplay(delayMinutes) {
     return `${menit} menit`;
 }
 
-// ======================= RENDER TABEL SISWA (DIPERBAIKI) =======================
+// ======================= RENDER TABEL SISWA (DENGAN FOTO) =======================
 
 function renderStudentsTable(retryCount = 0) {
     const MAX_RETRY = 5;
@@ -321,7 +416,7 @@ function renderStudentsTable(retryCount = 0) {
             let table = tableContainer.querySelector('table');
             if (!table) {
                 table = document.createElement('table');
-                table.innerHTML = '<thead><tr><th>ID FP</th><th>Nama</th><th>Kelas</th><th>Jurusan</th><th>Delay</th><th>Aksi</th></tr></thead>';
+                table.innerHTML = '<thead><tr><th>Foto</th><th>ID FP</th><th>Nama</th><th>Kelas</th><th>Jurusan</th><th>Delay</th><th>Aksi</th></tr></thead>';
                 tableContainer.appendChild(table);
                 console.log("students.js: Created table dynamically");
             }
@@ -346,13 +441,13 @@ function renderStudentsTable(retryCount = 0) {
     // CEK DATA
     if (typeof dbData === 'undefined' || !dbData.users) {
         console.log("⏳ students.js: dbData.users not ready yet");
-        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:30px;">⏳ Memuat data siswa...</div></div></div></tr></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:30px;">⏳ Memuat data siswa...</td><\/tr>`;
         return;
     }
     
     if (dbData.users.length === 0) {
         console.log("📭 students.js: Tidak ada data siswa");
-        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:30px;">📭 Belum ada data siswa. Silakan tambah siswa melalui form di atas.</div></div></div></td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:30px;">📭 Belum ada data siswa. Silakan tambah siswa melalui form di atas.<\/td><\/tr>`;
         updateStudentStatistics();
         return;
     }
@@ -362,7 +457,6 @@ function renderStudentsTable(retryCount = 0) {
     const kelas = document.getElementById('filterStudentKelas')?.value || 'all';
     const jurusan = document.getElementById('filterStudentJurusan')?.value || 'all';
 
-    // 🔥 PERBAIKAN: Definisikan variabel data
     let data = dbData.users.filter(u => u.nama && u.nama.toLowerCase().includes(search));
     if (kelas !== 'all') data = data.filter(u => u.kelas === kelas);
     if (jurusan !== 'all') data = data.filter(u => u.jurusan === jurusan);
@@ -371,28 +465,38 @@ function renderStudentsTable(retryCount = 0) {
     tbody.innerHTML = '';
     
     if (data.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:30px;">📭 Data siswa tidak ditemukan.${search ? '<br><small>Coba kata kunci lain</small>' : ''}</div></div></div></td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:30px;">📭 Data siswa tidak ditemukan.${search ? '<br><small>Coba kata kunci lain</small>' : ''}<\/td><\/tr>`;
         updateStudentStatistics();
         return;
     }
 
-    // RENDER SISWA
-    data.forEach(s => {
+    // RENDER SISWA DENGAN FOTO
+    for (const s of data) {
         const isNew = s.createdAt && (Date.now() - s.createdAt < 300000);
+        const studentPhoto = getStudentPhotoUrl(s.id, s.nama);
+        const studentInitial = s.nama ? s.nama.charAt(0).toUpperCase() : 'U';
+        
         tbody.innerHTML += `
             <tr data-id="${s.id}">
-                <td><strong>${s.id}</strong>${isNew ? '<br><span class="badge-new-student">NEW</span>' : ''}</div>
-                <td>${escapeHtmlStudents(s.nama)}</div>
-                <td>${s.kelas || '-'}</div>
-                <td>${s.jurusan || '-'}</div>
-                <td><span class="delay-badge">⏱️ ${formatDelayDisplay(s.delayOut)}</span></div>
+                <td style="text-align:center; vertical-align: middle;">
+                    <img src="${studentPhoto}" 
+                         alt="${escapeHtmlStudents(s.nama)}" 
+                         class="student-table-avatar"
+                         style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; border: 2px solid var(--primary); background: var(--bg-card);"
+                         onerror="this.src='https://ui-avatars.com/api/?name=${studentInitial}&background=00bcd4&color=fff&size=100&bold=true'">
+                 <\/td>
+                <td><strong>${s.id}</strong>${isNew ? '<br><span class="badge-new-student">NEW</span>' : ''}<\/td>
+                <td>${escapeHtmlStudents(s.nama)}<\/td>
+                <td>${s.kelas || '-'}<\/td>
+                <td>${s.jurusan || '-'}<\/td>
+                <td><span class="delay-badge">⏱️ ${formatDelayDisplay(s.delayOut)}</span><\/td>
                 <td>
-                    <button class="btn-icon edit" onclick="editStudent('${s.id}')" title="Edit Siswa">✏️</button>
-                    <button class="btn-icon delete" onclick="deleteStudentWithFP('${s.id}')" title="Hapus Siswa">🗑️</button>
-                  </div>
-              </tr>
+                    <button class="btn-icon edit" onclick="editStudent('${s.id}')" title="Edit Siswa">✏️<\/button>
+                    <button class="btn-icon delete" onclick="deleteStudentWithFP('${s.id}')" title="Hapus Siswa">🗑️<\/button>
+                  <\/td>
+            <\/tr>
         `;
-    });
+    }
     
     updateStudentStatistics();
     console.log(`✅ renderStudentsTable selesai, menampilkan ${data.length} siswa`);
@@ -424,7 +528,7 @@ function updateStudentStatistics() {
     const topJurusan = Object.entries(jurusanCount).sort((a,b) => b[1]-a[1])[0];
 
     statsContainer.innerHTML = `
-        <div style="display:flex;gap:20px;flex-wrap:wrap;padding:10px;background:#1e1e1e;border-radius:8px;margin-bottom:15px;">
+        <div style="display:flex;gap:20px;flex-wrap:wrap;padding:10px;background:var(--bg-hover);border-radius:8px;margin-bottom:15px;">
             <div><span style="color:#4a90e2;">👥 Total Siswa:</span> <strong>${total}</strong></div>
             <div><span style="color:#4a90e2;">📚 Kelas Terbanyak:</span> <strong>${topKelas ? `${topKelas[0]} (${topKelas[1]})` : '-'}</strong></div>
             <div><span style="color:#4a90e2;">🎓 Jurusan Terbanyak:</span> <strong>${topJurusan ? `${topJurusan[0]} (${topJurusan[1]})` : '-'}</strong></div>
@@ -475,6 +579,9 @@ function saveStudent() {
         .then(() => {
             showToast(mode === 'add' ? "✅ Siswa ditambahkan" : "✅ Siswa diupdate");
             
+            // Clear cache untuk siswa ini
+            studentDataCache.delete(idStr);
+            
             // LOG: Simpan siswa
             if (typeof logActivity === 'function') {
                 const action = mode === 'add' ? 'add_student' : 'edit_student';
@@ -494,6 +601,9 @@ function saveStudent() {
                     if (typeof updateUserInterface === 'function') updateUserInterface();
                 }
             }
+            
+            // Refresh tampilan yang membutuhkan data siswa
+            refreshStudentPhotos();
         })
         .catch(err => showToast("❌ Gagal: " + err.message, "error"))
         .finally(() => {
@@ -572,12 +682,21 @@ async function deleteStudentWithFP(studentId) {
     await db.ref(`users/${studentId}`).remove();
     showToast(`✅ Siswa "${name}" dihapus`, "success");
     
+    // Clear cache
+    studentDataCache.delete(studentId);
+    
     // LOG: Hapus siswa
     if (typeof logActivity === 'function') {
         logActivity('delete_student', `Menghapus siswa: ${name} (ID: ${studentId})${registeredUser ? ' beserta akunnya' : ''}`);
     }
     
     if (typeof renderStudentsTable === 'function') renderStudentsTable();
+    
+    // Refresh tampilan absensi
+    if (typeof renderTable === 'function') {
+        setTimeout(() => renderTable(), 100);
+    }
+    
     btns.forEach(btn => { btn.disabled = false; btn.innerHTML = '🗑️'; });
 }
 
@@ -610,13 +729,20 @@ function importStudentsFromCSV(csvText) {
         } else fail++;
     }
     
+    // Clear cache setelah import
+    studentDataCache.clear();
+    
     // LOG: Import siswa
     if (typeof logActivity === 'function' && success > 0) {
         const summary = `${success} berhasil, ${fail} gagal. Contoh: ${importedNames.slice(0, 3).join(', ')}${importedNames.length > 3 ? '...' : ''}`;
         logActivity('import_students', summary);
     }
     
-    setTimeout(() => showToast(`✅ Import: ${success} berhasil, ${fail} gagal`, fail ? "warning" : "success"), 1000);
+    setTimeout(() => {
+        showToast(`✅ Import: ${success} berhasil, ${fail} gagal`, fail ? "warning" : "success");
+        if (typeof renderStudentsTable === 'function') renderStudentsTable();
+        if (typeof renderTable === 'function') renderTable();
+    }, 1000);
 }
 
 function exportStudentsToCSV() {
@@ -653,6 +779,7 @@ function cleanupStudentsSystem() {
     studentsTabActive = false;
     studentFiltersRetryCount = 0;
     formDropdownRetryCount = 0;
+    studentDataCache.clear();
     console.log("🧹 Students system cleaned up");
 }
 
@@ -703,6 +830,23 @@ function initialPopulateFormDropdowns() {
 setTimeout(initialPopulateStudentFilters, 500);
 setTimeout(initialPopulateFormDropdowns, 500);
 
+// Setup listener untuk perubahan foto dari user auth
+if (typeof db !== 'undefined' && db) {
+    db.ref('users_auth').on('child_changed', (snapshot) => {
+        const userData = snapshot.val();
+        if (userData && userData.photoUrl && userData.fpId) {
+            console.log(`📸 Photo changed for student ID: ${userData.fpId}`);
+            studentDataCache.delete(userData.fpId);
+            if (typeof renderStudentsTable === 'function') {
+                renderStudentsTable();
+            }
+            if (typeof renderTable === 'function') {
+                setTimeout(() => renderTable(), 100);
+            }
+        }
+    });
+}
+
 // Jika data sudah ada
 if (typeof window !== 'undefined' && window.dbData && window.dbData.users) {
     console.log("📊 students.js: Data already available");
@@ -713,6 +857,7 @@ if (typeof window !== 'undefined' && window.dbData && window.dbData.users) {
         populateKelasOptions();
         populateJurusanOptions();
         populateStudentFilters();
+        preloadStudentPhotos();
     }, 100);
 }
 
@@ -747,5 +892,9 @@ window.importStudentsFromCSV = importStudentsFromCSV;
 window.exportStudentsToCSV = exportStudentsToCSV;
 window.cleanupStudentsSystem = cleanupStudentsSystem;
 window.initDelayEventListeners = initDelayEventListeners;
+window.getStudentPhotoUrl = getStudentPhotoUrl;
+window.refreshStudentPhotos = refreshStudentPhotos;
+window.syncStudentPhotoFromAuth = syncStudentPhotoFromAuth;
+window.preloadStudentPhotos = preloadStudentPhotos;
 
-console.log("✅ students.js V3.7 loaded - Dengan log aktivitas untuk CRUD siswa");
+console.log("✅ students.js V3.8 loaded - Dengan log aktivitas, foto siswa, dan sinkronisasi");
