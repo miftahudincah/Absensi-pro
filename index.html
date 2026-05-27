@@ -136,7 +136,178 @@
             margin-top: 0 !important;
         }
         
-        /* Responsive */
+        /* ======================== STYLE UNTUK AVATAR SISWA ======================== */
+        .student-avatar,
+        .attendance-student-avatar,
+        .rekap-student-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            object-fit: cover;
+            transition: transform 0.2s, box-shadow 0.2s;
+            cursor: pointer;
+            border: 2px solid transparent;
+        }
+
+        .student-avatar:hover,
+        .attendance-student-avatar:hover,
+        .rekap-student-avatar:hover {
+            transform: scale(1.1);
+            box-shadow: 0 2px 12px rgba(0, 188, 212, 0.4);
+            border-color: #00bcd4;
+        }
+
+        /* Badge status akun siswa */
+        .badge-account {
+            background: #4caf50;
+            color: white;
+            font-size: 9px;
+            padding: 2px 6px;
+            border-radius: 20px;
+            margin-left: 6px;
+            display: inline-block;
+            vertical-align: middle;
+        }
+
+        .badge-no-account {
+            background: #888;
+            color: white;
+            font-size: 9px;
+            padding: 2px 6px;
+            border-radius: 20px;
+            margin-left: 6px;
+            display: inline-block;
+            vertical-align: middle;
+        }
+
+        /* Badge NEW untuk siswa baru */
+        .badge-new-student {
+            background: #ff9800;
+            color: white;
+            font-size: 9px;
+            padding: 2px 6px;
+            border-radius: 20px;
+            margin-left: 6px;
+            display: inline-block;
+            vertical-align: middle;
+        }
+
+        /* Skeleton loading untuk avatar */
+        .avatar-skeleton {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: linear-gradient(90deg, #2c2c3a 25%, #3a3a4a 50%, #2c2c3a 75%);
+            background-size: 200% 100%;
+            animation: skeleton-loading 1.5s infinite;
+        }
+
+        @keyframes skeleton-loading {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+
+        /* ======================== REKAP PER SISWA STYLES ======================== */
+        .rekap-per-siswa-container {
+            margin-top: 30px;
+            padding: 20px;
+            background: var(--bg-card);
+            border-radius: 20px;
+            border: 1px solid var(--border-color);
+        }
+
+        .rekap-per-siswa-header {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            margin-bottom: 25px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--border);
+            flex-wrap: wrap;
+        }
+
+        .rekap-per-siswa-header .rekap-student-avatar {
+            width: 80px;
+            height: 80px;
+            border: 3px solid #00bcd4;
+        }
+
+        .rekap-stat-card {
+            text-align: center;
+            padding: 10px 18px;
+            border-radius: 12px;
+            min-width: 70px;
+        }
+
+        .rekap-stat-card .stat-number {
+            font-size: 28px;
+            font-weight: bold;
+        }
+
+        .rekap-stat-card .stat-label {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .rekap-grade-badge {
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-weight: bold;
+        }
+
+        .rekap-footer {
+            margin-top: 15px;
+            padding-top: 10px;
+            text-align: center;
+            font-size: 11px;
+            color: var(--text-muted);
+            border-top: 1px solid var(--border);
+        }
+
+        /* Select untuk rekap per siswa */
+        .rekap-per-siswa-select-wrapper {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: 15px;
+        }
+
+        .rekap-per-siswa-select-wrapper select {
+            flex: 2;
+            min-width: 250px;
+            padding: 10px 14px;
+            border-radius: 30px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+        }
+
+        .rekap-per-siswa-select-wrapper button {
+            padding: 10px 20px;
+        }
+
+        /* Periode wrapper untuk rekap per siswa */
+        .rekap-per-siswa-period-wrapper {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: var(--bg-hover);
+            border-radius: 16px;
+        }
+
+        .rekap-per-siswa-period-wrapper select,
+        .rekap-per-siswa-period-wrapper input {
+            transition: all 0.2s ease;
+        }
+
+        .rekap-per-siswa-period-wrapper select:focus,
+        .rekap-per-siswa-period-wrapper input:focus {
+            outline: none;
+            border-color: #00bcd4;
+            box-shadow: 0 0 0 2px rgba(0, 188, 212, 0.2);
+        }
+
+        /* Responsive untuk avatar dan rekap */
         @media (max-width: 768px) {
             .dropdown-navbar {
                 flex-direction: column;
@@ -155,6 +326,50 @@
                 left: 10px;
                 right: 10px;
                 width: auto;
+            }
+            
+            .student-avatar,
+            .attendance-student-avatar {
+                width: 32px;
+                height: 32px;
+            }
+            
+            .rekap-per-siswa-header {
+                flex-direction: column;
+                text-align: center;
+            }
+            
+            .rekap-per-siswa-header .rekap-student-avatar {
+                width: 60px;
+                height: 60px;
+            }
+            
+            .rekap-per-siswa-select-wrapper {
+                flex-direction: column;
+            }
+            
+            .rekap-per-siswa-select-wrapper select {
+                width: 100%;
+            }
+
+            .rekap-per-siswa-period-wrapper div {
+                flex-direction: column;
+                align-items: stretch !important;
+            }
+            
+            .rekap-per-siswa-period-wrapper select,
+            .rekap-per-siswa-period-wrapper input,
+            .rekap-per-siswa-period-wrapper button {
+                width: 100%;
+            }
+            
+            #rekapPerSiswaCustomRange {
+                flex-direction: column;
+                width: 100%;
+            }
+            
+            #rekapPerSiswaCustomRange input {
+                width: 100%;
             }
         }
         
@@ -218,94 +433,19 @@
             background: #f1f5f9;
         }
 
-        /* Styling untuk Rekap Per Siswa */
-        .rekap-per-siswa-section {
-            background: var(--bg-card);
-            border-radius: 20px;
-            padding: 20px;
-            margin-top: 20px;
-            border: 1px solid var(--border);
+        /* Light mode untuk avatar */
+        body.light-mode .student-avatar,
+        body.light-mode .attendance-student-avatar,
+        body.light-mode .rekap-student-avatar {
+            border-color: #e2e8f0;
         }
-        
-        .rekap-per-siswa-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 15px;
-            margin-bottom: 20px;
-            padding-bottom: 15px;
-            border-bottom: 1px solid var(--border);
+
+        body.light-mode .avatar-skeleton {
+            background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%);
         }
-        
-        .rekap-per-siswa-header h3 {
-            margin: 0;
-            color: var(--primary);
-        }
-        
-        .rekap-per-siswa-controls {
-            display: flex;
-            gap: 15px;
-            flex-wrap: wrap;
-            align-items: center;
-        }
-        
-        .rekap-per-siswa-select {
-            padding: 10px 15px;
-            border-radius: 30px;
-            border: 1px solid var(--border);
-            background: var(--bg-card);
-            color: var(--text-primary);
-            min-width: 250px;
-        }
-        
-        .btn-rekap-per-siswa {
-            background: linear-gradient(135deg, #9c27b0, #6a1b9a);
-            color: white;
-        }
-        
-        .btn-rekap-per-siswa:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(156, 39, 176, 0.3);
-        }
-        
-        #rekapPerSiswaContainer {
-            margin-top: 20px;
-        }
-        
-        .rekap-per-siswa-loading {
-            text-align: center;
-            padding: 40px;
-            color: var(--text-muted);
-        }
-        
-        .rekap-student-avatar {
-            width: 80px;
-            height: 80px;
-            border-radius: 50%;
-            object-fit: cover;
-            border: 3px solid #00bcd4;
-            background: var(--bg-card);
-            transition: transform 0.2s ease;
-        }
-        
-        .rekap-student-avatar:hover {
-            transform: scale(1.05);
-        }
-        
-        .rekap-stat-card {
-            transition: transform 0.2s ease;
-        }
-        
-        .rekap-stat-card:hover {
-            transform: translateY(-3px);
-        }
-        
-        .rekap-grade-badge {
-            display: inline-block;
-            padding: 6px 14px;
-            border-radius: 20px;
-            font-weight: bold;
+
+        body.light-mode .rekap-per-siswa-container {
+            background: #ffffff;
         }
     </style>
 </head>
@@ -390,7 +530,6 @@
                         <button onclick="switchTab('attendance'); closeAllDropdowns()">📋 Absensi</button>
                         <button onclick="switchTab('students'); closeAllDropdowns()">👨‍🎓 Data Siswa</button>
                         <button onclick="switchTab('rekap'); closeAllDropdowns()">📊 Rekap Absensi</button>
-                        <button onclick="switchTab('rekap-per-siswa'); closeAllDropdowns()">👤 Rekap Per Siswa</button>
                         <button onclick="switchTab('guide'); closeAllDropdowns()">📘 Panduan</button>
                     </div>
                 </div>
@@ -401,7 +540,7 @@
                     <div class="dropdown-content" id="dropdownSocialContent">
                         <button onclick="switchTab('friends'); closeAllDropdowns()">👥 Teman</button>
                         <button onclick="switchTab('chat'); closeAllDropdowns()">💬 Chat</button>
-                        <button id="btnCreateStatusDropdown" class="status-menu-btn" onclick="openCreateStatusModal(); closeAllDropdowns()">📸 Buat Status</button>
+                        <button onclick="openCreateStatusModal(); closeAllDropdowns()">📸 Buat Status</button>
                     </div>
                 </div>
                 
@@ -468,7 +607,7 @@
             <div class="status-header">
                 <h4>📸 Status Update</h4>
                 <small class="text-small">Status akan hilang setelah 24 jam</small>
-                <button id="btnCreateStatus" class="btn-action btn-primary" style="margin-left: auto; padding: 6px 14px; font-size: 0.75rem;">➕ Buat Status</button>
+                <button class="btn-action btn-primary" onclick="openCreateStatusModal()" style="margin-left: auto; padding: 6px 14px; font-size: 0.75rem;">➕ Buat Status</button>
             </div>
             <div id="statusBar" class="status-bar-scroll"></div>
         </div>
@@ -515,7 +654,7 @@
             </div>
         </div>
 
-        <!-- TAB ATTENDANCE -->
+        <!-- TAB ATTENDANCE - UPDATE HEADER TABEL DENGAN KOLOM FOTO -->
         <div id="tab-attendance" class="tab-content">
             <div class="controls-bar">
                 <div class="filter-group"><label>Kelas:</label><select id="filterKelas" onchange="renderTable()"><option value="all">Semua</option></select></div>
@@ -540,22 +679,22 @@
                 <table>
                     <thead>
                         <tr>
-                            <th>Siswa</th>
+                            <th>Foto</th>
+                            <th>Waktu</th>
                             <th>ID FP</th>
+                            <th>Nama</th>
                             <th>Kelas</th>
                             <th>Jurusan</th>
                             <th>Status</th>
                             <th>Aksi</th>
                         </tr>
                     </thead>
-                    <tbody id="tbody-attendance">
-                        <tr><td colspan="6">Memuat data...<\/td><\/tr>
-                    </tbody>
+                    <tbody id="tbody-attendance"><tr><td colspan="8">Memuat data...</td></tr></tbody>
                 </table>
             </div>
         </div>
 
-        <!-- TAB STUDENTS -->
+        <!-- TAB STUDENTS - UPDATE HEADER TABEL DENGAN KOLOM FOTO -->
         <div id="tab-students" class="tab-content">
             <div class="controls-bar"><div style="display: flex; gap:10px; flex-wrap:wrap; width:100%;">
                 <input type="hidden" id="editMode" value="add">
@@ -576,7 +715,7 @@
                 <div class="search-box"><input type="text" id="searchStudentName" placeholder="🔍 Cari nama siswa..." oninput="renderStudentsTable()"></div>
             </div>
             <div class="table-container">
-                <table>
+                <tr>
                     <thead>
                         <tr>
                             <th>Foto</th>
@@ -588,14 +727,11 @@
                             <th>Aksi</th>
                         </tr>
                     </thead>
-                    <tbody id="tbody-students">
-                        <tr><td colspan="7">Memuat data...<\/td><\/tr>
-                    </tbody>
+                    <tbody id="tbody-students"><tr><td colspan="7">Memuat data...</td></tr></tbody>
                 </table>
             </div>
         </div>
 
-        <!-- TAB USERS -->
         <div id="tab-users" class="tab-content role-admin role-guru">
             <div class="controls-bar"><h4>🔑 Generate Kode Pendaftaran</h4></div>
             <div class="key-box role-admin role-guru">
@@ -612,38 +748,21 @@
             <div id="generatedKeyDisplay" style="display:none;"></div>
             <h4 class="role-admin role-guru">📋 Daftar Kode Aktif</h4>
             <div class="table-container role-admin role-guru">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Kode</th>
-                            <th>Status</th>
-                            <th>Dibuat</th>
-                            <th>Pengguna</th>
-                            <th>Aksi</th>
-                        </tr>
-                    </thead>
+                <tr>
+                    <thead><tr><th>Kode</th><th>Status</th><th>Dibuat</th><th>Pengguna</th><th>Aksi</th></tr></thead>
                     <tbody id="tbody-codes"></tbody>
                 </table>
             </div>
             <div class="controls-bar role-admin role-guru"><h4>👥 Daftar Pengguna</h4><div class="search-box"><input type="text" id="searchUser" placeholder="🔍 Cari user..." oninput="renderUsersTable()"></div></div>
             <div class="table-container role-admin role-guru">
                 <table>
-                    <thead>
-                        <tr>
-                            <th>Foto</th>
-                            <th>Nama</th>
-                            <th>Email</th>
-                            <th>Role</th>
-                            <th>Detail</th>
-                            <th>Aksi</th>
-                        </tr>
-                    </thead>
+                    <thead><tr><th>Foto</th><th>Nama</th><th>Email</th><th>Role</th><th>Detail</th><th>Aksi</th></tr></thead>
                     <tbody id="tbody-users"></tbody>
                 </table>
             </div>
         </div>
 
-        <!-- TAB REKAP -->
+        <!-- TAB REKAP - DENGAN FITUR REKAP PER SISWA -->
         <div id="tab-rekap" class="tab-content">
             <div class="controls-bar">
                 <div class="filter-group"><label>📅 Periode:</label><select id="rekapPeriod" onchange="loadRekap()"><option value="minggu">Minggu Ini</option><option value="bulan">Bulan Ini</option><option value="semester">Semester Ini</option><option value="custom">Custom Range</option></select></div>
@@ -660,64 +779,65 @@
                 <table>
                     <thead>
                         <tr>
-                            <th>No</th>
-                            <th>ID FP</th>
-                            <th>Nama</th>
-                            <th>Kelas</th>
-                            <th>Jurusan</th>
-                            <th>Total Hari</th>
-                            <th>Hadir</th>
-                            <th>Sakit</th>
-                            <th>Izin</th>
-                            <th>Alpha</th>
-                            <th>Persentase</th>
-                            <th>Status</th>
+                            <th>No</th><th>ID FP</th><th>Nama</th><th>Kelas</th><th>Jurusan</th>
+                            <th>Total Hari</th><th>Hadir</th><th>Sakit</th><th>Izin</th><th>Alpha</th>
+                            <th>Persentase</th><th>Status</th>
                         </tr>
                     </thead>
-                    <tbody id="rekapTbody"><tr><td colspan="12">Memuat data...<\/td><\/tr><\/tbody>
+                    <tbody id="rekapTbody"><tr><td colspan="12">Memuat data...</td></tr></tbody>
                 </table>
             </div>
-        </div>
 
-        <!-- TAB REKAP PER SISWA (BARU) -->
-        <div id="tab-rekap-per-siswa" class="tab-content">
-            <div class="rekap-per-siswa-section">
-                <div class="rekap-per-siswa-header">
-                    <h3>👤 Rekap Absensi Per Siswa</h3>
-                    <div class="rekap-per-siswa-controls">
-                        <select id="rekapPerSiswaSelect" class="rekap-per-siswa-select" onchange="loadRekapPerSiswa()">
-                            <option value="">-- Pilih Siswa --</option>
+            <!-- ======================= REKAP PER SISWA SECTION ======================= -->
+            <div class="rekap-per-siswa-container" id="rekapPerSiswaContainer" style="margin-top: 30px; display: none;">
+                <div class="section-title" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 20px;">
+                    <span>📋 Detail Rekap Per Siswa</span>
+                    <div style="display: flex; gap: 10px;">
+                        <button class="btn-action btn-success" onclick="exportRekapPerSiswaToExcel()">📥 Export Excel</button>
+                        <button class="btn-action btn-primary" onclick="exportRekapPerSiswaToPDF()">📄 Export PDF</button>
+                    </div>
+                </div>
+                
+                <!-- Pilihan Siswa -->
+                <div class="rekap-per-siswa-select-wrapper">
+                    <select id="rekapPerSiswaSelect">
+                        <option value="">-- Pilih Siswa --</option>
+                    </select>
+                </div>
+                
+                <!-- Pilihan Periode -->
+                <div class="rekap-per-siswa-period-wrapper">
+                    <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                        <label style="font-weight: 500;">📅 Periode:</label>
+                        <select id="rekapPerSiswaPeriod">
+                            <option value="minggu">📆 Minggu Ini</option>
+                            <option value="bulan">📅 Bulan Ini</option>
+                            <option value="semester">📚 Semester Ini</option>
+                            <option value="tahun">🗓️ Tahun Ini</option>
+                            <option value="pertama">⭐ Pertama Kali Absensi</option>
+                            <option value="custom">📅 Custom Range</option>
                         </select>
-                        <div class="filter-group" style="margin-left: 10px;">
-                            <label>📅 Periode:</label>
-                            <select id="rekapPerSiswaPeriod" onchange="loadRekapPerSiswa()">
-                                <option value="minggu">Minggu Ini</option>
-                                <option value="bulan">Bulan Ini</option>
-                                <option value="semester">Semester Ini</option>
-                                <option value="custom">Custom Range</option>
-                            </select>
-                        </div>
-                        <div id="rekapPerSiswaCustomRange" style="display: none; gap: 10px; align-items: center;">
+                        <div id="rekapPerSiswaCustomRange" style="display: none; gap: 10px; align-items: center; flex-wrap: wrap;">
                             <input type="date" id="rekapPerSiswaStartDate">
                             <span>s/d</span>
                             <input type="date" id="rekapPerSiswaEndDate">
-                            <button class="btn-action btn-primary" onclick="loadRekapPerSiswa()">📊 Tampilkan</button>
                         </div>
-                        <div style="display: flex; gap: 10px; margin-left: auto;">
-                            <button class="btn-action btn-success" onclick="exportRekapPerSiswaToExcel()">📥 Excel</button>
-                            <button class="btn-action btn-primary btn-rekap-per-siswa" onclick="exportRekapPerSiswaToPDF()">📄 PDF</button>
-                        </div>
+                        <button class="btn-action btn-primary" onclick="loadRekapPerSiswa()">🔍 Tampilkan Rekap</button>
                     </div>
                 </div>
-                <div id="rekapPerSiswaContainer" style="display: none;">
-                    <div id="rekapPerSiswaContent" class="rekap-per-siswa-loading">
-                        ⏳ Pilih siswa dan periode untuk menampilkan rekap...
+                
+                <!-- Label periode yang dipilih -->
+                <div id="rekapPerSiswaPeriodLabel" class="text-small" style="margin-bottom: 15px; color: var(--text-muted); text-align: center;"></div>
+                
+                <!-- Container hasil rekap -->
+                <div id="rekapPerSiswaContent">
+                    <div style="text-align:center; padding:40px; color: var(--text-muted);">
+                        👈 Pilih siswa, pilih periode, lalu klik "Tampilkan Rekap" untuk melihat detail absensi per siswa
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- TAB FRIENDS -->
         <div id="tab-friends" class="tab-content">
             <div class="friends-container">
                 <div class="friends-search-section"><h4>🔍 Cari Teman</h4><div class="search-box" style="display:flex; gap:10px;"><input type="email" id="searchFriendEmail" placeholder="Cari berdasarkan email..." style="flex:1;"><button class="btn-action btn-primary" onclick="searchUserByEmail()">Cari</button></div><div id="searchResult" style="margin-top:10px; display:none;"></div></div>
@@ -728,7 +848,6 @@
             </div>
         </div>
 
-        <!-- TAB CHAT -->
         <div id="tab-chat" class="tab-content">
             <div class="chat-header-info" style="margin-bottom:15px;">
                 <h3>💬 Pesan dengan Teman</h3>
@@ -739,7 +858,6 @@
             </div>
         </div>
 
-        <!-- TAB LOGS -->
         <div id="tab-logs" class="tab-content role-admin role-guru role-developer">
             <div class="controls-bar">
                 <div class="filter-group"><label>🔍 Filter Aksi:</label><select id="logActionFilter" onchange="renderLogsTable()"><option value="all">Semua Aksi</option></select></div>
@@ -749,13 +867,12 @@
             </div>
             <div class="table-container">
                 <table id="logsTable"><thead><tr><th>🕒 Waktu</th><th>👤 Pengguna</th><th>🎭 Role</th><th>📌 Aksi</th><th>📝 Detail</th><th>🌐 IP</th></tr></thead>
-                <tbody id="logsTbody"><tr><td colspan="6" style="text-align:center; padding:40px;">⏳ Memuat log aktivitas...<\/td><\/tr><\/tbody>
-                <\/table>
+                <tbody id="logsTbody"><tr><td colspan="6" style="text-align:center; padding:40px;">⏳ Memuat log aktivitas...</td></tr></tbody>
+                </table>
                 <div id="logsPagination" style="display: flex; justify-content: center; gap: 10px; margin-top: 20px;"></div>
             </div>
         </div>
 
-        <!-- TAB CONFIG -->
         <div id="tab-config" class="tab-content role-admin role-guru role-developer">
             <div class="guide-container">
                 <h3>⚙️ Pengaturan Sistem</h3>
@@ -791,7 +908,6 @@
             </div>
         </div>
 
-        <!-- TAB GUIDE -->
         <div id="tab-guide" class="tab-content">
             <div class="guide-container">
                 <h3>📘 Panduan Sistem Absensi Fingerprint</h3>
@@ -835,7 +951,7 @@
     <script src="js/main.js"></script>
     <script src="js/rekap.js"></script>
     <script src="js/rekap-per-siswa.js"></script>
-    <script src="js/management.js"></script>
+
     <script>
         // Fungsi untuk toggle dropdown (click to open/close)
         function toggleDropdown(dropdownId) {
@@ -872,23 +988,6 @@
         document.addEventListener('DOMContentLoaded', function() {
             console.log("DOM Ready - Initializing with Click-to-Open Dropdown Menu...");
             
-            // ========== INISIALISASI TOMBOL BUAT STATUS ==========
-            var btnCreateStatus = document.getElementById('btnCreateStatus');
-            if (btnCreateStatus) {
-                btnCreateStatus.onclick = function(e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    if (typeof openCreateStatusModal === 'function') {
-                        openCreateStatusModal();
-                        console.log("Create status modal opened via button");
-                    } else {
-                        console.warn("openCreateStatusModal not ready yet");
-                        showToast("Fitur status sedang dimuat, coba lagi nanti", "warning");
-                    }
-                };
-                console.log("✅ Create status button initialized");
-            }
-            
             // Populate dropdown options
             var dh = document.getElementById('delayHoursValue');
             if(dh && dh.children.length===0) for(var i=1;i<=24;i++) dh.innerHTML+='<option value="'+i+'">'+i+' Jam</option>';
@@ -907,27 +1006,6 @@
             if(gdh2 && !gdh2._listenerAdded) { gdh2.addEventListener('change',function(){var h=document.getElementById('globalDelayHidden');if(h)h.value=this.value*60;}); gdh2._listenerAdded=true; }
             var gdu = document.getElementById('globalDelayUnit');
             if(gdu && !gdu._listenerAdded) { gdu.addEventListener('change',function(){if(typeof toggleGlobalDelayInput==='function') toggleGlobalDelayInput();}); gdu._listenerAdded=true; }
-            
-            // Setup untuk custom range rekap per siswa
-            var rekapPerSiswaPeriod = document.getElementById('rekapPerSiswaPeriod');
-            var rekapPerSiswaCustomRange = document.getElementById('rekapPerSiswaCustomRange');
-            if(rekapPerSiswaPeriod && rekapPerSiswaCustomRange) {
-                rekapPerSiswaPeriod.addEventListener('change', function() {
-                    rekapPerSiswaCustomRange.style.display = this.value === 'custom' ? 'flex' : 'none';
-                    if (this.value !== 'custom') {
-                        if (typeof loadRekapPerSiswa === 'function') loadRekapPerSiswa();
-                    }
-                });
-                
-                // Set default dates for custom range
-                var today = new Date();
-                var startDate = new Date();
-                startDate.setDate(today.getDate() - 30);
-                var startInput = document.getElementById('rekapPerSiswaStartDate');
-                var endInput = document.getElementById('rekapPerSiswaEndDate');
-                if(startInput && !startInput.value) startInput.value = startDate.toISOString().split('T')[0];
-                if(endInput && !endInput.value) endInput.value = today.toISOString().split('T')[0];
-            }
             
             setTimeout(function(){ 
                 if(typeof toggleDelayInput==='function') toggleDelayInput(); 
@@ -966,6 +1044,14 @@
             // Sembunyikan floating buttons yang tidak diperlukan
             var floatingBtns = document.querySelectorAll('.floating-chat-btn, .floating-friends-btn, .floating-status-btn, .floating-announcement-btn');
             floatingBtns.forEach(btn => btn.style.display = 'none');
+            
+            // Inisialisasi rekap per siswa
+            setTimeout(function() {
+                if (typeof initRekapPerSiswa === 'function') {
+                    initRekapPerSiswa();
+                    console.log("✅ Rekap per Siswa initialized");
+                }
+            }, 1000);
         });
         
         function showToast(msg,type){ var t=document.getElementById('toast'); if(t){ t.textContent=msg; t.style.borderLeftColor=type==='error'?'#f44336':'#00bcd4'; t.className='toast show'; setTimeout(()=>{t.className=t.className.replace('show','');},3000); } }
