@@ -1,8 +1,11 @@
-// rekap.js - VERSION 3.5 (DENGAN LOG AKTIVITAS)
+// rekap.js - VERSION 3.6 (DENGAN KLIK BARIS UNTUK REKAP PER SISWA & LOG AKTIVITAS)
 // Fitur Rekap Absensi per Siswa
 // Mendukung periode: Minggu, Bulan, Semester, dan Custom Range
 // Mendukung status: Hadir, Sakit, Izin, Alpha (termasuk manual dari attendance_status)
-// PERUBAHAN V3.5: Menambahkan logActivity untuk export Excel dan PDF
+// PERUBAHAN V3.6: 
+//   - Menambahkan fitur klik pada baris siswa untuk membuka detail rekap per siswa
+//   - Menambahkan efek highlight dan scroll otomatis ke container rekap per siswa
+//   - Menambahkan fungsi openRekapPerSiswa() untuk panggilan eksternal
 // ============================================================================
 
 let currentRekapData = [];
@@ -110,7 +113,27 @@ function initRekap() {
     if (customRangeGroup) customRangeGroup.style.display = defaultPeriod === 'custom' ? 'flex' : 'none';
     
     rekapInitDone = true;
+    
+    // Setup observer untuk tabel rekap agar event listener tetap terpasang
+    setupRekapTableObserver();
+    
     setTimeout(() => loadRekap(), 100);
+}
+
+/**
+ * Setup observer untuk mendeteksi perubahan pada tabel rekap
+ * Agar event listener tetap terpasang setelah data berubah
+ */
+function setupRekapTableObserver() {
+    const observer = new MutationObserver(() => {
+        attachRekapRowClickListeners();
+    });
+    
+    const tbody = document.getElementById('rekapTbody');
+    if (tbody) {
+        observer.observe(tbody, { childList: true, subtree: true });
+        console.log("✅ Rekap table observer attached");
+    }
 }
 
 function formatDateForInput(date) {
@@ -310,7 +333,7 @@ async function calculateStudentRekap(attendanceData, studentsData, startDate, en
     return results;
 }
 
-// ======================= RENDER REKAP TABLE =======================
+// ======================= RENDER REKAP TABLE (DENGAN KLIK BARIS) =======================
 
 function renderRekapTable(data) {
     let tbody = document.getElementById('rekapTbody');
@@ -372,8 +395,15 @@ function renderRekapTable(data) {
         if (item.percentage < 60) persenColor = '#ff9800';
         if (item.percentage < 40) persenColor = '#f44336';
         const tooltip = `${item.hadir} hadir dari ${item.totalDays} hari sekolah (setelah dikurangi libur)`;
+        
+        // Tambahkan class dan atribut untuk click handler
         tbody.innerHTML += `
-            <tr>
+            <tr class="rekap-row-clickable" 
+                data-student-id="${item.id}" 
+                data-student-name="${escapeHtml(item.nama)}" 
+                data-student-kelas="${item.kelas}" 
+                data-student-jurusan="${item.jurusan}"
+                style="cursor: pointer; transition: background 0.2s;">
                 <td>${index + 1}<\/td>
                 <td><strong>#${item.id}<\/strong><\/td>
                 <td>${escapeHtml(item.nama)}<\/td>
@@ -386,10 +416,186 @@ function renderRekapTable(data) {
                 <td style="color:#f44336; text-align:center;">${item.alpha}<\/td>
                 <td style="text-align:center;"><span class="rekap-percentage" style="color:${persenColor}; font-weight:bold; cursor:help;" title="${tooltip}">${item.percentage}%<\/span><\/td>
                 <td style="text-align:center;"><span class="rekap-badge ${item.statusClass}">${item.status}<\/span><\/td>
-            <\/tr>
+            </tr>
         `;
     });
     updateRekapSummary(validData);
+    
+    // Attach click listeners ke baris yang baru dibuat
+    attachRekapRowClickListeners();
+}
+
+/**
+ * Attach click event listeners to rekap table rows
+ * Ketika baris diklik, akan membuka rekap detail per siswa
+ */
+function attachRekapRowClickListeners() {
+    const rows = document.querySelectorAll('#rekapTbody .rekap-row-clickable');
+    console.log(`🔍 Attaching click listeners to ${rows.length} rekap rows`);
+    
+    rows.forEach(row => {
+        // Hapus listener lama jika ada (untuk menghindari duplicate)
+        row.removeEventListener('click', handleRekapRowClick);
+        // Tambah listener baru
+        row.addEventListener('click', handleRekapRowClick);
+        
+        // Tambah efek hover
+        row.addEventListener('mouseenter', () => {
+            row.style.backgroundColor = 'var(--bg-hover)';
+        });
+        row.addEventListener('mouseleave', () => {
+            row.style.backgroundColor = '';
+        });
+        
+        // Tambah title tooltip
+        row.setAttribute('title', 'Klik untuk melihat detail rekap per siswa');
+    });
+}
+
+/**
+ * Handle click on rekap table row
+ * @param {Event} event - Click event
+ */
+async function handleRekapRowClick(event) {
+    // Stop propagation agar tidak konflik dengan event lain
+    event.stopPropagation();
+    
+    const row = event.currentTarget;
+    const studentId = row.getAttribute('data-student-id');
+    const studentName = row.getAttribute('data-student-name');
+    const studentKelas = row.getAttribute('data-student-kelas');
+    const studentJurusan = row.getAttribute('data-student-jurusan');
+    
+    if (!studentId) {
+        console.warn("No student ID found on clicked row");
+        return;
+    }
+    
+    console.log(`🖱️ Rekap row clicked: ${studentName} (ID: ${studentId})`);
+    
+    // Tampilkan loading indicator
+    if (typeof showToast === 'function') {
+        showToast(`📊 Membuka detail rekap untuk ${studentName}...`, "info");
+    }
+    
+    // Panggil fungsi untuk membuka rekap per siswa
+    await openRekapPerSiswa(studentId, studentName);
+}
+
+/**
+ * Fungsi untuk membuka rekap per siswa langsung dari ID siswa
+ * @param {string|number} studentId - ID siswa
+ * @param {string} studentName - Nama siswa (opsional)
+ */
+async function openRekapPerSiswa(studentId, studentName) {
+    if (!studentId) {
+        if (typeof showToast === 'function') showToast("ID siswa tidak valid!", "error");
+        return;
+    }
+    
+    // Cari data siswa
+    const student = dbData.users?.find(s => s.id == studentId);
+    if (!student) {
+        if (typeof showToast === 'function') showToast(`❌ Data siswa dengan ID ${studentId} tidak ditemukan!`, "error");
+        return;
+    }
+    
+    const name = studentName || student.nama;
+    console.log(`🔍 Opening rekap per siswa for: ${name} (ID: ${studentId})`);
+    
+    // Pastikan container rekap per siswa visible
+    const container = document.getElementById('rekapPerSiswaContainer');
+    if (container) {
+        container.style.display = 'block';
+        
+        // Scroll ke container dengan efek smooth
+        container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        
+        // Beri efek highlight pada container
+        container.style.transition = 'box-shadow 0.3s';
+        container.style.boxShadow = '0 0 0 2px #00bcd4, 0 4px 20px rgba(0,188,212,0.3)';
+        setTimeout(() => {
+            container.style.boxShadow = '';
+        }, 1500);
+    }
+    
+    // Set pilihan siswa di dropdown rekap per siswa
+    const studentSelect = document.getElementById('rekapPerSiswaSelect');
+    if (studentSelect) {
+        // Refresh dropdown jika perlu
+        if (typeof populateRekapPerSiswaSelect === 'function') {
+            await populateRekapPerSiswaSelect();
+        }
+        
+        let optionFound = false;
+        for (let i = 0; i < studentSelect.options.length; i++) {
+            if (studentSelect.options[i].value == studentId) {
+                studentSelect.selectedIndex = i;
+                optionFound = true;
+                break;
+            }
+        }
+        
+        if (!optionFound) {
+            console.warn(`Student ID ${studentId} not found in rekap per siswa dropdown`);
+            if (typeof showToast === 'function') {
+                showToast(`⚠️ Data siswa ${name} tidak ditemukan di dropdown rekap`, "warning");
+            }
+            return;
+        }
+    }
+    
+    // Sinkronkan periode dengan rekap utama
+    const rekapPeriodSelect = document.getElementById('rekapPeriod');
+    const rekapPerSiswaPeriodSelect = document.getElementById('rekapPerSiswaPeriod');
+    const customRangeGroup = document.getElementById('rekapPerSiswaCustomRange');
+    
+    if (rekapPeriodSelect && rekapPerSiswaPeriodSelect) {
+        const currentPeriod = rekapPeriodSelect.value;
+        
+        // Jika periode rekap utama adalah custom, ambil tanggal mulai dan akhir
+        if (currentPeriod === 'custom') {
+            const startDate = document.getElementById('rekapStartDate')?.value;
+            const endDate = document.getElementById('rekapEndDate')?.value;
+            
+            if (startDate && endDate) {
+                // Set periode ke custom di rekap per siswa
+                rekapPerSiswaPeriodSelect.value = 'custom';
+                if (customRangeGroup) customRangeGroup.style.display = 'flex';
+                
+                // Set tanggal custom
+                const customStart = document.getElementById('rekapPerSiswaStartDate');
+                const customEnd = document.getElementById('rekapPerSiswaEndDate');
+                if (customStart) customStart.value = startDate;
+                if (customEnd) customEnd.value = endDate;
+            } else {
+                rekapPerSiswaPeriodSelect.value = currentPeriod;
+                if (customRangeGroup) customRangeGroup.style.display = 'none';
+            }
+        } else {
+            rekapPerSiswaPeriodSelect.value = currentPeriod;
+            if (customRangeGroup) customRangeGroup.style.display = 'none';
+        }
+    }
+    
+    // Load rekap per siswa
+    if (typeof loadRekapPerSiswa === 'function') {
+        setTimeout(() => {
+            loadRekapPerSiswa();
+            
+            // Tampilkan notifikasi sukses setelah load
+            setTimeout(() => {
+                if (typeof showToast === 'function') {
+                    showToast(`✅ Menampilkan detail rekap untuk ${name}`, "success");
+                }
+            }, 500);
+        }, 200);
+    } else {
+        console.error("loadRekapPerSiswa function not available");
+        if (typeof showToast === 'function') {
+            showToast("❌ Fitur detail rekap per siswa belum tersedia", "error");
+        }
+    }
 }
 
 function updateRekapSummary(data) {
@@ -817,5 +1023,8 @@ window.exportRekapToExcel = exportRekapToExcel;
 window.exportRekapToPDF = exportRekapToPDF;
 window.initRekap = initRekap;
 window.cleanupRekap = cleanupRekap;
+window.attachRekapRowClickListeners = attachRekapRowClickListeners;
+window.handleRekapRowClick = handleRekapRowClick;
+window.openRekapPerSiswa = openRekapPerSiswa;
 
-console.log("✅ rekap.js V3.5 loaded - Dengan log aktivitas untuk export Excel dan PDF");
+console.log("✅ rekap.js V3.6 loaded - Dengan klik baris untuk rekap per siswa & log aktivitas");

@@ -1,8 +1,11 @@
-// rekap-per-siswa.js - VERSION 1.3 (DENGAN PERIODE LENGKAP)
+// rekap-per-siswa.js - VERSION 1.4 (DENGAN DUKUNGAN PARAMETER STUDENT ID & INTEGRASI KLIK BARIS)
 // Fitur Rekap Absensi per Siswa (Detail Harian dengan Foto)
-// PERUBAHAN V1.3: 
-//   - Menambahkan periode "Tahun Ini" dan "Pertama Kali Absensi"
-//   - Perbaikan fungsi getDateRange untuk periode lengkap
+// PERUBAHAN V1.4: 
+//   - Menambahkan dukungan parameter studentId pada loadRekapPerSiswa()
+//   - Menambahkan fungsi loadRekapPerSiswaByStudentId() untuk panggilan eksternal
+//   - Memastikan container rekap per siswa terbuka saat dipanggil dari luar
+//   - Menambahkan auto-refresh dropdown jika siswa belum ada di dropdown
+//   - Menambahkan efek highlight saat dipanggil dari rekap utama
 // ============================================================================
 
 let currentRekapPerSiswaData = null;
@@ -231,18 +234,60 @@ function populateRekapPerSiswaSelect() {
 
 // ======================= LOAD DATA REKAP PER SISWA ========================
 
-async function loadRekapPerSiswa() {
+/**
+ * Load rekap per siswa
+ * @param {string|number} studentId - Optional student ID (jika tidak diberikan, ambil dari dropdown)
+ * @returns {Promise<void>}
+ */
+async function loadRekapPerSiswa(studentId = null) {
     const select = document.getElementById('rekapPerSiswaSelect');
-    const studentId = select?.value;
     
-    if (!studentId) {
-        showToast("📭 Pilih siswa terlebih dahulu!", "warning");
+    // Jika studentId diberikan, set dropdown ke nilai tersebut
+    if (studentId !== null && studentId !== undefined && select) {
+        // Cari option dengan value yang cocok
+        let optionFound = false;
+        for (let i = 0; i < select.options.length; i++) {
+            if (select.options[i].value == studentId) {
+                select.selectedIndex = i;
+                optionFound = true;
+                break;
+            }
+        }
+        
+        // Jika tidak ditemukan, refresh dropdown terlebih dahulu
+        if (!optionFound) {
+            console.log(`Student ID ${studentId} not found in dropdown, refreshing...`);
+            await populateRekapPerSiswaSelect();
+            
+            // Coba lagi setelah refresh
+            for (let i = 0; i < select.options.length; i++) {
+                if (select.options[i].value == studentId) {
+                    select.selectedIndex = i;
+                    optionFound = true;
+                    break;
+                }
+            }
+        }
+        
+        if (!optionFound) {
+            console.warn(`Student ID ${studentId} still not found after refresh`);
+            if (typeof showToast === 'function') {
+                showToast(`⚠️ Data siswa dengan ID ${studentId} tidak ditemukan`, "warning");
+            }
+            return;
+        }
+    }
+    
+    const selectedStudentId = select?.value;
+    
+    if (!selectedStudentId) {
+        if (typeof showToast === 'function') showToast("📭 Pilih siswa terlebih dahulu!", "warning");
         return;
     }
     
-    const student = dbData.users?.find(s => s.id == studentId);
+    const student = dbData.users?.find(s => s.id == selectedStudentId);
     if (!student) {
-        showToast("❌ Data siswa tidak ditemukan!", "error");
+        if (typeof showToast === 'function') showToast("❌ Data siswa tidak ditemukan!", "error");
         return;
     }
     
@@ -256,7 +301,7 @@ async function loadRekapPerSiswa() {
         const startInput = document.getElementById('rekapPerSiswaStartDate').value;
         const endInput = document.getElementById('rekapPerSiswaEndDate').value;
         if (!startInput || !endInput) {
-            showToast("📅 Pilih tanggal mulai dan akhir terlebih dahulu!", "warning");
+            if (typeof showToast === 'function') showToast("📅 Pilih tanggal mulai dan akhir terlebih dahulu!", "warning");
             return;
         }
         startDate = new Date(startInput);
@@ -267,7 +312,7 @@ async function loadRekapPerSiswa() {
     else if (period === 'pertama') {
         // Cari tanggal pertama kali siswa pernah absen
         const firstAttendance = dbData.attendance
-            .filter(a => a.studentId == studentId && a.date)
+            .filter(a => a.studentId == selectedStudentId && a.date)
             .sort((a, b) => new Date(a.date) - new Date(b.date))[0];
         
         if (firstAttendance && firstAttendance.date) {
@@ -282,7 +327,7 @@ async function loadRekapPerSiswa() {
             startDate.setMonth(startDate.getMonth() - 1);
             endDate = new Date();
             periodLabel = 'Belum Pernah Absen';
-            showToast("⚠️ Siswa ini belum pernah melakukan absensi sama sekali!", "warning");
+            if (typeof showToast === 'function') showToast("⚠️ Siswa ini belum pernah melakukan absensi sama sekali!", "warning");
         }
     }
     else {
@@ -293,7 +338,7 @@ async function loadRekapPerSiswa() {
     }
     
     if (startDate && endDate && startDate > endDate) {
-        showToast("⚠️ Tanggal mulai harus lebih kecil dari tanggal akhir!", "error");
+        if (typeof showToast === 'function') showToast("⚠️ Tanggal mulai harus lebih kecil dari tanggal akhir!", "error");
         return;
     }
     
@@ -303,7 +348,7 @@ async function loadRekapPerSiswa() {
         periodLabelSpan.textContent = periodLabel;
     }
     
-    showToast(`⏳ Memuat rekap ${student.nama}...`, "info");
+    if (typeof showToast === 'function') showToast(`⏳ Memuat rekap ${student.nama}...`, "info");
     
     const container = document.getElementById('rekapPerSiswaContainer');
     const contentDiv = document.getElementById('rekapPerSiswaContent');
@@ -315,11 +360,11 @@ async function loadRekapPerSiswa() {
         // Jika startDate tidak ada (belum pernah absen)
         if (!startDate) {
             renderEmptyRekap(student, periodLabel);
-            showToast(`📭 ${student.nama} belum memiliki data absensi`, "info");
+            if (typeof showToast === 'function') showToast(`📭 ${student.nama} belum memiliki data absensi`, "info");
             return;
         }
         
-        let attendanceRecords = dbData.attendance.filter(a => a.studentId == studentId);
+        let attendanceRecords = dbData.attendance.filter(a => a.studentId == selectedStudentId);
         attendanceRecords = attendanceRecords.filter(a => {
             const recordDate = new Date(a.date);
             return recordDate >= startDate && recordDate <= endDate;
@@ -373,7 +418,7 @@ async function loadRekapPerSiswa() {
         
         for (const dateStr of allDates) {
             const record = attendanceMap.get(dateStr);
-            const manual = manualStatusMap[dateStr]?.[studentId];
+            const manual = manualStatusMap[dateStr]?.[selectedStudentId];
             let status = 'alpha';
             let statusIcon = '❌';
             let statusColor = '#f44336';
@@ -455,15 +500,72 @@ async function loadRekapPerSiswa() {
         };
         
         renderRekapPerSiswa();
-        showToast(`✅ Rekap ${student.nama} selesai (${totalDays} hari sekolah)`, "success");
+        if (typeof showToast === 'function') showToast(`✅ Rekap ${student.nama} selesai (${totalDays} hari sekolah)`, "success");
         
     } catch (error) {
         console.error("Error loading rekap per siswa:", error);
         if (contentDiv) {
             contentDiv.innerHTML = `<div style="text-align:center; padding:40px; color:#f44336;">❌ Gagal memuat data: ${error.message}</div>`;
         }
-        showToast("❌ Gagal memuat rekap per siswa", "error");
+        if (typeof showToast === 'function') showToast("❌ Gagal memuat rekap per siswa", "error");
     }
+}
+
+/**
+ * Load rekap per siswa berdasarkan student ID (fungsi untuk panggilan eksternal)
+ * @param {string|number} studentId - ID siswa
+ * @param {boolean} scrollToContainer - Apakah akan scroll ke container
+ * @returns {Promise<void>}
+ */
+async function loadRekapPerSiswaByStudentId(studentId, scrollToContainer = true) {
+    if (!studentId) {
+        if (typeof showToast === 'function') showToast("ID siswa tidak valid!", "error");
+        return;
+    }
+    
+    // Cari data siswa
+    const student = dbData.users?.find(s => s.id == studentId);
+    if (!student) {
+        if (typeof showToast === 'function') showToast(`❌ Data siswa dengan ID ${studentId} tidak ditemukan!`, "error");
+        return;
+    }
+    
+    // Pastikan container terlihat
+    const container = document.getElementById('rekapPerSiswaContainer');
+    if (container) {
+        container.style.display = 'block';
+        
+        if (scrollToContainer) {
+            // Scroll ke container dengan efek smooth
+            container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            
+            // Beri efek highlight
+            container.style.transition = 'box-shadow 0.3s';
+            container.style.boxShadow = '0 0 0 2px #00bcd4, 0 4px 20px rgba(0,188,212,0.3)';
+            setTimeout(() => {
+                container.style.boxShadow = '';
+            }, 1500);
+        }
+    }
+    
+    // Refresh dropdown jika perlu
+    const select = document.getElementById('rekapPerSiswaSelect');
+    if (select) {
+        let optionFound = false;
+        for (let i = 0; i < select.options.length; i++) {
+            if (select.options[i].value == studentId) {
+                optionFound = true;
+                break;
+            }
+        }
+        
+        if (!optionFound) {
+            await populateRekapPerSiswaSelect();
+        }
+    }
+    
+    // Load rekap
+    await loadRekapPerSiswa(studentId);
 }
 
 function renderEmptyRekap(student, periodLabel) {
@@ -658,7 +760,7 @@ function showRekapStudentPhoto(studentId, studentName, photoUrl) {
 
 async function exportRekapPerSiswaToExcel() {
     if (!currentRekapPerSiswaData) {
-        showToast("📭 Tidak ada data rekap per siswa untuk diekspor!", "warning");
+        if (typeof showToast === 'function') showToast("📭 Tidak ada data rekap per siswa untuk diekspor!", "warning");
         return;
     }
     
@@ -696,7 +798,7 @@ async function exportRekapPerSiswaToExcel() {
     link.download = `rekap_siswa_${student.id}_${student.nama.replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().split('T')[0]}.csv`;
     link.click();
     URL.revokeObjectURL(url);
-    showToast("📥 Rekap per siswa berhasil diekspor ke Excel!", "success");
+    if (typeof showToast === 'function') showToast("📥 Rekap per siswa berhasil diekspor ke Excel!", "success");
     
     if (typeof logActivity === 'function') {
         logActivity('export_rekap_per_siswa_excel', `Ekspor rekap per siswa: ${student.nama} (ID: ${student.id})`);
@@ -705,7 +807,7 @@ async function exportRekapPerSiswaToExcel() {
 
 async function exportRekapPerSiswaToPDF() {
     if (!currentRekapPerSiswaData) {
-        showToast("📭 Tidak ada data rekap per siswa untuk diekspor!", "warning");
+        if (typeof showToast === 'function') showToast("📭 Tidak ada data rekap per siswa untuk diekspor!", "warning");
         return;
     }
     
@@ -800,7 +902,7 @@ async function exportRekapPerSiswaToPDF() {
         
         printWindow.document.write(`
             <tr>
-                <td>${no++}</td>
+                <td>${no++}</div>
                 <td>${formatIndonesianDateShort(item.date)}</div>
                 <td>${item.dayName}</div>
                 <td class="${statusClass}">${item.statusText}</div>
@@ -826,7 +928,7 @@ async function exportRekapPerSiswaToPDF() {
         </html>
     `);
     printWindow.document.close();
-    showToast("📄 Membuka halaman print...", "info");
+    if (typeof showToast === 'function') showToast("📄 Membuka halaman print...", "info");
     
     if (typeof logActivity === 'function') {
         logActivity('export_rekap_per_siswa_pdf', `Ekspor rekap per siswa ke PDF: ${student.nama} (ID: ${student.id})`);
@@ -849,6 +951,7 @@ function cleanupRekapPerSiswa() {
 window.initRekapPerSiswa = initRekapPerSiswa;
 window.populateRekapPerSiswaSelect = populateRekapPerSiswaSelect;
 window.loadRekapPerSiswa = loadRekapPerSiswa;
+window.loadRekapPerSiswaByStudentId = loadRekapPerSiswaByStudentId;
 window.exportRekapPerSiswaToExcel = exportRekapPerSiswaToExcel;
 window.exportRekapPerSiswaToPDF = exportRekapPerSiswaToPDF;
 window.cleanupRekapPerSiswa = cleanupRekapPerSiswa;
@@ -857,4 +960,4 @@ window.refreshRekapPhotoCache = refreshRekapPhotoCache;
 window.showRekapStudentPhoto = showRekapStudentPhoto;
 window.getRekapDateRange = getRekapDateRange;
 
-console.log("✅ rekap-per-siswa.js V1.3 loaded - Dengan periode lengkap (Minggu, Bulan, Semester, Tahun, Pertama Kali)");
+console.log("✅ rekap-per-siswa.js V1.4 loaded - Dengan dukungan parameter student ID & integrasi klik baris");
