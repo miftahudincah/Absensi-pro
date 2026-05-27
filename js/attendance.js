@@ -1,10 +1,11 @@
-// attendance.js - VERSION 4.4 (DENGAN FOTO SISWA & LOG AKTIVITAS)
+// attendance.js - VERSION 4.4 (DENGAN FOTO SISWA DI TABEL ABSENSI)
 // Mengelola data absensi, filter, validasi delay pulang,
 // serta manual status (sakit, izin, alpha) untuk siswa yang tidak hadir.
 // PERUBAHAN V4.4: 
-//   - Menambahkan foto siswa di tabel absensi (ambil dari akun masing-masing)
-//   - Fallback avatar inisial nama jika belum punya foto
-//   - Cache foto untuk performa lebih baik
+//   - Menambahkan kolom foto di tabel absensi
+//   - Sinkron foto dengan akun siswa masing-masing
+//   - Fallback inisial jika belum punya akun
+//   - Modal untuk perbesar foto dari tabel absensi
 // ============================================================================
 
 // ======================== GLOBAL VARIABLES ========================
@@ -13,68 +14,111 @@ let attendanceDataReadyListenerAdded = false;
 let attendanceRetryCount = 0;
 const MAX_ATTENDANCE_RETRY = 15;
 
-// Cache untuk foto siswa (performa)
-const studentPhotoCache = new Map();
+// Cache untuk foto siswa di attendance
+const attendancePhotoCache = new Map();
 
 // ======================== FUNGSI FOTO SISWA ========================
 
 /**
- * Mendapatkan URL foto siswa dari data user auth
- * @param {string|number} studentId - ID siswa (fpId)
+ * Mendapatkan URL foto siswa untuk tabel absensi
+ * @param {string|number} studentId - ID siswa
  * @param {string} studentName - Nama siswa (fallback)
  * @returns {string} URL foto atau avatar inisial
  */
-function getStudentPhotoUrl(studentId, studentName) {
+function getAttendanceStudentPhotoUrl(studentId, studentName) {
+    if (!studentId) {
+        const initial = studentName ? studentName.charAt(0).toUpperCase() : 'U';
+        return `https://ui-avatars.com/api/?name=${encodeURIComponent(initial)}&background=00bcd4&color=fff&size=100&bold=true`;
+    }
+    
+    // Cek cache
+    if (attendancePhotoCache.has(studentId)) {
+        return attendancePhotoCache.get(studentId);
+    }
+    
     // Cari user auth yang memiliki fpId = studentId
     const userAuth = dbData?.users_auth?.find(u => u.fpId == studentId);
     
-    if (userAuth && userAuth.photoUrl) {
-        return userAuth.photoUrl;
+    let photoUrl;
+    if (userAuth && userAuth.photoUrl && userAuth.photoUrl !== 'null' && userAuth.photoUrl !== 'undefined') {
+        photoUrl = userAuth.photoUrl;
+    } else {
+        // Fallback: avatar inisial nama
+        const initial = studentName ? studentName.charAt(0).toUpperCase() : 'U';
+        photoUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(initial)}&background=00bcd4&color=fff&size=100&bold=true`;
     }
     
-    // Fallback: avatar inisial nama
-    const initial = studentName ? studentName.charAt(0).toUpperCase() : 'U';
-    return `https://ui-avatars.com/api/?name=${encodeURIComponent(initial)}&background=00bcd4&color=fff&size=100&bold=true`;
+    // Simpan ke cache
+    attendancePhotoCache.set(studentId, photoUrl);
+    return photoUrl;
 }
 
 /**
- * Mendapatkan URL foto siswa dengan caching
+ * Clear cache foto attendance
  */
-function getStudentPhotoUrlCached(studentId, studentName) {
-    if (studentPhotoCache.has(studentId)) {
-        return studentPhotoCache.get(studentId);
-    }
-    const url = getStudentPhotoUrl(studentId, studentName);
-    studentPhotoCache.set(studentId, url);
-    return url;
+function clearAttendancePhotoCache() {
+    attendancePhotoCache.clear();
+    console.log("🖼️ Attendance photo cache cleared");
 }
 
 /**
- * Refresh cache foto siswa
- * Berguna setelah ada update foto profil
+ * Setup listener untuk update foto di attendance
  */
-function refreshStudentPhotoCache() {
-    studentPhotoCache.clear();
-    console.log("🖼️ Student photo cache cleared");
-    if (typeof renderTable === 'function') renderTable();
-}
-
-/**
- * Preload foto siswa untuk meningkatkan performa
- */
-async function preloadStudentPhotos() {
-    if (!dbData?.attendance) return;
+function setupAttendancePhotoListener() {
+    if (!db) return;
     
-    const uniqueStudentIds = [...new Set(dbData.attendance.map(a => a.studentId))];
-    console.log(`📸 Preloading ${uniqueStudentIds.length} student photos...`);
-    
-    for (const studentId of uniqueStudentIds) {
-        const student = dbData.users?.find(u => u.id == studentId);
-        if (student) {
-            getStudentPhotoUrlCached(studentId, student.nama);
+    db.ref('users_auth').on('child_changed', (snapshot) => {
+        const userData = snapshot.val();
+        if (userData && userData.photoUrl && userData.fpId) {
+            console.log(`🖼️ Photo changed for student ID: ${userData.fpId}, clearing attendance cache`);
+            attendancePhotoCache.delete(userData.fpId);
+            if (typeof renderTable === 'function') {
+                renderTable();
+            }
         }
-    }
-    console.log("✅ Student photos preloaded");
+    });
+}
+
+/**
+ * Modal untuk melihat foto siswa dari absensi
+ */
+function showAttendanceStudentPhoto(studentId, studentName, photoUrl) {
+    const userAuth = dbData?.users_auth?.find(u => u.fpId == studentId);
+    const hasAccount = !!userAuth;
+    const accountInfo = hasAccount 
+        ? `✅ Sudah memiliki akun (${userAuth.email || userAuth.nama})` 
+        : '❌ Belum memiliki akun. Foto menggunakan inisial nama.';
+    
+    let modalHtml = `
+        <div id="modal-attendance-photo" class="modal-overlay open">
+            <div class="modal-box" style="max-width: 500px; text-align: center;">
+                <div class="modal-title">
+                    <span>📸 Foto ${escapeHtml(studentName)}</span>
+                    <span onclick="closeModal('modal-attendance-photo')">✖</span>
+                </div>
+                <div style="padding: 20px;">
+                    <img src="${photoUrl}" 
+                         style="max-width: 100%; max-height: 60vh; border-radius: 20px; object-fit: contain;"
+                         onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(studentName?.charAt(0) || 'U')}&background=00bcd4&color=fff&size=200&bold=true'">
+                    <p style="margin-top: 15px;">
+                        <strong>${escapeHtml(studentName)}</strong><br>
+                        <span style="color: var(--text-muted);">ID: ${studentId}</span>
+                    </p>
+                    <hr>
+                    <div class="text-small" style="color: var(--text-muted); padding: 8px; background: var(--bg-hover); border-radius: 8px;">
+                        ℹ️ ${accountInfo}<br>
+                        ${hasAccount ? 'Foto ini sinkron dengan akun siswa.' : 'Silakan daftarkan akun siswa untuk memiliki foto profil.'}
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <button class="btn-cancel" onclick="closeModal('modal-attendance-photo')">Tutup</button>
+                </div>
+            </div>
+        </div>
+    `;
+    const existingModal = document.getElementById('modal-attendance-photo');
+    if (existingModal) existingModal.remove();
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
 }
 
 // ======================== EVENT LISTENER ========================
@@ -94,9 +138,6 @@ function setupAttendanceDataReadyListener() {
             if (typeof updateAttendanceDonutChart === 'function') updateAttendanceDonutChart();
             if (typeof renderTable === 'function') renderTable();
         });
-        
-        // Preload foto setelah data ready
-        setTimeout(() => preloadStudentPhotos(), 500);
     });
 
     const originalSwitchTab = window.switchTab;
@@ -162,11 +203,14 @@ function createAttendanceTableDynamic() {
     let table = tableContainer.querySelector('table');
     if (!table) {
         table = document.createElement('table');
+        // UPDATE HEADER: Tambah kolom Foto
         table.innerHTML = `
             <thead>
                 <tr>
-                    <th>Siswa</th>
+                    <th>Foto</th>
+                    <th>Waktu</th>
                     <th>ID FP</th>
+                    <th>Nama</th>
                     <th>Kelas</th>
                     <th>Jurusan</th>
                     <th>Status</th>
@@ -174,11 +218,11 @@ function createAttendanceTableDynamic() {
                 </tr>
             </thead>
             <tbody id="tbody-attendance">
-                <tr><td colspan="6" style="text-align:center; padding:20px;">Memuat data...<\/td></tr>
+                <tr><td colspan="8" style="text-align:center; padding:20px;">Memuat data...<\/td></tr>
             </tbody>
         `;
         tableContainer.appendChild(table);
-        console.log("✅ Created attendance table dynamically");
+        console.log("✅ Created attendance table dynamically with photo column");
     }
 }
 
@@ -364,9 +408,26 @@ async function renderTable() {
         }
     }
     
-    const fDate = document.getElementById('filterDate')?.value || 'all';
-    const fKelas = document.getElementById('filterKelas')?.value || 'all';
-    const fJurusan = document.getElementById('filterJurusan')?.value || 'all';
+    // Update header tabel jika perlu (pastikan ada kolom foto)
+    const table = tbody.closest('table');
+    const thead = table?.querySelector('thead tr');
+    if (thead && !thead.querySelector('th:first-child')?.textContent.includes('Foto')) {
+        thead.innerHTML = `
+            <th>Foto</th>
+            <th>Waktu</th>
+            <th>ID FP</th>
+            <th>Nama</th>
+            <th>Kelas</th>
+            <th>Jurusan</th>
+            <th>Status</th>
+            <th>Aksi</th>
+        `;
+        console.log("✅ Attendance table header updated with photo column");
+    }
+    
+    const fDate = document.getElementById('filterDate') ? document.getElementById('filterDate').value : 'all';
+    const fKelas = document.getElementById('filterKelas') ? document.getElementById('filterKelas').value : 'all';
+    const fJurusan = document.getElementById('filterJurusan') ? document.getElementById('filterJurusan').value : 'all';
 
     let data = dbData.attendance ? [...dbData.attendance] : [];
     
@@ -399,7 +460,7 @@ async function renderTable() {
     tbody.innerHTML = '';
     
     if (data.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:20px; color:#888;">
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:20px; color:#888;">
             📭 Data absensi tidak ditemukan.
             ${currentUser?.role === 'siswa' ? '<br><small>Hubungi guru untuk informasi lebih lanjut.</small>' : ''}
         <\/td><\/tr>`;
@@ -419,16 +480,22 @@ async function renderTable() {
         }
     }
     
-    let lateThreshold = window.attendanceSettings?.lateThreshold || '07:30';
+    let lateThreshold = '07:30';
+    if (window.attendanceSettings && window.attendanceSettings.lateThreshold) {
+        lateThreshold = window.attendanceSettings.lateThreshold;
+    } else if (window.attendanceSettings === undefined && typeof getAttendanceSettings === 'function') {
+        const settings = getAttendanceSettings();
+        lateThreshold = settings.lateThreshold || '07:30';
+    }
     
     let rows = [];
-    for (const [index, row] of data.entries()) {
+    for (const row of data) {
         const timeDisplay = row.timeIn || '-';
-        const outDisplay = row.timeOut ? `<span class="text-small"> | 🏠 Pulang: ${row.timeOut}</span>` : '';
-        const isNew = index < 3 && (Date.now() - new Date(row.timestamp).getTime() < 60000);
+        const outDisplay = row.timeOut ? `<br><span class="text-small" style="color:var(--danger)">🏠 Pulang: ${row.timeOut}</span>` : '';
+        const isNew = (Date.now() - new Date(row.timestamp).getTime() < 60000);
         
-        // Get student photo URL with cache
-        const studentPhoto = getStudentPhotoUrlCached(row.studentId, row.nama);
+        // Ambil foto siswa
+        const photoUrl = getAttendanceStudentPhotoUrl(row.studentId, row.nama);
         const studentInitial = row.nama ? row.nama.charAt(0).toUpperCase() : 'U';
         
         let statusHtml = '';
@@ -437,8 +504,8 @@ async function renderTable() {
             let icon = '', label = '', color = '';
             if (manual.status === 'sakit') { icon = '🤒'; label = 'Sakit'; color = '#ff9800'; }
             else if (manual.status === 'izin') { icon = '📝'; label = 'Izin'; color = '#2196f3'; }
-            else if (manual.status === 'alpha') { icon = '❌'; label = 'Alpha'; color = '#f44336'; }
-            statusHtml = `<span style="color:${color}; font-weight:500;">${icon} ${label}</span>${manual.status !== 'alpha' ? '<br><small class="text-small">(Manual)</small>' : ''}`;
+            else if (manual.status === 'alpha') { icon = '❌'; label = 'Alpha (Bolos)'; color = '#f44336'; }
+            statusHtml = `<span style="color:${color}; font-weight:500;">${icon} ${label}</span><br><small class="text-small">(Manual)</small>`;
         } else {
             let isLate = false;
             if (row.status === 'Hadir' && row.timeIn && row.timeIn > lateThreshold) {
@@ -454,30 +521,23 @@ async function renderTable() {
         }
         
         rows.push(`
-            <tr class="${isNew ? 'attendance-new-row' : ''}" style="border-bottom: 1px solid var(--border);">
-                <td style="padding: 12px 8px; vertical-align: middle;">
-                    <div style="display: flex; align-items: center; gap: 12px;">
-                        <img src="${studentPhoto}" 
-                             alt="${escapeHtml(row.nama)}" 
-                             class="attendance-student-avatar"
-                             style="width: 42px; height: 42px; border-radius: 50%; object-fit: cover; border: 2px solid var(--primary); background: var(--bg-card);"
-                             onerror="this.src='https://ui-avatars.com/api/?name=${studentInitial}&background=00bcd4&color=fff&size=100&bold=true'">
-                        <div>
-                            <div style="font-weight: 600; font-size: 0.9rem;">${escapeHtml(row.nama)}</div>
-                            <div style="font-size: 0.7rem; color: var(--text-muted); display: flex; gap: 8px; flex-wrap: wrap;">
-                                <span>⏰ ${timeDisplay}</span>
-                                <span>📅 ${row.date}</span>
-                                ${outDisplay}
-                            </div>
-                        </div>
-                    </div>
+            <tr class="${isNew ? 'attendance-new-row' : ''}">
+                <td style="text-align:center;">
+                    <img src="${photoUrl}" 
+                         class="attendance-student-avatar"
+                         style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; cursor: pointer; transition: transform 0.2s;"
+                         onerror="this.src='https://ui-avatars.com/api/?name=${studentInitial}&background=00bcd4&color=fff&size=100&bold=true'"
+                         onclick="showAttendanceStudentPhoto('${row.studentId}', '${escapeHtml(row.nama)}', this.src)"
+                         title="Klik untuk lihat foto">
                 </td>
-                <td style="padding: 12px 8px; vertical-align: middle;"><code style="background: var(--bg-hover); padding: 4px 8px; border-radius: 6px;">#${row.studentId}</code></td>
-                <td style="padding: 12px 8px; vertical-align: middle;">${row.kelas || '-'}</td>
-                <td style="padding: 12px 8px; vertical-align: middle;">${row.jurusan || '-'}</td>
-                <td style="padding: 12px 8px; vertical-align: middle;">${statusHtml}</td>
-                <td class="role-guru role-admin role-developer" style="padding: 12px 8px; vertical-align: middle;">
-                    <button class="btn-icon delete" onclick="deleteAttendance('${row.id}')" title="Hapus Data" style="background: rgba(244, 67, 54, 0.1); border-radius: 30px;">🗑️</button>
+                <td>⏰ ${timeDisplay}<br><span class="text-small">📅 ${row.date}</span>${outDisplay}</td>
+                <td><strong>#${row.studentId}</strong></td>
+                <td>${escapeHtml(row.nama)}</div>
+                <td>${row.kelas || '-'}</div>
+                <td>${row.jurusan || '-'}</div>
+                <td>${statusHtml}</div>
+                <td class="role-guru role-admin role-developer">
+                    <button class="btn-icon delete" onclick="deleteAttendance('${row.id}')" title="Hapus Data">🗑️</button>
                 </td>
             </tr>
         `);
@@ -538,7 +598,6 @@ function deleteAttendance(id) {
     const date = id.substring(0, lastDashIndex);
     const fpId = id.substring(lastDashIndex + 1);
     
-    // Ambil nama siswa untuk log
     const attendanceRecord = dbData.attendance.find(a => a.id === id);
     const studentName = attendanceRecord?.nama || fpId;
     
@@ -548,7 +607,6 @@ function deleteAttendance(id) {
     db.ref(`absensi/${date}/${fpId}`).remove()
         .then(() => {
             showToast("✅ Data absensi berhasil dihapus", "success");
-            // LOG: Hapus absensi
             if (typeof logActivity === 'function') {
                 logActivity('delete_attendance', `Menghapus absensi ${studentName} (ID: ${fpId}) pada tanggal ${date}`);
             }
@@ -642,15 +700,9 @@ function openSimulateInModal() {
         }
         let html = '';
         filtered.forEach(s => {
-            // Tampilkan foto preview di hasil pencarian
-            const avatarUrl = getStudentPhotoUrl(s.id, s.nama);
             html += `
-                <div class="student-list-item" data-id="${s.id}" data-nama="${escapeHtml(s.nama)}" data-kelas="${s.kelas || ''}" data-jurusan="${s.jurusan || ''}" style="padding: 10px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.2s; display: flex; align-items: center; gap: 10px;" onmouseover="this.style.backgroundColor='var(--bg-hover)'" onmouseout="this.style.backgroundColor='transparent'">
-                    <img src="${avatarUrl}" style="width: 36px; height: 36px; border-radius: 50%; object-fit: cover;" onerror="this.src='https://ui-avatars.com/api/?name=${s.nama?.charAt(0) || 'U'}&background=00bcd4&color=fff&size=100'">
-                    <div>
-                        <strong>${s.id}</strong> - ${escapeHtml(s.nama)}
-                        <div><small style="color: #888;">${s.kelas || '-'} / ${s.jurusan || '-'}</small></div>
-                    </div>
+                <div class="student-list-item" data-id="${s.id}" data-nama="${escapeHtml(s.nama)}" data-kelas="${s.kelas || ''}" data-jurusan="${s.jurusan || ''}" style="padding: 10px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.2s;" onmouseover="this.style.backgroundColor='var(--bg-hover)'" onmouseout="this.style.backgroundColor='transparent'">
+                    <strong>${s.id}</strong> - ${escapeHtml(s.nama)} <span style="color: #888;">(${s.kelas || '-'} / ${s.jurusan || '-'})</span>
                 </div>
             `;
         });
@@ -744,14 +796,13 @@ async function executeSimulateIn() {
         
         showToast(`✅ Simulasi Absen ${statusFinal} berhasil untuk ${nama} (${timeStr})`, "success");
         
-        // LOG: Simulasi scan masuk
         if (typeof logActivity === 'function') {
             const statusText = statusCondition === 'hadir' ? 'Hadir' : statusCondition;
             logActivity('simulate_attendance_in', `Simulasi masuk: ${nama} (ID: ${studentId}) - Status: ${statusText}, Waktu: ${timeStr}`);
         }
         
-        // Clear cache foto terkait
-        studentPhotoCache.delete(studentId);
+        // Clear cache foto untuk siswa ini
+        attendancePhotoCache.delete(studentId);
         
         closeModal('modal-simulate-in');
         if (typeof renderTable === 'function') setTimeout(() => renderTable(), 500);
@@ -842,14 +893,9 @@ function openSimulateOutModal() {
         }
         let html = '';
         filtered.forEach(s => {
-            const avatarUrl = getStudentPhotoUrl(s.id, s.nama);
             html += `
-                <div class="student-list-item" data-id="${s.id}" data-nama="${escapeHtml(s.nama)}" data-timein="${s.timeIn}" style="padding: 10px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.2s; display: flex; align-items: center; gap: 10px;" onmouseover="this.style.backgroundColor='var(--bg-hover)'" onmouseout="this.style.backgroundColor='transparent'">
-                    <img src="${avatarUrl}" style="width: 36px; height: 36px; border-radius: 50%; object-fit: cover;" onerror="this.src='https://ui-avatars.com/api/?name=${s.nama?.charAt(0) || 'U'}&background=00bcd4&color=fff&size=100'">
-                    <div>
-                        <strong>${s.id}</strong> - ${escapeHtml(s.nama)}
-                        <div><small style="color: #888;">Masuk: ${s.timeIn}</small></div>
-                    </div>
+                <div class="student-list-item" data-id="${s.id}" data-nama="${escapeHtml(s.nama)}" data-timein="${s.timeIn}" style="padding: 10px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.2s;" onmouseover="this.style.backgroundColor='var(--bg-hover)'" onmouseout="this.style.backgroundColor='transparent'">
+                    <strong>${s.id}</strong> - ${escapeHtml(s.nama)} <span style="color: #888;">Masuk: ${s.timeIn}</span>
                 </div>
             `;
         });
@@ -980,7 +1026,6 @@ async function executeSimulateOut() {
         });
         showToast(`✅ ${nama} berhasil absen pulang pukul ${timeOutStr}${warningMsg}`, "success");
         
-        // LOG: Simulasi scan pulang
         if (typeof logActivity === 'function') {
             logActivity('simulate_attendance_out', `Simulasi pulang: ${nama} (ID: ${studentId}) - Waktu pulang: ${timeOutStr}${warningMsg}`);
         }
@@ -1020,7 +1065,6 @@ function exportToExcel() {
     URL.revokeObjectURL(url);
     showToast("📥 Laporan Excel berhasil diunduh", "success");
     
-    // LOG: Ekspor Excel (opsional)
     if (typeof logActivity === 'function') {
         logActivity('export_attendance_excel', `Ekspor ${dbData.attendance.length} data absensi ke Excel`);
     }
@@ -1065,36 +1109,32 @@ function renderFilteredTable(filteredData) {
     filteredData.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
     tbody.innerHTML = '';
     if (filteredData.length === 0) {
-        tbody.innerHTML = `</table><td colspan="6" style="text-align:center; padding:20px; color:#888;">📭 Tidak ada data dalam rentang tanggal tersebut.<\/td><\/tr>`;
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:20px; color:#888;">📭 Tidak ada data dalam rentang tanggal tersebut.<\/td><\/tr>`;
         return;
     }
     let rows = [];
     for (const row of filteredData) {
-        const studentPhoto = getStudentPhotoUrlCached(row.studentId, row.nama);
+        const photoUrl = getAttendanceStudentPhotoUrl(row.studentId, row.nama);
         const studentInitial = row.nama ? row.nama.charAt(0).toUpperCase() : 'U';
-        const outDisplay = row.timeOut ? `<span class="text-small"> | 🏠 Pulang: ${row.timeOut}</span>` : '';
+        const outDisplay = row.timeOut ? `<br><span class="text-small" style="color:var(--danger)">🏠 Pulang: ${row.timeOut}</span>` : '';
         
         rows.push(`
-            <tr style="border-bottom: 1px solid var(--border);">
-                <td style="padding: 12px 8px; vertical-align: middle;">
-                    <div style="display: flex; align-items: center; gap: 12px;">
-                        <img src="${studentPhoto}" 
-                             alt="${escapeHtml(row.nama)}" 
-                             style="width: 42px; height: 42px; border-radius: 50%; object-fit: cover; border: 2px solid var(--primary);"
-                             onerror="this.src='https://ui-avatars.com/api/?name=${studentInitial}&background=00bcd4&color=fff&size=100&bold=true'">
-                        <div>
-                            <div><strong>${escapeHtml(row.nama)}</strong></div>
-                            <div class="text-small" style="color: var(--text-muted);">⏰ ${row.timeIn || '-'}</div>
-                            <div class="text-small" style="color: var(--text-muted);">📅 ${row.date}${outDisplay}</div>
-                        </div>
-                    </div>
-                 </td>
-                <td><strong>#${row.studentId}<\/strong><\/td>
-                <td>${row.kelas || '-'}<\/td>
-                <td>${row.jurusan || '-'}<\/td>
-                <td><span style="color:${row.status === 'Pulang' ? 'var(--danger)' : 'var(--success)'}">${row.status === 'Pulang' ? '🏠' : '✅'} ${row.status}</span><\/td>
-                <td class="role-guru role-admin role-developer"><button class="btn-icon delete" onclick="deleteAttendance('${row.id}')" title="Hapus Data">🗑️<\/button><\/td>
-            <\/tr>
+            <tr>
+                <td style="text-align:center;">
+                    <img src="${photoUrl}" 
+                         class="attendance-student-avatar"
+                         style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; cursor: pointer;"
+                         onerror="this.src='https://ui-avatars.com/api/?name=${studentInitial}&background=00bcd4&color=fff&size=100&bold=true'"
+                         onclick="showAttendanceStudentPhoto('${row.studentId}', '${escapeHtml(row.nama)}', this.src)">
+                </td>
+                <td>⏰ ${row.timeIn || '-'}<br><span class="text-small">📅 ${row.date}</span>${outDisplay}</td>
+                <td><strong>#${row.studentId}</strong></td>
+                <td>${escapeHtml(row.nama)}</div>
+                <td>${row.kelas || '-'}</div>
+                <td>${row.jurusan || '-'}</div>
+                <td><span style="color:${row.status === 'Pulang' ? 'var(--danger)' : 'var(--success)'}">${row.status === 'Pulang' ? '🏠' : '✅'} ${row.status}</span></div>
+                <td class="role-guru role-admin role-developer"><button class="btn-icon delete" onclick="deleteAttendance('${row.id}')" title="Hapus Data">🗑️</button></div>
+            </tr>
         `);
     }
     tbody.innerHTML = rows.join('');
@@ -1239,7 +1279,6 @@ async function saveAllAbsenceStatus() {
         if (Object.keys(finalUpdates).length > 0) await db.ref(refPath).update(finalUpdates);
         showToast(`✅ Berhasil menyimpan data ketidakhadiran.`, "success");
         
-        // LOG: Simpan manual attendance status
         if (typeof logActivity === 'function' && updatedCount > 0) {
             let statusSummary = [];
             for (const [id, val] of Object.entries(finalUpdates)) {
@@ -1282,12 +1321,13 @@ function cleanupAttendanceUI() {
     if (attendanceDonutChart) { attendanceDonutChart.destroy(); attendanceDonutChart = null; }
     attendanceDataReadyListenerAdded = false;
     attendanceRetryCount = 0;
-    studentPhotoCache.clear();
+    attendancePhotoCache.clear();
     console.log("🧹 Attendance UI cleaned up");
 }
 
 // ======================== INISIALISASI ========================
 setupAttendanceDataReadyListener();
+setupAttendancePhotoListener(); // Mulai listener foto
 
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
@@ -1312,7 +1352,6 @@ if (typeof window !== 'undefined' && window.dbData && window.dbData.attendance) 
         waitForAttendanceElements(() => {
             if (typeof updateAttendanceDonutChart === 'function') updateAttendanceDonutChart();
             if (typeof renderTable === 'function') renderTable();
-            preloadStudentPhotos();
         });
     }, 100);
 }
@@ -1336,11 +1375,9 @@ window.updateAttendanceDonutChart = updateAttendanceDonutChart;
 window.populateFilters = populateFilters;
 window.populateDateFilter = populateDateFilter;
 window.waitForAttendanceElements = waitForAttendanceElements;
+// Ekspor fungsi foto
+window.getAttendanceStudentPhotoUrl = getAttendanceStudentPhotoUrl;
+window.clearAttendancePhotoCache = clearAttendancePhotoCache;
+window.showAttendanceStudentPhoto = showAttendanceStudentPhoto;
 
-// Fungsi baru untuk foto siswa
-window.getStudentPhotoUrl = getStudentPhotoUrl;
-window.getStudentPhotoUrlCached = getStudentPhotoUrlCached;
-window.refreshStudentPhotoCache = refreshStudentPhotoCache;
-window.preloadStudentPhotos = preloadStudentPhotos;
-
-console.log("✅ attendance.js V4.4 loaded - Dengan foto siswa di tabel absensi & log aktivitas");
+console.log("✅ attendance.js V4.4 loaded - Dengan foto siswa di tabel absensi dan log aktivitas");

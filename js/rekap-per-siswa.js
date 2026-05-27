@@ -1,60 +1,158 @@
-// rekap-per-siswa.js - VERSION 1.1 (DENGAN FOTO SISWA & LOG AKTIVITAS)
-// Fitur Rekap Absensi per Siswa (Detail Harian)
-// Menampilkan detail kehadiran individual siswa dalam periode tertentu
-// PERUBAHAN V1.1: 
-//   - Menambahkan foto siswa dari akun masing-masing
-//   - Fallback avatar inisial jika belum punya foto
-//   - Sinkronisasi dengan data user auth
+// rekap-per-siswa.js - VERSION 1.3 (DENGAN PERIODE LENGKAP)
+// Fitur Rekap Absensi per Siswa (Detail Harian dengan Foto)
+// PERUBAHAN V1.3: 
+//   - Menambahkan periode "Tahun Ini" dan "Pertama Kali Absensi"
+//   - Perbaikan fungsi getDateRange untuk periode lengkap
 // ============================================================================
 
 let currentRekapPerSiswaData = null;
 let currentSelectedStudent = null;
-
-// Cache untuk foto siswa
 const rekapPhotoCache = new Map();
+
+// ======================= FUNGSI PERIODE LENGKAP ========================
+
+/**
+ * Mendapatkan range tanggal berdasarkan periode yang dipilih
+ * @param {string} period - 'minggu', 'bulan', 'semester', 'tahun', 'pertama', 'custom'
+ * @param {Date} customStart - tanggal mulai custom (opsional)
+ * @param {Date} customEnd - tanggal akhir custom (opsional)
+ * @returns {{start: Date, end: Date, label: string}}
+ */
+function getRekapDateRange(period, customStart = null, customEnd = null) {
+    const now = new Date();
+    let start = new Date();
+    let end = new Date();
+    let label = '';
+    
+    switch(period) {
+        case 'minggu':
+            const day = now.getDay();
+            const diffToMonday = (day === 0 ? 6 : day - 1);
+            start.setDate(now.getDate() - diffToMonday);
+            start.setHours(0, 0, 0, 0);
+            end.setDate(start.getDate() + 6);
+            end.setHours(23, 59, 59, 999);
+            label = `Minggu Ini (${formatDateIndonesian(start)} - ${formatDateIndonesian(end)})`;
+            break;
+            
+        case 'bulan':
+            start = new Date(now.getFullYear(), now.getMonth(), 1);
+            end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+            end.setHours(23, 59, 59, 999);
+            label = `Bulan Ini (${formatMonthYear(start)})`;
+            break;
+            
+        case 'semester':
+            const semester = now.getMonth() < 6 ? 1 : 2;
+            if (semester === 1) {
+                start = new Date(now.getFullYear(), 0, 1);
+                end = new Date(now.getFullYear(), 5, 30);
+                label = `Semester Ganjil ${now.getFullYear()}`;
+            } else {
+                start = new Date(now.getFullYear(), 6, 1);
+                end = new Date(now.getFullYear(), 11, 31);
+                label = `Semester Genap ${now.getFullYear()}`;
+            }
+            end.setHours(23, 59, 59, 999);
+            break;
+            
+        case 'tahun':
+            start = new Date(now.getFullYear(), 0, 1);
+            end = new Date(now.getFullYear(), 11, 31);
+            end.setHours(23, 59, 59, 999);
+            label = `Tahun ${now.getFullYear()}`;
+            break;
+            
+        case 'pertama':
+            // Range dari tanggal pertama kali siswa pernah absen sampai sekarang
+            label = 'Pertama Kali Absensi';
+            // Akan diisi nanti setelah data siswa diambil
+            return { start: null, end: now, label: label, isFirstTime: true };
+            
+        case 'custom':
+            if (customStart && customEnd) {
+                start = new Date(customStart);
+                end = new Date(customEnd);
+                end.setHours(23, 59, 59, 999);
+                label = `Custom (${formatDateIndonesian(start)} - ${formatDateIndonesian(end)})`;
+            }
+            break;
+            
+        default:
+            start = new Date(now.getFullYear(), now.getMonth(), 1);
+            end = now;
+            label = 'Periode Default';
+    }
+    
+    return { start, end, label };
+}
+
+function formatDateIndonesian(date) {
+    if (!date || !(date instanceof Date)) return '';
+    const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+    return `${days[date.getDay()]}, ${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`;
+}
+
+function formatMonthYear(date) {
+    const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+    return `${months[date.getMonth()]} ${date.getFullYear()}`;
+}
+
+function formatIndonesianDateShort(dateStr) {
+    if (!dateStr) return dateStr;
+    const parts = dateStr.split('-');
+    if (parts.length !== 3) return dateStr;
+    const bulan = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+    return `${parts[2]} ${bulan[parseInt(parts[1]) - 1]} ${parts[0]}`;
+}
 
 // ======================= FUNGSI FOTO SISWA ========================
 
-/**
- * Mendapatkan URL foto siswa berdasarkan ID
- * @param {string|number} studentId - ID siswa
- * @param {string} studentName - Nama siswa (fallback)
- * @returns {string} URL foto atau avatar
- */
 function getRekapStudentPhotoUrl(studentId, studentName) {
-    if (!studentId) return `https://ui-avatars.com/api/?name=${encodeURIComponent(studentName?.charAt(0) || 'U')}&background=00bcd4&color=fff&size=100&bold=true`;
+    if (!studentId) {
+        const initial = studentName ? studentName.charAt(0).toUpperCase() : 'U';
+        return `https://ui-avatars.com/api/?name=${encodeURIComponent(initial)}&background=00bcd4&color=fff&size=100&bold=true`;
+    }
     
-    // Cek cache
     if (rekapPhotoCache.has(studentId)) {
         return rekapPhotoCache.get(studentId);
     }
     
-    // Cari user auth yang memiliki fpId = studentId
     const userAuth = dbData?.users_auth?.find(u => u.fpId == studentId);
     
     let photoUrl;
-    if (userAuth && userAuth.photoUrl) {
+    if (userAuth && userAuth.photoUrl && userAuth.photoUrl !== 'null' && userAuth.photoUrl !== 'undefined') {
         photoUrl = userAuth.photoUrl;
     } else {
-        // Fallback: avatar inisial nama
         const initial = studentName ? studentName.charAt(0).toUpperCase() : 'U';
         photoUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(initial)}&background=00bcd4&color=fff&size=100&bold=true`;
     }
     
-    // Simpan ke cache
     rekapPhotoCache.set(studentId, photoUrl);
     return photoUrl;
 }
 
-/**
- * Refresh cache foto rekap
- */
 function refreshRekapPhotoCache() {
     rekapPhotoCache.clear();
     if (currentRekapPerSiswaData) {
         renderRekapPerSiswa();
     }
     console.log("🖼️ Rekap photo cache cleared");
+}
+
+function setupRekapPhotoListener() {
+    if (!db) return;
+    
+    db.ref('users_auth').on('child_changed', (snapshot) => {
+        const userData = snapshot.val();
+        if (userData && userData.photoUrl && userData.fpId) {
+            rekapPhotoCache.delete(userData.fpId);
+            if (currentRekapPerSiswaData && currentRekapPerSiswaData.student.id == userData.fpId) {
+                renderRekapPerSiswa();
+            }
+        }
+    });
 }
 
 // ======================= INISIALISASI ========================
@@ -68,53 +166,42 @@ function initRekapPerSiswa() {
         setTimeout(initRekapPerSiswa, 500);
     }
     
-    // Tambahkan listener untuk perubahan periode
-    const periodSelect = document.getElementById('rekapPeriod');
+    const periodSelect = document.getElementById('rekapPerSiswaPeriod');
     if (periodSelect) {
         periodSelect.addEventListener('change', () => {
+            const customGroup = document.getElementById('rekapPerSiswaCustomRange');
+            if (customGroup) {
+                customGroup.style.display = periodSelect.value === 'custom' ? 'flex' : 'none';
+            }
             if (document.getElementById('rekapPerSiswaContainer')?.style.display === 'block') {
                 loadRekapPerSiswa();
             }
         });
     }
     
-    const customStart = document.getElementById('rekapStartDate');
-    const customEnd = document.getElementById('rekapEndDate');
+    const customStart = document.getElementById('rekapPerSiswaStartDate');
+    const customEnd = document.getElementById('rekapPerSiswaEndDate');
     if (customStart) customStart.addEventListener('change', () => {
-        if (document.getElementById('rekapPeriod')?.value === 'custom' && 
+        if (document.getElementById('rekapPerSiswaPeriod')?.value === 'custom' && 
             document.getElementById('rekapPerSiswaContainer')?.style.display === 'block') {
             loadRekapPerSiswa();
         }
     });
     if (customEnd) customEnd.addEventListener('change', () => {
-        if (document.getElementById('rekapPeriod')?.value === 'custom' && 
+        if (document.getElementById('rekapPerSiswaPeriod')?.value === 'custom' && 
             document.getElementById('rekapPerSiswaContainer')?.style.display === 'block') {
             loadRekapPerSiswa();
         }
     });
     
-    // Setup listener untuk perubahan foto
-    setupRekapPhotoListener();
-}
-
-/**
- * Setup listener untuk perubahan foto dari user auth
- */
-function setupRekapPhotoListener() {
-    if (!db) return;
+    // Set default custom dates (30 hari terakhir)
+    const today = new Date();
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(today.getDate() - 30);
+    if (customStart && !customStart.value) customStart.value = thirtyDaysAgo.toISOString().split('T')[0];
+    if (customEnd && !customEnd.value) customEnd.value = today.toISOString().split('T')[0];
     
-    db.ref('users_auth').on('child_changed', (snapshot) => {
-        const userData = snapshot.val();
-        if (userData && userData.photoUrl && userData.fpId) {
-            console.log(`🖼️ Photo changed for student ID: ${userData.fpId}, clearing cache`);
-            rekapPhotoCache.delete(userData.fpId);
-            
-            // Refresh tampilan jika sedang menampilkan siswa yang sama
-            if (currentRekapPerSiswaData && currentRekapPerSiswaData.student.id == userData.fpId) {
-                renderRekapPerSiswa();
-            }
-        }
-    });
+    setupRekapPhotoListener();
 }
 
 function populateRekapPerSiswaSelect() {
@@ -131,7 +218,6 @@ function populateRekapPerSiswaSelect() {
     
     const students = [...dbData.users].sort((a, b) => a.id - b.id);
     for (const student of students) {
-        // Gunakan foto dari akun jika ada
         const photoUrl = getRekapStudentPhotoUrl(student.id, student.nama);
         select.innerHTML += `<option value="${student.id}" data-avatar="${photoUrl}">${student.id} - ${escapeHtml(student.nama)} (${student.kelas || '-'} / ${student.jurusan || '-'})</option>`;
     }
@@ -162,13 +248,13 @@ async function loadRekapPerSiswa() {
     
     currentSelectedStudent = student;
     
-    const periodSelect = document.getElementById('rekapPeriod');
+    const periodSelect = document.getElementById('rekapPerSiswaPeriod');
     const period = periodSelect ? periodSelect.value : 'minggu';
-    let startDate, endDate;
+    let startDate, endDate, periodLabel;
     
     if (period === 'custom') {
-        const startInput = document.getElementById('rekapStartDate').value;
-        const endInput = document.getElementById('rekapEndDate').value;
+        const startInput = document.getElementById('rekapPerSiswaStartDate').value;
+        const endInput = document.getElementById('rekapPerSiswaEndDate').value;
         if (!startInput || !endInput) {
             showToast("📅 Pilih tanggal mulai dan akhir terlebih dahulu!", "warning");
             return;
@@ -176,15 +262,45 @@ async function loadRekapPerSiswa() {
         startDate = new Date(startInput);
         endDate = new Date(endInput);
         endDate.setHours(23, 59, 59, 999);
-    } else {
-        const range = getDateRange(period);
+        periodLabel = `Custom (${formatIndonesianDateShort(startInput)} - ${formatIndonesianDateShort(endInput)})`;
+    } 
+    else if (period === 'pertama') {
+        // Cari tanggal pertama kali siswa pernah absen
+        const firstAttendance = dbData.attendance
+            .filter(a => a.studentId == studentId && a.date)
+            .sort((a, b) => new Date(a.date) - new Date(b.date))[0];
+        
+        if (firstAttendance && firstAttendance.date) {
+            startDate = new Date(firstAttendance.date);
+            startDate.setHours(0, 0, 0, 0);
+            endDate = new Date();
+            endDate.setHours(23, 59, 59, 999);
+            periodLabel = `Pertama Kali Absensi (${formatIndonesianDateShort(firstAttendance.date)} - Sekarang)`;
+        } else {
+            // Jika belum pernah absen sama sekali
+            startDate = new Date();
+            startDate.setMonth(startDate.getMonth() - 1);
+            endDate = new Date();
+            periodLabel = 'Belum Pernah Absen';
+            showToast("⚠️ Siswa ini belum pernah melakukan absensi sama sekali!", "warning");
+        }
+    }
+    else {
+        const range = getRekapDateRange(period);
         startDate = range.start;
         endDate = range.end;
+        periodLabel = range.label;
     }
     
-    if (startDate > endDate) {
+    if (startDate && endDate && startDate > endDate) {
         showToast("⚠️ Tanggal mulai harus lebih kecil dari tanggal akhir!", "error");
         return;
+    }
+    
+    // Update label periode yang ditampilkan
+    const periodLabelSpan = document.getElementById('rekapPerSiswaPeriodLabel');
+    if (periodLabelSpan && periodLabel) {
+        periodLabelSpan.textContent = periodLabel;
     }
     
     showToast(`⏳ Memuat rekap ${student.nama}...`, "info");
@@ -196,24 +312,27 @@ async function loadRekapPerSiswa() {
     if (contentDiv) contentDiv.innerHTML = '<div style="text-align:center; padding:40px;">⏳ Menghitung data kehadiran...</div>';
     
     try {
-        // Ambil data absensi siswa dalam periode
+        // Jika startDate tidak ada (belum pernah absen)
+        if (!startDate) {
+            renderEmptyRekap(student, periodLabel);
+            showToast(`📭 ${student.nama} belum memiliki data absensi`, "info");
+            return;
+        }
+        
         let attendanceRecords = dbData.attendance.filter(a => a.studentId == studentId);
         attendanceRecords = attendanceRecords.filter(a => {
             const recordDate = new Date(a.date);
             return recordDate >= startDate && recordDate <= endDate;
         });
         
-        // Filter hari libur jika fungsi tersedia
         if (typeof filterAttendanceByHoliday === 'function') {
             attendanceRecords = filterAttendanceByHoliday(attendanceRecords);
         }
         
-        // Ambil data manual status
         let manualStatusMap = {};
         if (typeof fetchManualStatusForRange === 'function') {
             manualStatusMap = await fetchManualStatusForRange(startDate, endDate);
         } else {
-            // Fallback: ambil manual status untuk periode
             const currentDate = new Date(startDate);
             const end = new Date(endDate);
             while (currentDate <= end) {
@@ -244,13 +363,11 @@ async function loadRekapPerSiswa() {
             currentDate.setDate(currentDate.getDate() + 1);
         }
         
-        // Buat map untuk quick lookup
         const attendanceMap = new Map();
         attendanceRecords.forEach(record => {
             attendanceMap.set(record.date, record);
         });
         
-        // Build detail attendance
         const details = [];
         let hadir = 0, sakit = 0, izin = 0, alpha = 0;
         
@@ -325,6 +442,7 @@ async function loadRekapPerSiswa() {
             student,
             startDate: startDate.toISOString().split('T')[0],
             endDate: endDate.toISOString().split('T')[0],
+            periodLabel: periodLabel,
             totalDays,
             hadir,
             sakit,
@@ -337,7 +455,6 @@ async function loadRekapPerSiswa() {
         };
         
         renderRekapPerSiswa();
-        
         showToast(`✅ Rekap ${student.nama} selesai (${totalDays} hari sekolah)`, "success");
         
     } catch (error) {
@@ -349,20 +466,32 @@ async function loadRekapPerSiswa() {
     }
 }
 
-// ======================= RENDER REKAP PER SISWA (DENGAN FOTO) ========================
+function renderEmptyRekap(student, periodLabel) {
+    currentRekapPerSiswaData = null;
+    const contentDiv = document.getElementById('rekapPerSiswaContent');
+    if (!contentDiv) return;
+    
+    contentDiv.innerHTML = `
+        <div style="text-align:center; padding:40px; background: var(--bg-hover); border-radius: 16px;">
+            <div style="font-size: 48px; margin-bottom: 16px;">📭</div>
+            <h3 style="color: var(--text-primary);">Belum Ada Data Absensi</h3>
+            <p style="color: var(--text-muted); margin-top: 8px;">
+                Siswa <strong>${escapeHtml(student.nama)}</strong> (ID: ${student.id})<br>
+                belum pernah melakukan absensi fingerprint.
+            </p>
+            <p style="color: var(--text-muted); font-size: 12px; margin-top: 16px;">
+                Periode: ${periodLabel || 'Pertama Kali Absensi'}
+            </p>
+        </div>
+    `;
+}
+
+// ======================= RENDER REKAP PER SISWA ========================
 
 function formatDayName(dateStr) {
     const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
     const date = new Date(dateStr);
     return days[date.getDay()];
-}
-
-function formatIndonesianDate(dateStr) {
-    if (!dateStr) return dateStr;
-    const parts = dateStr.split('-');
-    if (parts.length !== 3) return dateStr;
-    const bulan = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
-    return `${parts[2]} ${bulan[parseInt(parts[1]) - 1]} ${parts[0]}`;
 }
 
 function renderRekapPerSiswa() {
@@ -372,19 +501,27 @@ function renderRekapPerSiswa() {
     const data = currentRekapPerSiswaData;
     const student = data.student;
     
-    // Dapatkan foto siswa dari akun
     let avatarUrl = getRekapStudentPhotoUrl(student.id, student.nama);
     const studentInitial = student.nama ? student.nama.charAt(0).toUpperCase() : 'U';
+    
+    // Cek apakah siswa memiliki akun
+    const hasAccount = dbData.users_auth?.some(u => u.fpId == student.id);
+    const accountBadge = hasAccount 
+        ? '<span class="badge-account" style="background:#4caf50; font-size:11px; margin-left:10px; padding:2px 8px; border-radius:20px;">✓ Berakun</span>' 
+        : '<span class="badge-no-account" style="background:#888; font-size:11px; margin-left:10px; padding:2px 8px; border-radius:20px;">❌ Belum Berakun</span>';
     
     let html = `
         <div class="rekap-per-siswa-header" style="display: flex; gap: 20px; align-items: center; margin-bottom: 25px; padding-bottom: 20px; border-bottom: 1px solid var(--border); flex-wrap: wrap;">
             <div style="display: flex; align-items: center; gap: 15px;">
                 <img src="${avatarUrl}" 
                      class="rekap-student-avatar"
-                     style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover; border: 3px solid #00bcd4; background: var(--bg-card);" 
-                     onerror="this.src='https://ui-avatars.com/api/?name=${studentInitial}&background=00bcd4&color=fff&size=100&bold=true'">
+                     style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover; border: 3px solid #00bcd4; background: var(--bg-card); cursor: pointer;"
+                     onerror="this.src='https://ui-avatars.com/api/?name=${studentInitial}&background=00bcd4&color=fff&size=100&bold=true'"
+                     onclick="showRekapStudentPhoto('${student.id}', '${escapeHtml(student.nama)}', this.src)">
                 <div>
-                    <h2 style="margin: 0; color: var(--text-primary);">${escapeHtml(student.nama)}</h2>
+                    <h2 style="margin: 0; color: var(--text-primary);">
+                        ${escapeHtml(student.nama)}${accountBadge}
+                    </h2>
                     <div style="color: var(--text-muted); margin-top: 5px;">
                         <span>🆔 ID: ${student.id}</span> | 
                         <span>📚 Kelas: ${student.kelas || '-'}</span> | 
@@ -419,7 +556,7 @@ function renderRekapPerSiswa() {
         <div style="margin-bottom: 20px;">
             <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 15px;">
                 <div style="color: var(--text-muted);">
-                    <strong>📅 Periode:</strong> ${formatIndonesianDate(data.startDate)} - ${formatIndonesianDate(data.endDate)}
+                    <strong>📅 Periode:</strong> <span id="rekapPerSiswaPeriodDisplay">${data.periodLabel || formatIndonesianDateShort(data.startDate) + ' - ' + formatIndonesianDateShort(data.endDate)}</span>
                     <span style="margin-left: 15px;">📊 Total Hari Sekolah: <strong>${data.totalDays}</strong> hari</span>
                 </div>
                 <div>
@@ -453,7 +590,7 @@ function renderRekapPerSiswa() {
         html += `
             <tr style="border-bottom: 1px solid var(--border);">
                 <td style="padding: 10px; text-align: center;">${no++}</td>
-                <td style="padding: 10px; text-align: center;">${formatIndonesianDate(item.date)}</td>
+                <td style="padding: 10px; text-align: center;">${formatIndonesianDateShort(item.date)}</td>
                 <td style="padding: 10px; text-align: center;">${item.dayName}</td>
                 <td style="padding: 10px; text-align: center;">
                     <span style="color: ${item.statusColor}; font-weight: bold; display: inline-flex; align-items: center; gap: 4px;">
@@ -478,7 +615,46 @@ function renderRekapPerSiswa() {
     contentDiv.innerHTML = html;
 }
 
-// ======================= EXPORT FUNCTIONS (DENGAN FOTO) ========================
+function showRekapStudentPhoto(studentId, studentName, photoUrl) {
+    const userAuth = dbData?.users_auth?.find(u => u.fpId == studentId);
+    const hasAccount = !!userAuth;
+    const accountInfo = hasAccount 
+        ? `✅ Sudah memiliki akun (${userAuth.email || userAuth.nama})` 
+        : '❌ Belum memiliki akun. Foto menggunakan inisial nama.';
+    
+    let modalHtml = `
+        <div id="modal-rekap-photo" class="modal-overlay open">
+            <div class="modal-box" style="max-width: 500px; text-align: center;">
+                <div class="modal-title">
+                    <span>📸 Foto ${escapeHtml(studentName)}</span>
+                    <span onclick="closeModal('modal-rekap-photo')">✖</span>
+                </div>
+                <div style="padding: 20px;">
+                    <img src="${photoUrl}" 
+                         style="max-width: 100%; max-height: 60vh; border-radius: 20px; object-fit: contain;"
+                         onerror="this.src='https://ui-avatars.com/api/?name=${escapeHtml(studentName?.charAt(0) || 'U')}&background=00bcd4&color=fff&size=200&bold=true'">
+                    <p style="margin-top: 15px;">
+                        <strong>${escapeHtml(studentName)}</strong><br>
+                        <span style="color: var(--text-muted);">ID: ${studentId}</span>
+                    </p>
+                    <hr>
+                    <div class="text-small" style="color: var(--text-muted); padding: 8px; background: var(--bg-hover); border-radius: 8px;">
+                        ℹ️ ${accountInfo}<br>
+                        ${hasAccount ? 'Foto ini sinkron dengan akun siswa.' : 'Silakan daftarkan akun siswa untuk memiliki foto profil.'}
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <button class="btn-cancel" onclick="closeModal('modal-rekap-photo')">Tutup</button>
+                </div>
+            </div>
+        </div>
+    `;
+    const existingModal = document.getElementById('modal-rekap-photo');
+    if (existingModal) existingModal.remove();
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+}
+
+// ======================= EXPORT FUNCTIONS ========================
 
 async function exportRekapPerSiswaToExcel() {
     if (!currentRekapPerSiswaData) {
@@ -496,7 +672,7 @@ async function exportRekapPerSiswaToExcel() {
     csv += `"${schoolName}"\n`;
     csv += `"Nama: ${student.nama}"\n`;
     csv += `"ID: ${student.id} | Kelas: ${student.kelas || '-'} | Jurusan: ${student.jurusan || '-'}"\n`;
-    csv += `"Periode: ${formatIndonesianDate(data.startDate)} - ${formatIndonesianDate(data.endDate)}"\n`;
+    csv += `"Periode: ${data.periodLabel || formatIndonesianDateShort(data.startDate) + ' - ' + formatIndonesianDateShort(data.endDate)}"\n`;
     csv += `"Total Hari Sekolah: ${data.totalDays} hari"\n`;
     csv += `"Tanggal Cetak: ${dateNow}"\n`;
     csv += `\n`;
@@ -509,7 +685,7 @@ async function exportRekapPerSiswaToExcel() {
     
     let no = 1;
     for (const item of data.details) {
-        csv += `${no},"${formatIndonesianDate(item.date)}","${item.dayName}","${item.statusText}","${item.timeIn}","${item.timeOut}"\n`;
+        csv += `${no},"${formatIndonesianDateShort(item.date)}","${item.dayName}","${item.statusText}","${item.timeIn}","${item.timeOut}"\n`;
         no++;
     }
     
@@ -523,7 +699,7 @@ async function exportRekapPerSiswaToExcel() {
     showToast("📥 Rekap per siswa berhasil diekspor ke Excel!", "success");
     
     if (typeof logActivity === 'function') {
-        logActivity('export_rekap_per_siswa_excel', `Ekspor rekap per siswa: ${student.nama} (ID: ${student.id}), periode ${data.startDate} s/d ${data.endDate}`);
+        logActivity('export_rekap_per_siswa_excel', `Ekspor rekap per siswa: ${student.nama} (ID: ${student.id})`);
     }
 }
 
@@ -539,7 +715,6 @@ async function exportRekapPerSiswaToPDF() {
     const dateNow = new Date().toLocaleDateString('id-ID');
     const timeNow = new Date().toLocaleTimeString('id-ID');
     
-    // Dapatkan avatar URL untuk print
     let avatarUrl = getRekapStudentPhotoUrl(student.id, student.nama);
     const studentInitial = student.nama ? student.nama.charAt(0).toUpperCase() : 'U';
     
@@ -593,7 +768,7 @@ async function exportRekapPerSiswaToPDF() {
                 <div class="student-details">
                     <h2>${escapeHtml(student.nama)}</h2>
                     <p>🆔 ID: ${student.id} | 📚 Kelas: ${student.kelas || '-'} | 🎓 Jurusan: ${student.jurusan || '-'}</p>
-                    <p>📅 Periode: ${formatIndonesianDate(data.startDate)} - ${formatIndonesianDate(data.endDate)}</p>
+                    <p>📅 Periode: ${data.periodLabel || formatIndonesianDateShort(data.startDate) + ' - ' + formatIndonesianDateShort(data.endDate)}</p>
                     <p>📊 Total Hari Sekolah: ${data.totalDays} hari</p>
                 </div>
             </div>
@@ -626,11 +801,11 @@ async function exportRekapPerSiswaToPDF() {
         printWindow.document.write(`
             <tr>
                 <td>${no++}</td>
-                <td>${formatIndonesianDate(item.date)}</td>
-                <td>${item.dayName}</td>
-                <td class="${statusClass}">${item.statusText}</td>
-                <td>${item.timeIn}</td>
-                <td>${item.timeOut}</td>
+                <td>${formatIndonesianDateShort(item.date)}</div>
+                <td>${item.dayName}</div>
+                <td class="${statusClass}">${item.statusText}</div>
+                <td>${item.timeIn}</div>
+                <td>${item.timeOut}</div>
             </tr>
         `);
     }
@@ -654,18 +829,14 @@ async function exportRekapPerSiswaToPDF() {
     showToast("📄 Membuka halaman print...", "info");
     
     if (typeof logActivity === 'function') {
-        logActivity('export_rekap_per_siswa_pdf', `Ekspor rekap per siswa ke PDF: ${student.nama} (ID: ${student.id}), periode ${data.startDate} s/d ${data.endDate}`);
+        logActivity('export_rekap_per_siswa_pdf', `Ekspor rekap per siswa ke PDF: ${student.nama} (ID: ${student.id})`);
     }
 }
-
-// ======================= UTILITY ========================
 
 function escapeHtml(str) {
     if (!str) return '';
     return str.replace(/[&<>]/g, m => m === '&' ? '&amp;' : m === '<' ? '&lt;' : '&gt;');
 }
-
-// ======================= CLEANUP ========================
 
 function cleanupRekapPerSiswa() {
     currentRekapPerSiswaData = null;
@@ -683,5 +854,7 @@ window.exportRekapPerSiswaToPDF = exportRekapPerSiswaToPDF;
 window.cleanupRekapPerSiswa = cleanupRekapPerSiswa;
 window.getRekapStudentPhotoUrl = getRekapStudentPhotoUrl;
 window.refreshRekapPhotoCache = refreshRekapPhotoCache;
+window.showRekapStudentPhoto = showRekapStudentPhoto;
+window.getRekapDateRange = getRekapDateRange;
 
-console.log("✅ rekap-per-siswa.js V1.1 loaded - Dengan foto siswa & log aktivitas");
+console.log("✅ rekap-per-siswa.js V1.3 loaded - Dengan periode lengkap (Minggu, Bulan, Semester, Tahun, Pertama Kali)");

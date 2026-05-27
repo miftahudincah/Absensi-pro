@@ -1,29 +1,11 @@
-// init.js - VERSION 5.1 (FIXED: dbData undefined error)
+// init.js - VERSION 5.0 (SUPABASE INTEGRATION & AUTO-DELETE EXPIRED STATUS)
 // INISIALISASI DATA DENGAN FLAG SYSTEM + EVENT DATA READY
 // DENGAN DUKUNGAN SUPABASE AUTO-DELETE UNTUK STATUS EXPIRED
-// PERBAIKAN: Menambahkan pengecekan dbData global window
 // ============================================================================
 
 let appInitialized = false;
 let initListenersAttached = false;
 let isSchoolConfigLoadedFromFirebase = false;
-
-// ========== INISIALISASI dbData GLOBAL ==========
-// Pastikan dbData tersedia secara global untuk semua modul
-if (typeof window.dbData === 'undefined') {
-    window.dbData = {
-        users: [],
-        users_auth: [],
-        attendance: [],
-        codes: []
-    };
-    console.log("📦 window.dbData initialized globally");
-}
-
-// Untuk kompatibilitas dengan modul lain yang menggunakan dbData langsung
-if (typeof dbData === 'undefined') {
-    var dbData = window.dbData;
-}
 
 // Flags untuk mengecek ketersediaan data
 let dataReady = {
@@ -50,7 +32,7 @@ function checkAllDataReady() {
             window._dataReadyDispatched = true;
             console.log("📡 Dispatching 'dataReady' event to all modules...");
             window.dispatchEvent(new CustomEvent('dataReady', { 
-                detail: { dbData: window.dbData, currentUser, timestamp: Date.now() }
+                detail: { dbData, currentUser, timestamp: Date.now() }
             }));
         }
         
@@ -260,363 +242,321 @@ function initDataListeners() {
     
     // ========== 1. LISTENER DATA SISWA (users) ==========
     db.ref('users').on('value', (snapshot) => {
-        try {
-            const data = snapshot.val();
-            const oldCount = window.dbData.users?.length || 0;
-            
-            window.dbData.users = [];
-            if (data) {
-                Object.keys(data).forEach(key => {
-                    window.dbData.users.push({ id: key, ...data[key] });
-                });
-            }
-            
-            const newCount = window.dbData.users.length;
-            if (oldCount !== newCount) {
-                console.log(`📊 Users data updated: ${oldCount} → ${newCount} students`);
-            }
-            
-            dataReady.users = true;
-            checkAllDataReady();
-            
-            if (typeof renderStudentsTable === 'function') {
-                renderStudentsTable();
-            }
-            if (typeof populateStudentFilters === 'function') {
-                populateStudentFilters();
-            }
-            if (typeof populateFilters === 'function') {
-                populateFilters();
-            }
-            if (typeof populateDateFilter === 'function') {
-                populateDateFilter();
-            }
-            if (typeof populateStudentSelectForCode === 'function') {
-                populateStudentSelectForCode();
-            }
-            if (typeof updateStudentStatistics === 'function') {
-                updateStudentStatistics();
-            }
-        } catch (err) {
-            console.error("Error processing users data:", err);
+        const data = snapshot.val();
+        const oldCount = dbData.users?.length || 0;
+        
+        dbData.users = [];
+        if (data) {
+            Object.keys(data).forEach(key => {
+                dbData.users.push({ id: key, ...data[key] });
+            });
         }
-    }, (error) => {
-        console.error("Firebase users listener error:", error);
+        
+        const newCount = dbData.users.length;
+        if (oldCount !== newCount) {
+            console.log(`📊 Users data updated: ${oldCount} → ${newCount} students`);
+        }
+        
+        dataReady.users = true;
+        checkAllDataReady();
+        
+        if (typeof renderStudentsTable === 'function') {
+            renderStudentsTable();
+        }
+        if (typeof populateStudentFilters === 'function') {
+            populateStudentFilters();
+        }
+        if (typeof populateFilters === 'function') {
+            populateFilters();
+        }
+        if (typeof populateDateFilter === 'function') {
+            populateDateFilter();
+        }
+        if (typeof populateStudentSelectForCode === 'function') {
+            populateStudentSelectForCode();
+        }
+        if (typeof updateStudentStatistics === 'function') {
+            updateStudentStatistics();
+        }
     });
     
     // ========== 2. LISTENER DATA USER AUTH (users_auth) ==========
     db.ref('users_auth').on('value', (snapshot) => {
-        try {
-            const data = snapshot.val();
-            const oldCount = window.dbData.users_auth?.length || 0;
-            
-            window.dbData.users_auth = [];
-            if (data) {
-                Object.keys(data).forEach(uid => {
-                    window.dbData.users_auth.push({ uid: uid, ...data[uid] });
-                });
-            }
-            
-            const newCount = window.dbData.users_auth.length;
-            if (oldCount !== newCount) {
-                console.log(`👥 Users auth updated: ${oldCount} → ${newCount} users`);
-            }
-            
-            dataReady.users_auth = true;
-            checkAllDataReady();
-            
-            if (currentUser && currentUser.uid) {
-                const updatedUser = window.dbData.users_auth.find(u => u.uid === currentUser.uid);
-                if (updatedUser) {
-                    const oldRole = currentUser.role;
-                    currentUser = { ...currentUser, ...updatedUser };
-                    if (typeof saveUserToLocalStorage === 'function') {
-                        saveUserToLocalStorage(currentUser);
-                    }
-                    if (oldRole !== currentUser.role && typeof applyRolePermissions === 'function') {
-                        applyRolePermissions();
-                    }
+        const data = snapshot.val();
+        const oldCount = dbData.users_auth?.length || 0;
+        
+        dbData.users_auth = [];
+        if (data) {
+            Object.keys(data).forEach(uid => {
+                dbData.users_auth.push({ uid: uid, ...data[uid] });
+            });
+        }
+        
+        const newCount = dbData.users_auth.length;
+        if (oldCount !== newCount) {
+            console.log(`👥 Users auth updated: ${oldCount} → ${newCount} users`);
+        }
+        
+        dataReady.users_auth = true;
+        checkAllDataReady();
+        
+        if (currentUser && currentUser.uid) {
+            const updatedUser = dbData.users_auth.find(u => u.uid === currentUser.uid);
+            if (updatedUser) {
+                const oldRole = currentUser.role;
+                currentUser = { ...currentUser, ...updatedUser };
+                if (typeof saveUserToLocalStorage === 'function') {
+                    saveUserToLocalStorage(currentUser);
+                }
+                if (oldRole !== currentUser.role && typeof applyRolePermissions === 'function') {
+                    applyRolePermissions();
                 }
             }
-            
-            if (typeof renderUsersTable === 'function') {
-                renderUsersTable();
-            }
-        } catch (err) {
-            console.error("Error processing users_auth data:", err);
         }
-    }, (error) => {
-        console.error("Firebase users_auth listener error:", error);
+        
+        if (typeof renderUsersTable === 'function') {
+            renderUsersTable();
+        }
     });
     
     // ========== 3. LISTENER DATA ABSENSI ==========
     db.ref('absensi').on('value', (snapshot) => {
-        try {
-            const data = snapshot.val();
-            const oldCount = window.dbData.attendance?.length || 0;
-            
-            window.dbData.attendance = [];
-            if (data) {
-                Object.keys(data).forEach(date => {
-                    const dailyRecords = data[date];
-                    if (dailyRecords) {
-                        Object.keys(dailyRecords).forEach(id => {
-                            const record = dailyRecords[id];
-                            if (record) {
-                                window.dbData.attendance.push({
-                                    id: date + "-" + id,
-                                    studentId: id,
-                                    timestamp: date + "T" + (record.in || "00:00"),
-                                    date: date,
-                                    timeIn: record.in,
-                                    timeOut: record.out,
-                                    nama: record.nama,
-                                    kelas: record.kelas,
-                                    jurusan: record.jurusan,
-                                    status: (record.out) ? "Pulang" : "Hadir"
-                                });
-                            }
-                        });
-                    }
-                });
-            }
-            window.dbData.attendance.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-            
-            const newCount = window.dbData.attendance.length;
-            if (oldCount !== newCount) {
-                console.log(`📋 Attendance updated: ${oldCount} → ${newCount} records`);
-            }
-            
-            dataReady.attendance = true;
-            checkAllDataReady();
-            
-            if (typeof renderTable === 'function') {
-                renderTable();
-            }
-            
-            if (typeof renderDashboard === 'function') {
-                renderDashboard();
-            }
-            if (typeof updateDashboardChart === 'function') {
-                setTimeout(() => updateDashboardChart(), 100);
-            }
-            if (typeof updateAttendanceDonutChart === 'function') {
-                updateAttendanceDonutChart();
-            }
-            
-            if (typeof loadRekap === 'function' && document.getElementById('tab-rekap')?.classList.contains('active')) {
-                setTimeout(() => loadRekap(), 100);
-            }
-        } catch (err) {
-            console.error("Error processing attendance data:", err);
+        const data = snapshot.val();
+        const oldCount = dbData.attendance?.length || 0;
+        
+        dbData.attendance = [];
+        if (data) {
+            Object.keys(data).forEach(date => {
+                const dailyRecords = data[date];
+                if (dailyRecords) {
+                    Object.keys(dailyRecords).forEach(id => {
+                        const record = dailyRecords[id];
+                        if (record) {
+                            dbData.attendance.push({
+                                id: date + "-" + id,
+                                studentId: id,
+                                timestamp: date + "T" + (record.in || "00:00"),
+                                date: date,
+                                timeIn: record.in,
+                                timeOut: record.out,
+                                nama: record.nama,
+                                kelas: record.kelas,
+                                jurusan: record.jurusan,
+                                status: (record.out) ? "Pulang" : "Hadir"
+                            });
+                        }
+                    });
+                }
+            });
         }
-    }, (error) => {
-        console.error("Firebase absensi listener error:", error);
+        dbData.attendance.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        
+        const newCount = dbData.attendance.length;
+        if (oldCount !== newCount) {
+            console.log(`📋 Attendance updated: ${oldCount} → ${newCount} records`);
+        }
+        
+        dataReady.attendance = true;
+        checkAllDataReady();
+        
+        if (typeof renderTable === 'function') {
+            renderTable();
+        }
+        
+        if (typeof renderDashboard === 'function') {
+            renderDashboard();
+        }
+        if (typeof updateDashboardChart === 'function') {
+            setTimeout(() => updateDashboardChart(), 100);
+        }
+        if (typeof updateAttendanceDonutChart === 'function') {
+            updateAttendanceDonutChart();
+        }
+        
+        if (typeof loadRekap === 'function' && document.getElementById('tab-rekap')?.classList.contains('active')) {
+            setTimeout(() => loadRekap(), 100);
+        }
     });
     
     // ========== 4. LISTENER SCHOOL CONFIG ==========
     db.ref('school_config').on('value', (snapshot) => {
-        try {
-            const data = snapshot.val();
+        const data = snapshot.val();
+        
+        console.log("📡 School config listener triggered, data from Firebase:", JSON.stringify(data));
+        
+        if (data && typeof data === 'object') {
+            const configType = data.type || 'smp';
+            const configClasses = data.classes || [];
+            const configMajors = data.majors || [];
             
-            console.log("📡 School config listener triggered, data from Firebase:", JSON.stringify(data));
+            console.log(`🏫 School config LOADED from Firebase: type=${configType}, classes=${configClasses.length}, majors=${configMajors.length}`);
+            if (configClasses.length > 0) console.log(`   Classes: ${configClasses.join(', ')}`);
+            if (configMajors.length > 0) console.log(`   Majors: ${configMajors.join(', ')}`);
             
-            if (data && typeof data === 'object') {
-                const configType = data.type || 'smp';
-                const configClasses = data.classes || [];
-                const configMajors = data.majors || [];
-                
-                console.log(`🏫 School config LOADED from Firebase: type=${configType}, classes=${configClasses.length}, majors=${configMajors.length}`);
-                if (configClasses.length > 0) console.log(`   Classes: ${configClasses.join(', ')}`);
-                if (configMajors.length > 0) console.log(`   Majors: ${configMajors.join(', ')}`);
-                
-                window.currentSchoolConfig = {
-                    type: configType,
-                    majors: [...configMajors],
-                    classes: [...configClasses]
-                };
-                
-                if (typeof currentSchoolConfig !== 'undefined') {
-                    currentSchoolConfig.type = configType;
-                    currentSchoolConfig.majors = [...configMajors];
-                    currentSchoolConfig.classes = [...configClasses];
-                    console.log(`✅ Updated currentSchoolConfig (setting.js): type=${currentSchoolConfig.type}`);
-                }
-                
-                if (typeof syncSchoolConfigToWindow === 'function') {
-                    syncSchoolConfigToWindow();
-                    console.log("✅ Called syncSchoolConfigToWindow()");
-                }
-                
-                isSchoolConfigLoadedFromFirebase = true;
-                
-                const typeSelect = document.getElementById('schoolTypeSelect');
-                if (typeSelect) {
-                    if (typeSelect.value !== configType) {
-                        typeSelect.value = configType;
-                        console.log(`📋 Set schoolTypeSelect to: ${configType}`);
-                    } else {
-                        console.log(`📋 schoolTypeSelect already = ${configType}`);
-                    }
+            window.currentSchoolConfig = {
+                type: configType,
+                majors: [...configMajors],
+                classes: [...configClasses]
+            };
+            
+            if (typeof currentSchoolConfig !== 'undefined') {
+                currentSchoolConfig.type = configType;
+                currentSchoolConfig.majors = [...configMajors];
+                currentSchoolConfig.classes = [...configClasses];
+                console.log(`✅ Updated currentSchoolConfig (setting.js): type=${currentSchoolConfig.type}`);
+            }
+            
+            if (typeof syncSchoolConfigToWindow === 'function') {
+                syncSchoolConfigToWindow();
+                console.log("✅ Called syncSchoolConfigToWindow()");
+            }
+            
+            isSchoolConfigLoadedFromFirebase = true;
+            
+            const typeSelect = document.getElementById('schoolTypeSelect');
+            if (typeSelect) {
+                if (typeSelect.value !== configType) {
+                    typeSelect.value = configType;
+                    console.log(`📋 Set schoolTypeSelect to: ${configType}`);
                 } else {
-                    console.warn("⚠️ schoolTypeSelect not found in DOM yet");
+                    console.log(`📋 schoolTypeSelect already = ${configType}`);
                 }
-                
-                const majorsDiv = document.getElementById('majorsManager');
-                if (majorsDiv) {
-                    const shouldShow = (configType === 'smk' || configType === 'both');
-                    majorsDiv.style.display = shouldShow ? 'block' : 'none';
-                    console.log(`📋 Majors manager visibility: ${shouldShow ? 'show' : 'hide'}`);
-                }
-                
-                if (typeof renderClassesList === 'function') {
-                    renderClassesList();
-                }
-                if (typeof renderMajorsList === 'function') {
-                    renderMajorsList();
-                }
-                
             } else {
-                console.log("⚠️ No school config found in Firebase");
-                
-                if (!window.currentSchoolConfig) {
-                    window.currentSchoolConfig = {
-                        type: 'smp',
-                        majors: [],
-                        classes: ['VII', 'VIII', 'IX']
-                    };
-                    console.log("📚 Created default school config");
-                    
-                    db.ref('school_config').set({
-                        type: 'smp',
-                        classes: ['VII', 'VIII', 'IX'],
-                        majors: []
-                    }).then(() => {
-                        console.log("✅ Default config saved to Firebase");
-                    }).catch(err => {
-                        console.error("❌ Failed to save default config:", err);
-                    });
-                } else {
-                    console.log(`📚 Keeping existing config: type=${window.currentSchoolConfig.type}`);
-                }
-                
-                if (typeof currentSchoolConfig !== 'undefined' && !currentSchoolConfig.type) {
-                    currentSchoolConfig.type = window.currentSchoolConfig.type;
-                    currentSchoolConfig.majors = [...window.currentSchoolConfig.majors];
-                    currentSchoolConfig.classes = [...window.currentSchoolConfig.classes];
-                }
-                
-                isSchoolConfigLoadedFromFirebase = false;
+                console.warn("⚠️ schoolTypeSelect not found in DOM yet");
             }
             
-            dataReady.schoolConfig = true;
-            checkAllDataReady();
-            
-            setTimeout(() => {
-                console.log("🔄 Populating all dropdowns after school config loaded...");
-                if (typeof populateKelasOptions === 'function') populateKelasOptions();
-                if (typeof populateJurusanOptions === 'function') populateJurusanOptions();
-                if (typeof populateStudentFilters === 'function') populateStudentFilters();
-                if (typeof populateFilters === 'function') populateFilters();
-                if (typeof populateDateFilter === 'function') populateDateFilter();
-                if (typeof populateStudentSelectForCode === 'function') populateStudentSelectForCode();
-            }, 150);
-            
-            if (typeof loadRekap === 'function' && document.getElementById('tab-rekap')?.classList.contains('active')) {
-                setTimeout(() => loadRekap(), 200);
+            const majorsDiv = document.getElementById('majorsManager');
+            if (majorsDiv) {
+                const shouldShow = (configType === 'smk' || configType === 'both');
+                majorsDiv.style.display = shouldShow ? 'block' : 'none';
+                console.log(`📋 Majors manager visibility: ${shouldShow ? 'show' : 'hide'}`);
             }
-        } catch (err) {
-            console.error("Error processing school_config:", err);
+            
+            if (typeof renderClassesList === 'function') {
+                renderClassesList();
+            }
+            if (typeof renderMajorsList === 'function') {
+                renderMajorsList();
+            }
+            
+        } else {
+            console.log("⚠️ No school config found in Firebase");
+            
+            if (!window.currentSchoolConfig) {
+                window.currentSchoolConfig = {
+                    type: 'smp',
+                    majors: [],
+                    classes: ['VII', 'VIII', 'IX']
+                };
+                console.log("📚 Created default school config");
+                
+                db.ref('school_config').set({
+                    type: 'smp',
+                    classes: ['VII', 'VIII', 'IX'],
+                    majors: []
+                }).then(() => {
+                    console.log("✅ Default config saved to Firebase");
+                }).catch(err => {
+                    console.error("❌ Failed to save default config:", err);
+                });
+            } else {
+                console.log(`📚 Keeping existing config: type=${window.currentSchoolConfig.type}`);
+            }
+            
+            if (typeof currentSchoolConfig !== 'undefined' && !currentSchoolConfig.type) {
+                currentSchoolConfig.type = window.currentSchoolConfig.type;
+                currentSchoolConfig.majors = [...window.currentSchoolConfig.majors];
+                currentSchoolConfig.classes = [...window.currentSchoolConfig.classes];
+            }
+            
+            isSchoolConfigLoadedFromFirebase = false;
         }
-    }, (error) => {
-        console.error("Firebase school_config listener error:", error);
+        
+        dataReady.schoolConfig = true;
+        checkAllDataReady();
+        
+        setTimeout(() => {
+            console.log("🔄 Populating all dropdowns after school config loaded...");
+            if (typeof populateKelasOptions === 'function') populateKelasOptions();
+            if (typeof populateJurusanOptions === 'function') populateJurusanOptions();
+            if (typeof populateStudentFilters === 'function') populateStudentFilters();
+            if (typeof populateFilters === 'function') populateFilters();
+            if (typeof populateDateFilter === 'function') populateDateFilter();
+            if (typeof populateStudentSelectForCode === 'function') populateStudentSelectForCode();
+        }, 150);
+        
+        if (typeof loadRekap === 'function' && document.getElementById('tab-rekap')?.classList.contains('active')) {
+            setTimeout(() => loadRekap(), 200);
+        }
     });
     
     // ========== 5. LISTENER GLOBAL DELAY ==========
     db.ref('settings/delayOut').on('value', (snapshot) => {
-        try {
-            const delay = snapshot.val();
-            console.log(`⏰ Global delay: ${delay || 60} minutes`);
-            
-            window.globalDelayValue = delay || 60;
-            
-            const displaySpan = document.getElementById('globalDelayDisplay');
-            if (displaySpan) {
-                if (typeof formatDelayText === 'function') {
-                    displaySpan.textContent = formatDelayText(delay || 60);
-                } else {
-                    displaySpan.textContent = delay ? `${delay} menit` : '60 menit';
-                }
+        const delay = snapshot.val();
+        console.log(`⏰ Global delay: ${delay || 60} minutes`);
+        
+        window.globalDelayValue = delay || 60;
+        
+        const displaySpan = document.getElementById('globalDelayDisplay');
+        if (displaySpan) {
+            if (typeof formatDelayText === 'function') {
+                displaySpan.textContent = formatDelayText(delay || 60);
+            } else {
+                displaySpan.textContent = delay ? `${delay} menit` : '60 menit';
             }
-            
-            if (typeof setGlobalDelayFormValue === 'function') {
-                setGlobalDelayFormValue(delay || 60);
-            }
-            
-            dataReady.globalDelay = true;
-            checkAllDataReady();
-        } catch (err) {
-            console.error("Error processing delayOut:", err);
         }
-    }, (error) => {
-        console.error("Firebase delayOut listener error:", error);
+        
+        if (typeof setGlobalDelayFormValue === 'function') {
+            setGlobalDelayFormValue(delay || 60);
+        }
+        
+        dataReady.globalDelay = true;
+        checkAllDataReady();
     });
     
     // ========== 6. LISTENER KODE REGISTRASI ==========
     db.ref('codes').on('value', (snapshot) => {
-        try {
-            const data = snapshot.val();
-            
-            const now = Date.now();
-            const fiveHoursInMs = 5 * 60 * 60 * 1000;
-            if (data) {
-                Object.keys(data).forEach(key => {
-                    const item = data[key];
-                    if (item && item.createdAt && (now - item.createdAt > fiveHoursInMs)) {
-                        db.ref('codes/' + key).remove();
-                        console.log(`🗑️ Expired code removed: ${key}`);
-                    }
-                });
-            }
-            
-            window.dbData.codes = [];
-            if (data) {
-                Object.keys(data).forEach(key => {
-                    window.dbData.codes.push({ code: key, ...data[key] });
-                });
-            }
-            
-            if (typeof renderCodesTable === 'function') {
-                renderCodesTable();
-            }
-            if (typeof updateCodesStatistics === 'function') {
-                updateCodesStatistics();
-            }
-        } catch (err) {
-            console.error("Error processing codes data:", err);
+        const data = snapshot.val();
+        
+        const now = Date.now();
+        const fiveHoursInMs = 5 * 60 * 60 * 1000;
+        if (data) {
+            Object.keys(data).forEach(key => {
+                const item = data[key];
+                if (item && item.createdAt && (now - item.createdAt > fiveHoursInMs)) {
+                    db.ref('codes/' + key).remove();
+                    console.log(`🗑️ Expired code removed: ${key}`);
+                }
+            });
         }
-    }, (error) => {
-        console.error("Firebase codes listener error:", error);
+        
+        dbData.codes = [];
+        if (data) {
+            Object.keys(data).forEach(key => {
+                dbData.codes.push({ code: key, ...data[key] });
+            });
+        }
+        
+        if (typeof renderCodesTable === 'function') {
+            renderCodesTable();
+        }
+        if (typeof updateCodesStatistics === 'function') {
+            updateCodesStatistics();
+        }
     });
     
     // ========== 7. LISTENER NAMA SEKOLAH ==========
     db.ref('system_config/schoolName').on('value', (snapshot) => {
-        try {
-            const name = snapshot.val();
-            const display = name || 'Sistem Absensi';
-            
-            const headerTitle = document.getElementById('schoolNameDisplay');
-            if (headerTitle) headerTitle.textContent = display;
-            
-            const inputField = document.getElementById('inputSchoolName');
-            if (inputField && inputField.value !== name) {
-                inputField.value = name || '';
-            }
-        } catch (err) {
-            console.error("Error processing schoolName:", err);
+        const name = snapshot.val();
+        const display = name || 'Sistem Absensi';
+        
+        const headerTitle = document.getElementById('schoolNameDisplay');
+        if (headerTitle) headerTitle.textContent = display;
+        
+        const inputField = document.getElementById('inputSchoolName');
+        if (inputField && inputField.value !== name) {
+            inputField.value = name || '';
         }
-    }, (error) => {
-        console.error("Firebase schoolName listener error:", error);
     });
     
     console.log("✅ All Firebase data listeners attached successfully");
@@ -665,11 +605,6 @@ function waitForFirebaseAndInit() {
         return;
     }
     
-    // Pastikan window.dbData sudah ada
-    if (typeof window.dbData === 'undefined') {
-        window.dbData = { users: [], users_auth: [], attendance: [], codes: [] };
-    }
-    
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', () => {
             setTimeout(() => initDataListeners(), 100);
@@ -692,4 +627,4 @@ window.syncSchoolConfigToAll = syncSchoolConfigToAll;
 window.initSupabaseAutoDelete = initSupabaseAutoDelete;
 window.stopSupabaseAutoDelete = stopSupabaseAutoDelete;
 
-console.log("✅ init.js V5.1 loaded - Fixed dbData undefined error");
+console.log("✅ init.js V5.0 loaded - Supabase integration with auto-delete for expired statuses");
