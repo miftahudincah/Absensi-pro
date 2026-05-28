@@ -1,6 +1,7 @@
-// rekap.js - VERSION 3.7 (DENGAN SINKRONASI DATA SISWA & PERBAIKAN FILTER)
+// rekap.js - VERSION 3.8 (DENGAN INTEGRASI MODAL REKAP PER SISWA)
 // Fitur Rekap Absensi per Siswa
-// PERUBAHAN V3.7: 
+// PERUBAHAN V3.8: 
+//   - Mengintegrasikan dengan modal rekap per siswa (bukan container di bawah)
 //   - Memastikan data siswa selalu sinkron dengan dbData.users
 //   - Menambahkan validasi data siswa sebelum dirender
 //   - Filter siswa yang tidak valid (nama kosong/null)
@@ -411,16 +412,8 @@ function renderRekapTable(data) {
         }
         tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; padding:40px;">${message}<\/td><\/tr>`;
         updateRekapSummary([]);
-        
-        // Update summary rekap per siswa juga
-        const rekapPerSiswaContainer = document.getElementById('rekapPerSiswaContainer');
-        if (rekapPerSiswaContainer) rekapPerSiswaContainer.style.display = 'none';
         return;
     }
-    
-    // Tampilkan container rekap per siswa
-    const rekapPerSiswaContainer = document.getElementById('rekapPerSiswaContainer');
-    if (rekapPerSiswaContainer) rekapPerSiswaContainer.style.display = 'block';
     
     tbody.innerHTML = '';
     validData.forEach((item, index) => {
@@ -513,11 +506,11 @@ function updateRekapSummary(data) {
     `;
 }
 
-// ======================= FUNGSI KLIK BARIS =======================
+// ======================= FUNGSI KLIK BARIS (INTEGRASI MODAL) =======================
 
 /**
  * Attach click event listeners to rekap table rows
- * Ketika baris diklik, akan membuka rekap detail per siswa
+ * Ketika baris diklik, akan membuka modal detail rekap per siswa
  */
 function attachRekapRowClickListeners() {
     const rows = document.querySelectorAll('#rekapTbody .rekap-row-clickable');
@@ -544,6 +537,7 @@ function attachRekapRowClickListeners() {
 
 /**
  * Handle click on rekap table row
+ * Membuka modal rekap per siswa
  * @param {Event} event - Click event
  */
 async function handleRekapRowClick(event) {
@@ -566,17 +560,11 @@ async function handleRekapRowClick(event) {
         showToast(`📊 Membuka detail rekap untuk ${studentName}...`, "info");
     }
     
-    // Panggil fungsi dari rekap-per-siswa.js
-    if (typeof loadRekapPerSiswaByStudentId === 'function') {
-        await loadRekapPerSiswaByStudentId(studentId, true);
-    } else if (typeof loadRekapPerSiswa === 'function') {
-        // Fallback jika fungsi spesifik tidak ada
-        await loadRekapPerSiswa(studentId);
-        if (typeof showToast === 'function') {
-            setTimeout(() => showToast(`✅ Menampilkan detail rekap untuk ${studentName}`, "success"), 500);
-        }
+    // Panggil fungsi modal dari rekap-per-siswa.js
+    if (typeof openRekapPerSiswaModal === 'function') {
+        await openRekapPerSiswaModal(studentId, studentName);
     } else {
-        console.error("loadRekapPerSiswa function not available");
+        console.error("openRekapPerSiswaModal function not available");
         if (typeof showToast === 'function') {
             showToast("❌ Fitur detail rekap per siswa belum tersedia", "error");
         }
@@ -589,15 +577,13 @@ async function handleRekapRowClick(event) {
  * @param {string} studentName - Nama siswa (opsional)
  */
 async function openRekapPerSiswa(studentId, studentName) {
-    if (typeof loadRekapPerSiswaByStudentId === 'function') {
-        await loadRekapPerSiswaByStudentId(studentId, true);
-    } else if (typeof loadRekapPerSiswa === 'function') {
-        await loadRekapPerSiswa(studentId);
-        if (typeof showToast === 'function' && studentName) {
-            setTimeout(() => showToast(`✅ Menampilkan detail rekap untuk ${studentName}`, "success"), 500);
-        }
+    if (typeof openRekapPerSiswaModal === 'function') {
+        await openRekapPerSiswaModal(studentId, studentName);
     } else {
-        if (typeof showToast === 'function') showToast("❌ Fitur rekap per siswa belum tersedia", "error");
+        console.error("openRekapPerSiswaModal function not available");
+        if (typeof showToast === 'function') {
+            showToast("❌ Fitur rekap per siswa belum tersedia", "error");
+        }
     }
 }
 
@@ -717,11 +703,8 @@ async function loadRekap(retryCount = 0, forceRefresh = false) {
         } else {
             const tbody = document.getElementById('rekapTbody');
             if (tbody) {
-                tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; padding:30px;">📭 Belum ada data siswa. Silakan tambah siswa terlebih dahulu.<\/td><\/tr>`;
+                tbody.innerHTML = `<td><td colspan="12" style="text-align:center; padding:30px;">📭 Belum ada data siswa. Silakan tambah siswa terlebih dahulu.<\/td><\/tr>`;
             }
-            // Sembunyikan container rekap per siswa
-            const rekapPerSiswaContainer = document.getElementById('rekapPerSiswaContainer');
-            if (rekapPerSiswaContainer) rekapPerSiswaContainer.style.display = 'none';
             return;
         }
     }
@@ -982,4 +965,4 @@ window.handleRekapRowClick = handleRekapRowClick;
 window.openRekapPerSiswa = openRekapPerSiswa;
 window.getValidStudentsList = getValidStudentsList;
 
-console.log("✅ rekap.js V3.7 loaded - Dengan sinkronasi data siswa & perbaikan filter");
+console.log("✅ rekap.js V3.8 loaded - Dengan integrasi modal rekap per siswa");
