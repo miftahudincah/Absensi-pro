@@ -1,8 +1,7 @@
-// status.js - VERSION 4.8 (DENGAN LOG AKTIVITAS)
+// status.js - VERSION 4.9 (STATUS HANYA UNTUK TEMAN)
 // Fitur Status: upload teks/gambar, auto-delete 24 jam, reply/balas status,
 // daftar orang yang melihat (viewers), notifikasi.
-// PERBAIKAN: Tombol mata (👁️) hanya muncul untuk pemilik status.
-// PERUBAHAN V4.8: Menambahkan logActivity untuk create dan delete status
+// PERUBAHAN V4.9: Status hanya bisa dilihat oleh TEMAN (selain status sendiri)
 // ============================================================================
 
 let statusesListener = null;
@@ -15,6 +14,19 @@ let statusUiReadyListenerAdded = false;
 let lastStatusCount = 0;
 let currentViewerCount = 0;
 let viewerCountListener = null;
+
+// ======================= CEK APAKAH USER ADALAH TEMAN ========================
+async function isFriend(userId) {
+    if (!currentUser) return false;
+    if (userId === currentUser.uid) return true; // diri sendiri dianggap teman
+    try {
+        const snapshot = await db.ref(`friendships/list/${currentUser.uid}/${userId}`).once('value');
+        return snapshot.exists();
+    } catch (err) {
+        console.error("Error checking friend status:", err);
+        return false;
+    }
+}
 
 // ======================= EVENT LISTENER ========================
 function setupStatusUiReadyListener() {
@@ -87,7 +99,7 @@ function setupStatusListener() {
     if (statusesListener) {
         db.ref('statuses').off('value', statusesListener);
     }
-    statusesListener = db.ref('statuses').on('value', (snapshot) => {
+    statusesListener = db.ref('statuses').on('value', async (snapshot) => {
         if (!currentUser) return;
         const data = snapshot.val();
         const now = Date.now();
@@ -120,31 +132,54 @@ function setupStatusListener() {
             });
         }
         allStatuses.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+        
+        // Filter status berdasarkan teman
+        const friendStatuses = [];
+        for (const status of allStatuses) {
+            const isFriendUser = await isFriend(status.userId);
+            if (isFriendUser) {
+                friendStatuses.push(status);
+            }
+        }
+        
         const groupedByUser = {};
-        allStatuses.forEach(status => {
+        friendStatuses.forEach(status => {
             if (!groupedByUser[status.userId]) groupedByUser[status.userId] = [];
             groupedByUser[status.userId].push(status);
         });
-        renderStatusBar(groupedByUser);
-        currentStatusList = allStatuses;
-        checkAndNotifyNewStatus(allStatuses);
+        
+        await renderStatusBar(groupedByUser);
+        currentStatusList = friendStatuses;
+        checkAndNotifyNewStatus(friendStatuses);
     });
 }
 
 // ======================= RENDER STATUS BAR ========================
-function renderStatusBar(groupedByUser) {
+async function renderStatusBar(groupedByUser) {
     const container = document.getElementById('statusBar');
     if (!container) {
         console.warn("renderStatusBar: #statusBar tidak ditemukan");
         return;
     }
-    if (!groupedByUser || Object.keys(groupedByUser).length === 0) {
+    
+    // Cek apakah ada status dari teman selain diri sendiri
+    let hasFriendStatus = false;
+    for (const userId of Object.keys(groupedByUser)) {
+        if (userId !== currentUser.uid) {
+            hasFriendStatus = true;
+            break;
+        }
+    }
+    
+    if (!groupedByUser || Object.keys(groupedByUser).length === 0 || (!groupedByUser[currentUser.uid] && !hasFriendStatus)) {
         container.innerHTML = '<div class="status-empty text-small" style="text-align:center; padding:10px;">📭 Belum ada status. Buat status pertama!</div>';
         setupStatusEventDelegation();
         return;
     }
+    
     let html = '';
-    // Status Saya
+    
+    // Status Saya - SELALU TAMPIL
     if (groupedByUser[currentUser.uid]) {
         const myStatuses = groupedByUser[currentUser.uid];
         const latest = myStatuses[0];
@@ -170,9 +205,15 @@ function renderStatusBar(groupedByUser) {
             </div>
         `;
     }
-    // Status teman
+    
+    // HANYA TAMPILKAN STATUS DARI TEMAN (bukan semua user)
     for (const [userId, statuses] of Object.entries(groupedByUser)) {
         if (userId === currentUser.uid) continue;
+        
+        // CEK APAKAH USER INI TEMAN (sudah difilter di atas, tapi amankan)
+        const isFriendUser = await isFriend(userId);
+        if (!isFriendUser) continue; // SKIP jika bukan teman
+        
         const latest = statuses[0];
         const isViewed = latest.viewedBy && latest.viewedBy[currentUser.uid];
         html += `
@@ -337,13 +378,21 @@ function updateViewerCountButton(buttonElement, count) {
     }
 }
 
-// ======================= STATUS VIEWER (DENGAN REPLY & VIEWERS) ========================
+// ======================= STATUS VIEWER (DENGAN CEK TEMAN) ========================
 async function openStatusViewer(userId) {
     console.log("📸 openStatusViewer called for userId:", userId);
     if (!currentUser) {
         showToast("Anda harus login!", "error");
         return;
     }
+    
+    // CEK APAKAH BISA MELIHAT STATUS (teman atau diri sendiri)
+    const isFriendUser = await isFriend(userId);
+    if (!isFriendUser && userId !== currentUser.uid) {
+        showToast("❌ Anda hanya bisa melihat status teman!", "error");
+        return;
+    }
+    
     const modal = document.getElementById('modal-status-viewer');
     if (!modal) {
         console.error("Modal status viewer tidak ditemukan!");
@@ -904,5 +953,6 @@ window.openReplyToStatus = openReplyToStatus;
 window.sendStatusReply = sendStatusReply;
 window.showStatusRepliesModal = showStatusRepliesModal;
 window.cleanupStatusSystem = cleanupStatusSystem;
+window.isFriend = isFriend; // export untuk digunakan modul lain
 
-console.log("✅ status.js V4.8 loaded - Dengan log aktivitas untuk status");
+console.log("✅ status.js V4.9 loaded - Status hanya dapat dilihat oleh teman");
