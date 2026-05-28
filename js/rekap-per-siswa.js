@@ -1,16 +1,18 @@
-// rekap-per-siswa.js - VERSION 2.0 (MODAL UNTUK DETAIL REKAP SISWA)
+// rekap-per-siswa.js - VERSION 2.1 (DENGAN PERIODE LENGKAP DI MODAL)
 // Fitur Rekap Absensi per Siswa - Tampil dalam Modal
-// PERUBAHAN V2.0: 
-//   - Menampilkan detail rekap siswa dalam MODAL, bukan di container
-//   - Menambahkan navigasi prev/next antar siswa dalam modal
-//   - Tombol export Excel/PDF langsung dari modal
-//   - Desain modal yang lebih modern dan responsif
+// PERUBAHAN V2.1: 
+//   - Menambahkan pilihan periode lengkap di dalam modal
+//   - Periode: Hari Ini, Minggu Ini, Bulan Ini, Semester Ini, Tahun Ini, Pertama Kali, Custom Range
+//   - Periode dapat diubah langsung dari modal tanpa harus ke halaman utama
 // ============================================================================
 
 let currentRekapPerSiswaData = null;
 let currentSelectedStudent = null;
 let currentStudentList = [];
 let currentStudentIndex = -1;
+let currentModalPeriod = 'minggu'; // default period
+let currentModalCustomStart = null;
+let currentModalCustomEnd = null;
 const rekapPhotoCache = new Map();
 
 // ======================= FUNGSI PERIODE LENGKAP ========================
@@ -22,6 +24,14 @@ function getRekapDateRange(period, customStart = null, customEnd = null) {
     let label = '';
     
     switch(period) {
+        case 'hari':
+            start = new Date();
+            start.setHours(0, 0, 0, 0);
+            end = new Date();
+            end.setHours(23, 59, 59, 999);
+            label = `Hari Ini (${formatDateIndonesian(start)})`;
+            break;
+            
         case 'minggu':
             const day = now.getDay();
             const diffToMonday = (day === 0 ? 6 : day - 1);
@@ -153,7 +163,7 @@ function setupRekapPhotoListener() {
 // ======================= INISIALISASI ========================
 
 function initRekapPerSiswa() {
-    console.log("📋 Initializing Rekap per Siswa module (Modal version)...");
+    console.log("📋 Initializing Rekap per Siswa module (Modal version with period options)...");
     
     if (dbData && dbData.users && dbData.users.length > 0) {
         updateStudentList();
@@ -162,6 +172,13 @@ function initRekapPerSiswa() {
     }
     
     setupRekapPhotoListener();
+    
+    // Set default custom dates
+    const today = new Date();
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(today.getDate() - 30);
+    currentModalCustomStart = thirtyDaysAgo.toISOString().split('T')[0];
+    currentModalCustomEnd = today.toISOString().split('T')[0];
 }
 
 function updateStudentList() {
@@ -202,36 +219,22 @@ async function openRekapPerSiswaModal(studentId, studentName) {
     // Tampilkan loading
     if (typeof showToast === 'function') showToast(`📊 Memuat rekap ${student.nama}...`, "info");
     
-    // Ambil periode yang dipilih dari dropdown (jika ada)
-    const periodSelect = document.getElementById('rekapPerSiswaPeriod');
-    let period = 'minggu';
-    let customStartDate = null;
-    let customEndDate = null;
-    
-    if (periodSelect) {
-        period = periodSelect.value;
-        
-        if (period === 'custom') {
-            const startInput = document.getElementById('rekapPerSiswaStartDate');
-            const endInput = document.getElementById('rekapPerSiswaEndDate');
-            if (startInput && endInput && startInput.value && endInput.value) {
-                customStartDate = startInput.value;
-                customEndDate = endInput.value;
-            }
-        }
-    }
-    
+    // Hitung data rekap dengan periode yang dipilih
+    await loadRekapDataForModal(student);
+}
+
+async function loadRekapDataForModal(student) {
     let startDate, endDate, periodLabel;
     
-    if (period === 'custom' && customStartDate && customEndDate) {
-        startDate = new Date(customStartDate);
-        endDate = new Date(customEndDate);
+    if (currentModalPeriod === 'custom' && currentModalCustomStart && currentModalCustomEnd) {
+        startDate = new Date(currentModalCustomStart);
+        endDate = new Date(currentModalCustomEnd);
         endDate.setHours(23, 59, 59, 999);
-        periodLabel = `Custom (${formatIndonesianDateShort(customStartDate)} - ${formatIndonesianDateShort(customEndDate)})`;
+        periodLabel = `Custom (${formatIndonesianDateShort(currentModalCustomStart)} - ${formatIndonesianDateShort(currentModalCustomEnd)})`;
     } 
-    else if (period === 'pertama') {
+    else if (currentModalPeriod === 'pertama') {
         const firstAttendance = dbData.attendance
-            .filter(a => a.studentId == studentId && a.date)
+            .filter(a => a.studentId == student.id && a.date)
             .sort((a, b) => new Date(a.date) - new Date(b.date))[0];
         
         if (firstAttendance && firstAttendance.date) {
@@ -247,7 +250,7 @@ async function openRekapPerSiswaModal(studentId, studentName) {
         }
     }
     else {
-        const range = getRekapDateRange(period);
+        const range = getRekapDateRange(currentModalPeriod);
         startDate = range.start;
         endDate = range.end;
         periodLabel = range.label;
@@ -447,7 +450,36 @@ async function navigateRekapStudent(direction) {
             if (modalContent) {
                 modalContent.innerHTML = '<div style="text-align:center; padding:40px;">⏳ Memuat data siswa...</div>';
             }
-            await openRekapPerSiswaModal(student.id, student.nama);
+            await loadRekapDataForModal(student);
+        }
+    }
+}
+
+// ======================= FUNGSI PERIODE DI MODAL ========================
+
+function changeModalPeriod(period) {
+    currentModalPeriod = period;
+    
+    // Tampilkan/hide custom range inputs
+    const customRangeDiv = document.getElementById('modal-custom-range');
+    if (customRangeDiv) {
+        customRangeDiv.style.display = period === 'custom' ? 'flex' : 'none';
+    }
+    
+    // Reload data dengan periode baru
+    if (currentRekapPerSiswaData && currentRekapPerSiswaData.student) {
+        loadRekapDataForModal(currentRekapPerSiswaData.student);
+    }
+}
+
+function updateModalCustomDates() {
+    const startInput = document.getElementById('modal-custom-start');
+    const endInput = document.getElementById('modal-custom-end');
+    if (startInput && endInput && startInput.value && endInput.value) {
+        currentModalCustomStart = startInput.value;
+        currentModalCustomEnd = endInput.value;
+        if (currentModalPeriod === 'custom' && currentRekapPerSiswaData && currentRekapPerSiswaData.student) {
+            loadRekapDataForModal(currentRekapPerSiswaData.student);
         }
     }
 }
@@ -496,7 +528,7 @@ function renderRekapPerSiswaModal(data) {
             </p>
         </div>
     ` : `
-        <div class="table-container" style="max-height: 400px; overflow-y: auto;">
+        <div class="table-container" style="max-height: 350px; overflow-y: auto;">
             <table style="width: 100%; font-size: 13px;">
                 <thead style="position: sticky; top: 0; background: var(--bg-card); z-index: 10;">
                     <tr style="background: var(--bg-secondary);">
@@ -535,6 +567,29 @@ function renderRekapPerSiswaModal(data) {
         </div>
     ` : '';
     
+    // Pilihan periode yang sudah dipilih
+    const periodOptions = `
+        <select id="modal-period-select" onchange="changeModalPeriod(this.value)" style="padding: 8px 12px; border-radius: 30px; background: var(--bg-secondary); border: 1px solid var(--border); color: var(--text-primary);">
+            <option value="hari" ${currentModalPeriod === 'hari' ? 'selected' : ''}>📅 Hari Ini</option>
+            <option value="minggu" ${currentModalPeriod === 'minggu' ? 'selected' : ''}>📆 Minggu Ini</option>
+            <option value="bulan" ${currentModalPeriod === 'bulan' ? 'selected' : ''}>📊 Bulan Ini</option>
+            <option value="semester" ${currentModalPeriod === 'semester' ? 'selected' : ''}>📚 Semester Ini</option>
+            <option value="tahun" ${currentModalPeriod === 'tahun' ? 'selected' : ''}>🗓️ Tahun Ini</option>
+            <option value="pertama" ${currentModalPeriod === 'pertama' ? 'selected' : ''}>⭐ Pertama Kali</option>
+            <option value="custom" ${currentModalPeriod === 'custom' ? 'selected' : ''}>📅 Custom Range</option>
+        </select>
+    `;
+    
+    // Custom range inputs
+    const customRangeHtml = `
+        <div id="modal-custom-range" style="display: ${currentModalPeriod === 'custom' ? 'flex' : 'none'}; gap: 10px; align-items: center; flex-wrap: wrap;">
+            <input type="date" id="modal-custom-start" value="${currentModalCustomStart || ''}" style="padding: 8px 12px; border-radius: 30px; background: var(--bg-secondary); border: 1px solid var(--border); color: var(--text-primary);">
+            <span>s/d</span>
+            <input type="date" id="modal-custom-end" value="${currentModalCustomEnd || ''}" style="padding: 8px 12px; border-radius: 30px; background: var(--bg-secondary); border: 1px solid var(--border); color: var(--text-primary);">
+            <button class="btn-action btn-primary" onclick="updateModalCustomDates()" style="padding: 6px 16px;">📅 Terapkan</button>
+        </div>
+    `;
+    
     const modalHtml = `
         <div id="modal-rekap-per-siswa" class="modal-overlay open" style="z-index: 10000;">
             <div class="modal-box" style="max-width: 1000px; width: 90%; max-height: 85vh; overflow-y: auto; animation: modalSlideIn 0.3s ease;">
@@ -571,6 +626,15 @@ function renderRekapPerSiswaModal(data) {
                         </div>
                     </div>
                     
+                    <!-- Pilihan Periode -->
+                    <div style="margin-bottom: 20px; padding: 15px; background: var(--bg-hover); border-radius: 16px;">
+                        <div style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap; margin-bottom: 10px;">
+                            <label style="font-weight: 500;">📅 Pilih Periode:</label>
+                            ${periodOptions}
+                        </div>
+                        ${customRangeHtml}
+                    </div>
+                    
                     <!-- Ringkasan Statistik -->
                     <div style="display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 20px;">
                         <div class="rekap-stat-card" style="text-align: center; background: rgba(76, 175, 80, 0.15); padding: 8px 15px; border-radius: 12px; flex: 1; min-width: 70px;">
@@ -599,7 +663,7 @@ function renderRekapPerSiswaModal(data) {
                     <div style="margin-bottom: 20px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 12px;">
                             <div style="color: var(--text-muted); font-size: 0.85rem;">
-                                <strong>📅 Periode:</strong> ${data.periodLabel || formatIndonesianDateShort(data.startDate) + ' - ' + formatIndonesianDateShort(data.endDate)}
+                                <strong>📅 Periode:</strong> <span id="modal-period-label">${data.periodLabel || formatIndonesianDateShort(data.startDate) + ' - ' + formatIndonesianDateShort(data.endDate)}</span>
                                 <span style="margin-left: 15px;">📊 Total Hari Sekolah: <strong>${data.totalDays}</strong> hari</span>
                             </div>
                             <div>
@@ -629,6 +693,12 @@ function renderRekapPerSiswaModal(data) {
     if (existingModal) existingModal.remove();
     
     document.body.insertAdjacentHTML('beforeend', modalHtml);
+    
+    // Update label periode di modal setelah render
+    const periodLabelSpan = document.getElementById('modal-period-label');
+    if (periodLabelSpan) {
+        periodLabelSpan.textContent = data.periodLabel || `${formatIndonesianDateShort(data.startDate)} - ${formatIndonesianDateShort(data.endDate)}`;
+    }
     
     if (typeof showToast === 'function' && data.totalDays > 0) {
         setTimeout(() => showToast(`✅ Rekap ${student.nama} selesai dimuat`, "success"), 500);
@@ -883,6 +953,8 @@ window.initRekapPerSiswa = initRekapPerSiswa;
 window.openRekapPerSiswaModal = openRekapPerSiswaModal;
 window.closeRekapPerSiswaModal = closeRekapPerSiswaModal;
 window.navigateRekapStudent = navigateRekapStudent;
+window.changeModalPeriod = changeModalPeriod;
+window.updateModalCustomDates = updateModalCustomDates;
 window.exportCurrentRekapPerSiswaToExcel = exportCurrentRekapPerSiswaToExcel;
 window.exportCurrentRekapPerSiswaToPDF = exportCurrentRekapPerSiswaToPDF;
 window.cleanupRekapPerSiswa = cleanupRekapPerSiswa;
@@ -891,4 +963,4 @@ window.refreshRekapPhotoCache = refreshRekapPhotoCache;
 window.showRekapStudentPhoto = showRekapStudentPhoto;
 window.getRekapDateRange = getRekapDateRange;
 
-console.log("✅ rekap-per-siswa.js V2.0 loaded - Modal untuk detail rekap siswa");
+console.log("✅ rekap-per-siswa.js V2.1 loaded - Modal dengan pilihan periode lengkap (Hari, Minggu, Bulan, Semester, Tahun, Pertama Kali, Custom)");
