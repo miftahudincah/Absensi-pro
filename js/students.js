@@ -1,13 +1,13 @@
-// students.js - VERSION 3.8 (DENGAN FOTO SISWA & BADGE AKUN)
+// students.js - VERSION 3.9 (FILTER SISWA BERDASARKAN KELAS & JURUSAN)
 // ======================= MANAJEMEN DATA SISWA =======================
 // Fitur: CRUD siswa, sinkronisasi dengan ESP32, delay per siswa,
 //        dukungan kelas & jurusan dinamis dari pengaturan sekolah,
 //        real-time update, import/export CSV.
-// PERUBAHAN V3.8: 
-//   - Menambahkan kolom foto di tabel siswa
-//   - Menambahkan badge status akun (Berakun / Belum Berakun)
-//   - Menambahkan modal untuk perbesar foto
-//   - Sinkron foto dengan akun masing-masing, fallback inisial
+// PERUBAHAN V3.9: 
+//   - Siswa hanya melihat data siswa dengan kelas & jurusan yang sama
+//   - Sembunyikan tombol edit/hapus untuk role siswa
+//   - Sembunyikan form input untuk role siswa
+//   - Sembunyikan filter untuk role siswa
 // ====================================================================
 
 let studentFormResetTimer = null;
@@ -20,6 +20,33 @@ const MAX_FORM_DROPDOWN_RETRY = 10;
 
 // Cache untuk foto siswa
 const studentPhotoCache = new Map();
+
+// ======================= CEK AKSES EDIT SISWA ========================
+function canEditStudents() {
+    if (!currentUser) return false;
+    // Hanya admin, guru, dan developer yang dapat mengedit siswa
+    return (currentUser.role === 'admin' || currentUser.role === 'guru' || currentUser.role === 'developer');
+}
+
+/**
+ * Mendapatkan filter kelas & jurusan berdasarkan role user
+ * @returns {Object} { kelas, jurusan }
+ */
+function getStudentFilterByRole() {
+    if (!currentUser) return { kelas: 'all', jurusan: 'all' };
+    
+    // Untuk siswa: filter berdasarkan kelas dan jurusan mereka sendiri
+    if (currentUser.role === 'siswa') {
+        return {
+            kelas: currentUser.kelas || 'all',
+            jurusan: currentUser.jurusan || 'all',
+            isSiswa: true
+        };
+    }
+    
+    // Untuk admin/guru/developer: bisa melihat semua
+    return { kelas: 'all', jurusan: 'all', isSiswa: false };
+}
 
 // ======================= FUNGSI FOTO SISWA ========================
 
@@ -141,6 +168,11 @@ function setupStudentsDataReadyListener() {
     window.addEventListener('dataReady', (e) => {
         console.log("🔄 students.js: dataReady received, updating students UI");
         
+        // Sembunyikan form input untuk siswa
+        if (currentUser && currentUser.role === 'siswa') {
+            hideStudentFormForSiswa();
+        }
+        
         if (typeof populateKelasOptions === 'function') populateKelasOptions();
         if (typeof populateJurusanOptions === 'function') populateJurusanOptions();
         if (typeof populateStudentFilters === 'function') populateStudentFilters();
@@ -155,6 +187,30 @@ function setupStudentsDataReadyListener() {
     });
 }
 
+/**
+ * Sembunyikan form input untuk siswa
+ */
+function hideStudentFormForSiswa() {
+    const formContainer = document.querySelector('#tab-students .controls-bar:first-child');
+    if (formContainer) {
+        formContainer.style.display = 'none';
+        console.log("🔒 Form input siswa disembunyikan untuk role siswa");
+    }
+    
+    // Sembunyikan tombol aksi di header tabel
+    const actionHeader = document.querySelector('#tab-students table thead th:last-child');
+    if (actionHeader) {
+        actionHeader.style.display = 'none';
+    }
+    
+    // Sembunyikan filter jika perlu
+    const filterBar = document.querySelector('#tab-students .controls-bar:nth-child(2)');
+    if (filterBar && currentUser && currentUser.role === 'siswa') {
+        filterBar.style.display = 'none';
+        console.log("🔒 Filter siswa disembunyikan untuk role siswa");
+    }
+}
+
 // Monitor tab aktif
 function initTabActiveMonitor() {
     const checkActiveTab = () => {
@@ -162,6 +218,9 @@ function initTabActiveMonitor() {
         studentsTabActive = !!(tabStudents && tabStudents.classList.contains('active'));
         if (studentsTabActive) {
             console.log("✅ Tab siswa aktif, siap render");
+            if (currentUser && currentUser.role === 'siswa') {
+                hideStudentFormForSiswa();
+            }
             if (typeof dbData !== 'undefined' && dbData.users) {
                 renderStudentsTable();
             }
@@ -179,6 +238,9 @@ function initTabActiveMonitor() {
                     studentsTabActive = target.classList.contains('active');
                     if (studentsTabActive && !wasActive) {
                         console.log("📊 Tab siswa diaktifkan, render ulang");
+                        if (currentUser && currentUser.role === 'siswa') {
+                            hideStudentFormForSiswa();
+                        }
                         renderStudentsTable();
                         populateStudentFilters();
                         setTimeout(() => {
@@ -203,6 +265,9 @@ function initTabActiveMonitor() {
     window.addEventListener('tabSwitched', (e) => {
         if (e.detail && e.detail.tabId === 'students') {
             studentsTabActive = true;
+            if (currentUser && currentUser.role === 'siswa') {
+                hideStudentFormForSiswa();
+            }
             renderStudentsTable();
             populateStudentFilters();
             setTimeout(() => {
@@ -406,7 +471,7 @@ function formatDelayDisplay(delayMinutes) {
     return `${menit} menit`;
 }
 
-// ======================= RENDER TABEL SISWA (DENGAN FOTO) =======================
+// ======================= RENDER TABEL SISWA (DENGAN FILTER ROLE) =======================
 
 function renderStudentsTable(retryCount = 0) {
     const MAX_RETRY = 5;
@@ -465,19 +530,55 @@ function renderStudentsTable(retryCount = 0) {
         return;
     }
     
-    const search = document.getElementById('searchStudentName')?.value.toLowerCase() || '';
-    const kelas = document.getElementById('filterStudentKelas')?.value || 'all';
-    const jurusan = document.getElementById('filterStudentJurusan')?.value || 'all';
-
-    let data = dbData.users.filter(u => u.nama && u.nama.toLowerCase().includes(search));
-    if (kelas !== 'all') data = data.filter(u => u.kelas === kelas);
-    if (jurusan !== 'all') data = data.filter(u => u.jurusan === jurusan);
+    // ========== FILTER DATA BERDASARKAN ROLE ==========
+    let data = [...dbData.users];
+    const isSiswa = (currentUser && currentUser.role === 'siswa');
+    
+    if (isSiswa) {
+        // SISWA: Hanya lihat siswa dengan kelas dan jurusan yang sama
+        const userKelas = currentUser.kelas;
+        const userJurusan = currentUser.jurusan;
+        
+        data = data.filter(u => {
+            let match = true;
+            if (userKelas && u.kelas !== userKelas) match = false;
+            if (userJurusan && u.jurusan !== userJurusan) match = false;
+            return match;
+        });
+        
+        console.log(`👨‍🎓 Siswa filter: kelas=${userKelas}, jurusan=${userJurusan} → ${data.length} siswa ditampilkan`);
+        
+        // Sembunyikan form input
+        hideStudentFormForSiswa();
+        
+        // Sembunyikan filter
+        const filterBar = document.querySelector('#tab-students .controls-bar:nth-child(2)');
+        if (filterBar) filterBar.style.display = 'none';
+    } else {
+        // ADMIN/GURU/DEVELOPER: Tampilkan semua dengan filter opsional
+        const search = document.getElementById('searchStudentName')?.value.toLowerCase() || '';
+        const kelas = document.getElementById('filterStudentKelas')?.value || 'all';
+        const jurusan = document.getElementById('filterStudentJurusan')?.value || 'all';
+        
+        if (search) data = data.filter(u => u.nama && u.nama.toLowerCase().includes(search));
+        if (kelas !== 'all') data = data.filter(u => u.kelas === kelas);
+        if (jurusan !== 'all') data = data.filter(u => u.jurusan === jurusan);
+        
+        // Tampilkan filter
+        const filterBar = document.querySelector('#tab-students .controls-bar:nth-child(2)');
+        if (filterBar) filterBar.style.display = '';
+    }
+    
     data.sort((a, b) => parseInt(a.id) - parseInt(b.id));
-
+    
     tbody.innerHTML = '';
     
     if (data.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:30px;">📭 Data siswa tidak ditemukan.${search ? '<br><small>Coba kata kunci lain</small>' : ''}</td></tr>`;
+        if (isSiswa) {
+            tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:30px;">📭 Tidak ada teman sekelas dengan kelas dan jurusan yang sama.</td></tr>`;
+        } else {
+            tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:30px;">📭 Data siswa tidak ditemukan.${search ? '<br><small>Coba kata kunci lain</small>' : ''}</td></tr>`;
+        }
         updateStudentStatistics();
         return;
     }
@@ -494,6 +595,14 @@ function renderStudentsTable(retryCount = 0) {
             ? '<span class="badge-account" style="background:#4caf50; font-size:10px; margin-left:6px; padding:2px 6px; border-radius:20px;">✓ Berakun</span>' 
             : '<span class="badge-no-account" style="background:#888; font-size:10px; margin-left:6px; padding:2px 6px; border-radius:20px;">❌ Belum Berakun</span>';
         
+        // Untuk siswa, sembunyikan kolom aksi (edit/hapus)
+        const actionCell = isSiswa ? '<td style="display: none;"></td>' : `
+            <td>
+                <button class="btn-icon edit" onclick="editStudent('${s.id}')" title="Edit Siswa">✏️</button>
+                <button class="btn-icon delete" onclick="deleteStudentWithFP('${s.id}')" title="Hapus Siswa">🗑️</button>
+            </td>
+        `;
+        
         tbody.innerHTML += `
             <tr data-id="${s.id}">
                 <td style="text-align:center;">
@@ -503,22 +612,19 @@ function renderStudentsTable(retryCount = 0) {
                          onerror="this.src='https://ui-avatars.com/api/?name=${studentInitial}&background=00bcd4&color=fff&size=100&bold=true'"
                          onclick="showStudentPhotoModal('${s.id}', '${escapeHtmlStudents(s.nama)}', this.src)"
                          title="Klik untuk perbesar foto">
-                </td>
+                 </td>
                 <td><strong>${s.id}</strong>${isNew ? '<br><span class="badge-new-student">NEW</span>' : ''}</td>
                 <td>${escapeHtmlStudents(s.nama)}${accountBadge}</td>
                 <td>${s.kelas || '-'}</td>
                 <td>${s.jurusan || '-'}</td>
                 <td><span class="delay-badge">⏱️ ${formatDelayDisplay(s.delayOut)}</span></td>
-                <td>
-                    <button class="btn-icon edit" onclick="editStudent('${s.id}')" title="Edit Siswa">✏️</button>
-                    <button class="btn-icon delete" onclick="deleteStudentWithFP('${s.id}')" title="Hapus Siswa">🗑️</button>
-                </td>
-            </tr>
+                ${actionCell}
+             </tr>
         `;
     }
     
     updateStudentStatistics();
-    console.log(`✅ renderStudentsTable selesai, menampilkan ${data.length} siswa dengan foto`);
+    console.log(`✅ renderStudentsTable selesai, menampilkan ${data.length} siswa${isSiswa ? ' (filtered by kelas/jurusan)' : ''}`);
 }
 
 // ======================= UPDATE STATISTIK =======================
@@ -535,17 +641,30 @@ function updateStudentStatistics() {
         } else return;
     }
 
-    const total = dbData.users?.length || 0;
-    const withAccount = dbData.users_auth?.filter(u => u.fpId && dbData.users?.some(s => s.id == u.fpId)).length || 0;
+    // Untuk siswa, hanya hitung statistik dari data yang terfilter
+    const isSiswa = (currentUser && currentUser.role === 'siswa');
+    let filteredData = dbData.users || [];
+    
+    if (isSiswa && currentUser) {
+        const userKelas = currentUser.kelas;
+        const userJurusan = currentUser.jurusan;
+        filteredData = filteredData.filter(u => {
+            let match = true;
+            if (userKelas && u.kelas !== userKelas) match = false;
+            if (userJurusan && u.jurusan !== userJurusan) match = false;
+            return match;
+        });
+    }
+    
+    const total = filteredData.length;
+    const withAccount = dbData.users_auth?.filter(u => u.fpId && filteredData.some(s => s.id == u.fpId)).length || 0;
     const withoutAccount = total - withAccount;
     
     const kelasCount = {}, jurusanCount = {};
-    if (dbData.users) {
-        dbData.users.forEach(s => {
-            if (s.kelas) kelasCount[s.kelas] = (kelasCount[s.kelas] || 0) + 1;
-            if (s.jurusan) jurusanCount[s.jurusan] = (jurusanCount[s.jurusan] || 0) + 1;
-        });
-    }
+    filteredData.forEach(s => {
+        if (s.kelas) kelasCount[s.kelas] = (kelasCount[s.kelas] || 0) + 1;
+        if (s.jurusan) jurusanCount[s.jurusan] = (jurusanCount[s.jurusan] || 0) + 1;
+    });
     const topKelas = Object.entries(kelasCount).sort((a,b) => b[1]-a[1])[0];
     const topJurusan = Object.entries(jurusanCount).sort((a,b) => b[1]-a[1])[0];
 
@@ -632,6 +751,12 @@ function saveStudent() {
 }
 
 function editStudent(id) {
+    // Cek akses
+    if (!canEditStudents()) {
+        showToast("⛔ Anda tidak memiliki akses untuk mengedit siswa!", "error");
+        return;
+    }
+    
     const s = dbData.users?.find(u => u.id == id);
     if (!s) { showToast("❌ Data tidak ditemukan", "error"); return; }
     document.querySelector('#tab-students .controls-bar:first-child')?.scrollIntoView({ behavior: 'smooth' });
@@ -718,6 +843,11 @@ function deleteStudent(id) {
 // ======================= BULK OPERATIONS =======================
 
 function importStudentsFromCSV(csvText) {
+    if (!canEditStudents()) {
+        showToast("⛔ Anda tidak memiliki akses untuk import siswa!", "error");
+        return;
+    }
+    
     const lines = csvText.trim().split('\n');
     let success = 0, fail = 0;
     let importedNames = [];
@@ -750,8 +880,22 @@ function importStudentsFromCSV(csvText) {
 
 function exportStudentsToCSV() {
     if (!dbData.users?.length) { showToast("❌ Tidak ada data", "error"); return; }
+    
+    // Untuk siswa, hanya export data yang terfilter
+    let dataToExport = dbData.users;
+    if (currentUser && currentUser.role === 'siswa') {
+        const userKelas = currentUser.kelas;
+        const userJurusan = currentUser.jurusan;
+        dataToExport = dataToExport.filter(u => {
+            let match = true;
+            if (userKelas && u.kelas !== userKelas) match = false;
+            if (userJurusan && u.jurusan !== userJurusan) match = false;
+            return match;
+        });
+    }
+    
     let csv = "\uFEFFID,Nama,Kelas,Jurusan,Delay (menit)\n";
-    dbData.users.forEach(s => {
+    dataToExport.forEach(s => {
         csv += `"${s.id}","${escapeCsv(s.nama)}","${s.kelas || '-'}","${s.jurusan || '-'}","${s.delayOut || 60}"\n`;
     });
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -763,7 +907,7 @@ function exportStudentsToCSV() {
     showToast("📥 Data siswa diekspor", "success");
     
     if (typeof logActivity === 'function') {
-        logActivity('export_students', `Ekspor ${dbData.users.length} data siswa ke CSV`);
+        logActivity('export_students', `Ekspor ${dataToExport.length} data siswa ke CSV`);
     }
 }
 
@@ -811,6 +955,11 @@ setupStudentPhotoListener(); // Mulai listener foto
 function initialPopulateStudentFilters() {
     if (document.getElementById('filterStudentKelas') && document.getElementById('filterStudentJurusan')) {
         populateStudentFilters();
+        // Sembunyikan filter untuk siswa
+        if (currentUser && currentUser.role === 'siswa') {
+            const filterBar = document.querySelector('#tab-students .controls-bar:nth-child(2)');
+            if (filterBar) filterBar.style.display = 'none';
+        }
     } else {
         console.log("⏳ Menunggu DOM untuk populateStudentFilters...");
         setTimeout(initialPopulateStudentFilters, 300);
@@ -843,6 +992,11 @@ if (typeof window !== 'undefined' && window.dbData && window.dbData.users) {
         populateKelasOptions();
         populateJurusanOptions();
         populateStudentFilters();
+        
+        // Sembunyikan form untuk siswa
+        if (currentUser && currentUser.role === 'siswa') {
+            hideStudentFormForSiswa();
+        }
     }, 100);
 }
 
@@ -854,6 +1008,9 @@ if (originalSwitchTab && typeof originalSwitchTab === 'function') {
         window.dispatchEvent(new CustomEvent('tabSwitched', { detail: { tabId: tabId } }));
         if (tabId === 'students') {
             setTimeout(() => {
+                if (currentUser && currentUser.role === 'siswa') {
+                    hideStudentFormForSiswa();
+                }
                 renderStudentsTable();
                 populateStudentFilters();
                 populateKelasOptions();
@@ -877,9 +1034,11 @@ window.importStudentsFromCSV = importStudentsFromCSV;
 window.exportStudentsToCSV = exportStudentsToCSV;
 window.cleanupStudentsSystem = cleanupStudentsSystem;
 window.initDelayEventListeners = initDelayEventListeners;
+window.canEditStudents = canEditStudents;
+window.hideStudentFormForSiswa = hideStudentFormForSiswa;
 // Ekspor fungsi foto
 window.getStudentPhotoUrl = getStudentPhotoUrl;
 window.refreshStudentPhotoCache = refreshStudentPhotoCache;
 window.showStudentPhotoModal = showStudentPhotoModal;
 
-console.log("✅ students.js V3.8 loaded - Dengan foto siswa, badge akun, dan log aktivitas");
+console.log("✅ students.js V3.9 loaded - Filter siswa berdasarkan kelas & jurusan, akses edit untuk admin/guru/developer saja");

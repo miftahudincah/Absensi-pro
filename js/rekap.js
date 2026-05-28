@@ -1,10 +1,9 @@
-// rekap.js - VERSION 3.8 (DENGAN INTEGRASI MODAL REKAP PER SISWA)
+// rekap.js - VERSION 3.9 (REKAP DINONAKTIFKAN UNTUK SISWA)
 // Fitur Rekap Absensi per Siswa
-// PERUBAHAN V3.8: 
-//   - Mengintegrasikan dengan modal rekap per siswa (bukan container di bawah)
-//   - Memastikan data siswa selalu sinkron dengan dbData.users
-//   - Menambahkan validasi data siswa sebelum dirender
-//   - Filter siswa yang tidak valid (nama kosong/null)
+// PERUBAHAN V3.9: 
+//   - Menonaktifkan akses rekap untuk role SISWA
+//   - Menampilkan pesan akses terbatas untuk siswa
+//   - Filter data hanya untuk admin/guru/developer
 // ============================================================================
 
 let currentRekapData = [];
@@ -28,6 +27,58 @@ if (typeof getHolidayCountInRange === 'undefined') {
     window.getHolidayCountInRange = function(startDate, endDate) { return 0; };
 }
 
+// ======================= CEK AKSES REKAP ========================
+function isRekapAccessible() {
+    if (!currentUser) return false;
+    // Hanya admin, guru, dan developer yang dapat mengakses rekap
+    return (currentUser.role === 'admin' || currentUser.role === 'guru' || currentUser.role === 'developer');
+}
+
+/**
+ * Menampilkan pesan akses terbatas untuk siswa
+ */
+function showRekapBlockedMessage() {
+    const tabRekap = document.getElementById('tab-rekap');
+    if (!tabRekap) return;
+    
+    // Cek apakah sudah ada pesan blocked
+    if (tabRekap.querySelector('.rekap-blocked-message')) return;
+    
+    // Simpan konten asli jika belum disimpan
+    if (!tabRekap.getAttribute('data-original-content')) {
+        tabRekap.setAttribute('data-original-content', tabRekap.innerHTML);
+    }
+    
+    tabRekap.innerHTML = `
+        <div class="rekap-blocked-message" style="text-align: center; padding: 80px 20px;">
+            <div style="font-size: 64px; margin-bottom: 20px;">🔒</div>
+            <h2 style="color: var(--text-primary); margin-bottom: 10px;">Akses Terbatas</h2>
+            <p style="color: var(--text-muted); margin-bottom: 8px;">Fitur Rekap Absensi hanya tersedia untuk:</p>
+            <div style="display: flex; justify-content: center; gap: 20px; flex-wrap: wrap; margin: 20px 0;">
+                <span style="background: #4caf50; padding: 5px 15px; border-radius: 20px;">👑 Admin</span>
+                <span style="background: #ff9800; padding: 5px 15px; border-radius: 20px;">👨‍🏫 Guru</span>
+                <span style="background: #00bcd4; padding: 5px 15px; border-radius: 20px;">👨‍💻 Developer</span>
+            </div>
+            <p style="color: var(--text-muted); font-size: 14px;">Silakan hubungi guru Anda untuk informasi kehadiran.</p>
+            <button class="btn-action btn-primary" onclick="switchTab('attendance')" style="margin-top: 25px;">📋 Kembali ke Absensi</button>
+        </div>
+    `;
+}
+
+/**
+ * Merestore konten asli tab rekap
+ */
+function restoreRekapContent() {
+    const tabRekap = document.getElementById('tab-rekap');
+    if (!tabRekap) return;
+    
+    const originalContent = tabRekap.getAttribute('data-original-content');
+    if (originalContent) {
+        tabRekap.innerHTML = originalContent;
+        tabRekap.removeAttribute('data-original-content');
+    }
+}
+
 // ======================= EVENT LISTENER ========================
 
 function setupRekapDataReadyListener() {
@@ -37,6 +88,15 @@ function setupRekapDataReadyListener() {
 
     window.addEventListener('dataReady', (e) => {
         console.log("📊 rekap.js: dataReady received, initializing rekap system");
+        
+        // CEK AKSES UNTUK SISWA
+        if (!isRekapAccessible()) {
+            console.log("🚫 Siswa tidak memiliki akses ke fitur rekap");
+            showRekapBlockedMessage();
+            return;
+        }
+        
+        restoreRekapContent();
         if (!rekapInitDone) {
             initRekap();
         } else {
@@ -51,6 +111,14 @@ function setupRekapUiReadyListener() {
     console.log("📡 Setting up uiReady event listener for rekap module");
 
     window.addEventListener('uiReady', () => {
+        // CEK AKSES UNTUK SISWA
+        if (!isRekapAccessible()) {
+            console.log("🚫 Siswa tidak memiliki akses ke fitur rekap");
+            showRekapBlockedMessage();
+            return;
+        }
+        
+        restoreRekapContent();
         if (rekapInitDone) {
             if (document.getElementById('tab-rekap')?.classList.contains('active')) {
                 loadRekap();
@@ -63,6 +131,14 @@ function setupRekapUiReadyListener() {
 
 function initRekap() {
     if (rekapInitDone) return;
+    
+    // CEK AKSES UNTUK SISWA
+    if (!isRekapAccessible()) {
+        console.log("🚫 initRekap: Siswa tidak memiliki akses");
+        showRekapBlockedMessage();
+        return;
+    }
+    
     console.log("📊 Initializing rekap system...");
     
     const periodSelect = document.getElementById('rekapPeriod');
@@ -364,6 +440,13 @@ async function calculateStudentRekap(attendanceData, studentsData, startDate, en
 // ======================= RENDER REKAP TABLE (DENGAN KLIK BARIS) =======================
 
 function renderRekapTable(data) {
+    // CEK AKSES UNTUK SISWA
+    if (!isRekapAccessible()) {
+        console.log("🚫 renderRekapTable: Siswa tidak memiliki akses");
+        showRekapBlockedMessage();
+        return;
+    }
+    
     let tbody = document.getElementById('rekapTbody');
     if (!tbody) {
         console.warn("⚠️ rekapTbody not found, attempting to create dynamically...");
@@ -544,6 +627,12 @@ async function handleRekapRowClick(event) {
     // Stop propagation agar tidak konflik dengan event lain
     event.stopPropagation();
     
+    // CEK AKSES UNTUK SISWA
+    if (!isRekapAccessible()) {
+        showToast("🔒 Akses ditolak! Fitur ini hanya untuk Admin, Guru, dan Developer.", "error");
+        return;
+    }
+    
     const row = event.currentTarget;
     const studentId = row.getAttribute('data-student-id');
     const studentName = row.getAttribute('data-student-name');
@@ -577,6 +666,12 @@ async function handleRekapRowClick(event) {
  * @param {string} studentName - Nama siswa (opsional)
  */
 async function openRekapPerSiswa(studentId, studentName) {
+    // CEK AKSES UNTUK SISWA
+    if (!isRekapAccessible()) {
+        showToast("🔒 Akses ditolak! Fitur ini hanya untuk Admin, Guru, dan Developer.", "error");
+        return;
+    }
+    
     if (typeof openRekapPerSiswaModal === 'function') {
         await openRekapPerSiswaModal(studentId, studentName);
     } else {
@@ -674,6 +769,13 @@ async function loadRekap(retryCount = 0, forceRefresh = false) {
     const MAX_RETRY = 5;
     const RETRY_DELAY = 1000;
 
+    // CEK AKSES UNTUK SISWA
+    if (!isRekapAccessible()) {
+        console.log("🚫 loadRekap: Siswa tidak memiliki akses");
+        showRekapBlockedMessage();
+        return;
+    }
+
     if (isLoadingRekap) {
         console.log("⏳ Rekap sedang dimuat, skip duplicate call");
         return;
@@ -686,7 +788,7 @@ async function loadRekap(retryCount = 0, forceRefresh = false) {
         } else {
             const tbody = document.getElementById('rekapTbody');
             if (tbody) {
-                tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; padding:40px;">❌ Gagal memuat data rekap (database tidak siap).<\/td><\/tr>`;
+                tbody.innerHTML = `<td><td colspan="12" style="text-align:center; padding:40px;">❌ Gagal memuat data rekap (database tidak siap).<\/td><\/tr>`;
             }
             if (typeof showToast === 'function') showToast("❌ Gagal memuat data rekap (database tidak siap)", "error");
         }
@@ -703,7 +805,7 @@ async function loadRekap(retryCount = 0, forceRefresh = false) {
         } else {
             const tbody = document.getElementById('rekapTbody');
             if (tbody) {
-                tbody.innerHTML = `<td><td colspan="12" style="text-align:center; padding:30px;">📭 Belum ada data siswa. Silakan tambah siswa terlebih dahulu.<\/td><\/tr>`;
+                tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; padding:30px;">📭 Belum ada data siswa. Silakan tambah siswa terlebih dahulu.<\/td><\/tr>`;
             }
             return;
         }
@@ -800,6 +902,12 @@ async function loadRekap(retryCount = 0, forceRefresh = false) {
 // ======================= EXPORT FUNCTIONS (DENGAN LOG) =======================
 
 function exportRekapToExcel() {
+    // CEK AKSES UNTUK SISWA
+    if (!isRekapAccessible()) {
+        showToast("🔒 Akses ditolak! Fitur ini hanya untuk Admin, Guru, dan Developer.", "error");
+        return;
+    }
+    
     if (!currentRekapData || currentRekapData.length === 0) {
         if (typeof showToast === 'function') showToast("❌ Tidak ada data untuk diekspor!", "error");
         return;
@@ -837,6 +945,12 @@ function exportRekapToExcel() {
 }
 
 function exportRekapToPDF() {
+    // CEK AKSES UNTUK SISWA
+    if (!isRekapAccessible()) {
+        showToast("🔒 Akses ditolak! Fitur ini hanya untuk Admin, Guru, dan Developer.", "error");
+        return;
+    }
+    
     if (!currentRekapData || currentRekapData.length === 0) {
         if (typeof showToast === 'function') showToast("❌ Tidak ada data untuk diekspor!", "error");
         return;
@@ -950,7 +1064,11 @@ setupRekapUiReadyListener();
 if (typeof window !== 'undefined' && window.dbData && window.dbData.attendance && window.dbData.users) {
     console.log("📊 rekap.js: Data already available, initializing rekap immediately");
     setTimeout(() => {
-        if (!rekapInitDone) initRekap();
+        if (!rekapInitDone && isRekapAccessible()) {
+            initRekap();
+        } else if (!isRekapAccessible()) {
+            showRekapBlockedMessage();
+        }
     }, 100);
 }
 
@@ -964,5 +1082,7 @@ window.attachRekapRowClickListeners = attachRekapRowClickListeners;
 window.handleRekapRowClick = handleRekapRowClick;
 window.openRekapPerSiswa = openRekapPerSiswa;
 window.getValidStudentsList = getValidStudentsList;
+window.isRekapAccessible = isRekapAccessible;
+window.showRekapBlockedMessage = showRekapBlockedMessage;
 
-console.log("✅ rekap.js V3.8 loaded - Dengan integrasi modal rekap per siswa");
+console.log("✅ rekap.js V3.9 loaded - Rekap dinonaktifkan untuk role siswa");
