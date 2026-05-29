@@ -1,7 +1,7 @@
-// announcement.js - VERSION 3.2 (DENGAN LOG AKTIVITAS)
-// Fitur Pengumuman dengan Timer Otomatis, Real-time Updates, dan Notifikasi
+// announcement.js - VERSION 4.0 (DENGAN UPLOAD GAMBAR & LOG AKTIVITAS)
+// Fitur Pengumuman dengan Timer Otomatis, Real-time Updates, Notifikasi, dan Upload Gambar
 // Sekarang role 'developer' memiliki akses penuh seperti admin & guru
-// PERUBAHAN V3.2: Menambahkan logActivity untuk create, edit, delete announcement
+// PERUBAHAN V4.0: Menambahkan fitur upload gambar ke Supabase/ImgBB
 // ============================================================================
 
 let announcementCheckInterval = null;
@@ -10,6 +10,7 @@ let announcementCountdownInterval = null;
 let lastAnnouncementCount = 0;
 let announcementDataReadyListenerAdded = false;
 let announcementUiReadyListenerAdded = false;
+let currentAnnouncementImageFile = null;
 
 // ======================= EVENT LISTENER ========================
 
@@ -40,9 +41,124 @@ function setupAnnouncementUiReadyListener() {
         if (user && (user.role === 'admin' || user.role === 'guru' || user.role === 'developer')) {
             console.log("📢 announcement.js: uiReady received, checking permissions for floating button");
             const floatingBtn = document.getElementById('floatingAnnouncementBtn');
-            if (floatingBtn) floatingBtn.style.display = 'flex';
+            if (floatingBtn) floatingBtn.classList.add('show');
         }
     });
+}
+
+// ======================= FUNGSI UPLOAD GAMBAR =======================
+
+function previewAnnouncementImage(input) {
+    const previewContainer = document.getElementById('annImagePreviewContainer');
+    const previewImg = document.getElementById('annImagePreview');
+    
+    if (input.files && input.files[0]) {
+        currentAnnouncementImageFile = input.files[0];
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            if (previewImg) {
+                previewImg.src = e.target.result;
+                previewImg.style.display = 'block';
+            }
+            if (previewContainer) {
+                previewContainer.style.display = 'block';
+            }
+        };
+        reader.readAsDataURL(input.files[0]);
+    } else {
+        currentAnnouncementImageFile = null;
+        if (previewImg) {
+            previewImg.src = '';
+            previewImg.style.display = 'none';
+        }
+        if (previewContainer) {
+            previewContainer.style.display = 'none';
+        }
+    }
+}
+
+function removeAnnouncementImage() {
+    currentAnnouncementImageFile = null;
+    const previewImg = document.getElementById('annImagePreview');
+    const previewContainer = document.getElementById('annImagePreviewContainer');
+    const fileInput = document.getElementById('annImageInput');
+    
+    if (previewImg) {
+        previewImg.src = '';
+        previewImg.style.display = 'none';
+    }
+    if (previewContainer) {
+        previewContainer.style.display = 'none';
+    }
+    if (fileInput) {
+        fileInput.value = '';
+    }
+    showToast("🗑️ Gambar dihapus", "info");
+}
+
+async function uploadAnnouncementImage(file) {
+    if (!file) return null;
+    
+    if (!file.type.match('image.*')) {
+        showToast("❌ Hanya file gambar yang diperbolehkan!", "error");
+        return null;
+    }
+    
+    if (file.size > 2 * 1024 * 1024) {
+        showToast("❌ Ukuran gambar maksimal 2MB!", "error");
+        return null;
+    }
+    
+    showToast("📤 Mengunggah gambar pengumuman...", "info");
+    
+    try {
+        if (typeof uploadWithFallback !== 'undefined') {
+            const result = await uploadWithFallback(file, 'announcements');
+            return result.url;
+        } else {
+            console.warn("uploadWithFallback not available, using ImgBB fallback");
+            const formData = new FormData();
+            formData.append('image', file);
+            const response = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_KEY}`, {
+                method: 'POST',
+                body: formData
+            });
+            const data = await response.json();
+            if (!data.success) throw new Error("ImgBB upload failed");
+            return data.data.image.url;
+        }
+    } catch (error) {
+        console.error("Upload image error:", error);
+        showToast("❌ Gagal upload gambar: " + error.message, "error");
+        return null;
+    }
+}
+
+function viewAnnouncementImage(imageUrl) {
+    if (!imageUrl) return;
+    
+    let modalHtml = `
+        <div id="modal-announcement-image" class="modal-overlay open">
+            <div class="modal-box" style="max-width: 600px; text-align: center; background: #000;">
+                <div class="modal-title">
+                    <span>🖼️ Gambar Pengumuman</span>
+                    <span onclick="closeModal('modal-announcement-image')">✖</span>
+                </div>
+                <div style="padding: 20px;">
+                    <img src="${imageUrl}" 
+                         style="max-width: 100%; max-height: 70vh; border-radius: 12px; object-fit: contain;"
+                         onerror="this.src='https://placehold.co/400x300?text=Gambar+Gagal+Dimuat'">
+                </div>
+                <div class="modal-actions">
+                    <button class="btn-cancel" onclick="closeModal('modal-announcement-image')">Tutup</button>
+                    <a href="${imageUrl}" target="_blank" class="btn-primary" style="padding: 8px 16px; background: #00bcd4; color: white; text-decoration: none; border-radius: 8px;">🔗 Buka di Tab Baru</a>
+                </div>
+            </div>
+        </div>
+    `;
+    const existingModal = document.getElementById('modal-announcement-image');
+    if (existingModal) existingModal.remove();
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
 }
 
 // ======================= RENDER PENGUMUMAN =======================
@@ -110,6 +226,19 @@ function renderAnnouncement() {
             const createdInfo = ann.createdBy ? `👤 Dibuat oleh: ${escapeHtmlAnn(ann.createdBy)}` : '';
             const createdAtDate = ann.createdAt ? new Date(ann.createdAt).toLocaleString('id-ID') : '';
             
+            // Tampilkan gambar jika ada
+            let imageHtml = '';
+            if (ann.imageUrl && ann.imageUrl !== 'null' && ann.imageUrl !== 'undefined') {
+                imageHtml = `
+                    <div class="announcement-image" style="margin-top: 10px;">
+                        <img src="${ann.imageUrl}" 
+                             style="max-width: 100%; max-height: 200px; border-radius: 12px; cursor: pointer; object-fit: cover;"
+                             onclick="viewAnnouncementImage('${ann.imageUrl}')"
+                             onerror="this.style.display='none'">
+                    </div>
+                `;
+            }
+            
             let actionButtons = '';
             if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'guru' || currentUser.role === 'developer')) {
                 actionButtons = `
@@ -135,6 +264,7 @@ function renderAnnouncement() {
                         </div>
                     </div>
                     <div class="announcement-message">${escapeHtmlAnn(ann.message)}</div>
+                    ${imageHtml}
                     <div class="announcement-footer">
                         <small>${createdInfo}</small>
                         <small>📅 ${createdAtDate || ''}</small>
@@ -289,6 +419,15 @@ function openAnnouncementModal() {
     document.getElementById('annExpiryDate').value = '';
     document.getElementById('annExpiryTime').value = '';
     
+    // Reset gambar
+    currentAnnouncementImageFile = null;
+    const previewImg = document.getElementById('annImagePreview');
+    const previewContainer = document.getElementById('annImagePreviewContainer');
+    const fileInput = document.getElementById('annImageInput');
+    if (previewImg) previewImg.src = '';
+    if (previewContainer) previewContainer.style.display = 'none';
+    if (fileInput) fileInput.value = '';
+    
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
     document.getElementById('annExpiryDate').value = formatDateToString(tomorrow);
@@ -309,6 +448,24 @@ function editAnnouncement(announcementId) {
             document.getElementById('annTitle').value = data.title || '';
             document.getElementById('annMessage').value = data.message || '';
             document.getElementById('annPriority').value = data.priority || 'normal';
+            
+            // Tampilkan preview gambar jika ada
+            if (data.imageUrl && data.imageUrl !== 'null' && data.imageUrl !== 'undefined') {
+                const previewImg = document.getElementById('annImagePreview');
+                const previewContainer = document.getElementById('annImagePreviewContainer');
+                if (previewImg) {
+                    previewImg.src = data.imageUrl;
+                    previewImg.style.display = 'block';
+                }
+                if (previewContainer) {
+                    previewContainer.style.display = 'block';
+                }
+                currentAnnouncementImageFile = null;
+            } else {
+                const previewContainer = document.getElementById('annImagePreviewContainer');
+                if (previewContainer) previewContainer.style.display = 'none';
+                currentAnnouncementImageFile = null;
+            }
             
             if (data.expiryDate && data.expiryTime) {
                 document.getElementById('annExpiryType').value = 'both';
@@ -351,8 +508,8 @@ function toggleExpiryInput() {
     }
 }
 
-// ======================= SAVE ANNOUNCEMENT (DENGAN LOG) =======================
-function saveAnnouncement() {
+// ======================= SAVE ANNOUNCEMENT (DENGAN GAMBAR & LOG) =======================
+async function saveAnnouncement() {
     if (!currentUser) {
         showToast("Anda harus login!", "error");
         return;
@@ -387,6 +544,22 @@ function saveAnnouncement() {
         if (!expiryDate || !expiryTime) { showToast("📅⏰ Pilih tanggal dan waktu berakhir!", "error"); return; }
     }
     
+    // Upload image if exists
+    let imageUrl = null;
+    if (currentAnnouncementImageFile) {
+        imageUrl = await uploadAnnouncementImage(currentAnnouncementImageFile);
+        if (!imageUrl && currentAnnouncementImageFile) {
+            if (!confirm("⚠️ Gagal upload gambar. Lanjutkan tanpa gambar?")) {
+                return;
+            }
+        }
+    } else {
+        const existingImageUrl = document.getElementById('annImagePreview')?.src;
+        if (existingImageUrl && existingImageUrl !== '' && !existingImageUrl.includes('blob:') && !existingImageUrl.includes('null')) {
+            imageUrl = existingImageUrl;
+        }
+    }
+    
     const announcementData = {
         title, message, priority,
         createdBy: currentUser.nama || currentUser.email,
@@ -396,8 +569,9 @@ function saveAnnouncement() {
     };
     if (expiryDate) announcementData.expiryDate = expiryDate;
     if (expiryTime) announcementData.expiryTime = expiryTime;
+    if (imageUrl) announcementData.imageUrl = imageUrl;
     
-    const btn = document.getElementById('btnSaveAnnouncement');
+    const btn = document.querySelector('#modal-announcement .btn-save');
     if (btn) { btn.disabled = true; btn.innerHTML = '💾 Menyimpan...'; }
     
     let promise = announcementId ? 
@@ -410,14 +584,27 @@ function saveAnnouncement() {
         closeModal('modal-announcement');
         showAnnouncementNotification(title, message);
         
+        // Reset form
+        currentAnnouncementImageFile = null;
+        const fileInput = document.getElementById('annImageInput');
+        if (fileInput) fileInput.value = '';
+        const previewContainer = document.getElementById('annImagePreviewContainer');
+        if (previewContainer) previewContainer.style.display = 'none';
+        
         // LOG: Simpan pengumuman
         if (typeof logActivity === 'function') {
             const expiryInfo = expiryDate ? ` (Berakhir: ${expiryDate}${expiryTime ? ' ' + expiryTime : ''})` : '';
+            const imageInfo = imageUrl ? ' dengan gambar' : '';
             logActivity(action === 'create' ? 'create_announcement' : 'update_announcement', 
-                       `"${title}" - Prioritas: ${priority}${expiryInfo}`);
+                       `"${title}" - Prioritas: ${priority}${expiryInfo}${imageInfo}`);
         }
         
-        setTimeout(() => renderAnnouncement(), 100);
+        setTimeout(() => {
+            renderAnnouncement();
+            if (typeof renderFullAnnouncementList === 'function') {
+                renderFullAnnouncementList();
+            }
+        }, 100);
     }).catch(err => {
         console.error("Save announcement error:", err);
         showToast("❌ Gagal menyimpan: " + err.message, "error");
@@ -441,27 +628,47 @@ function showAnnouncementNotification(title, message) {
     }
 }
 
-// ======================= DELETE ANNOUNCEMENT (DENGAN LOG) =======================
-function deleteAnnouncement(announcementId) {
+// ======================= DELETE ANNOUNCEMENT (DENGAN LOG & HAPUS GAMBAR) =======================
+async function deleteAnnouncement(announcementId) {
     if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'guru' && currentUser.role !== 'developer')) {
         showToast("⛔ Anda tidak memiliki akses!", "error");
         return;
     }
-    db.ref(`announcements/active/${announcementId}/title`).once('value', (snapshot) => {
-        const title = snapshot.val() || 'pengumuman ini';
+    
+    db.ref(`announcements/active/${announcementId}`).once('value', async (snapshot) => {
+        const ann = snapshot.val();
+        const title = ann?.title || 'pengumuman ini';
+        
         if (!confirm(`⚠️ Yakin ingin menghapus "${title}"?\n\nTindakan ini tidak dapat dibatalkan!`)) return;
+        
         const btn = document.querySelector(`.announcement-item[data-id="${announcementId}"] .announcement-delete`);
         if (btn) btn.style.opacity = '0.5';
+        
+        // Hapus gambar dari Supabase jika ada
+        if (ann && ann.imageUrl && typeof deleteFromSupabase === 'function') {
+            try {
+                await deleteFromSupabase(ann.imageUrl);
+                console.log("🗑️ Gambar pengumuman dihapus dari storage");
+            } catch (err) {
+                console.warn("Gagal hapus gambar:", err);
+            }
+        }
+        
         db.ref(`announcements/active/${announcementId}`).remove()
             .then(() => { 
                 showToast(`✅ Pengumuman "${title}" berhasil dihapus`);
                 
                 // LOG: Hapus pengumuman
                 if (typeof logActivity === 'function') {
-                    logActivity('delete_announcement', `Menghapus pengumuman: "${title}"`);
+                    logActivity('delete_announcement', `Menghapus pengumuman: "${title}"${ann?.imageUrl ? ' (dengan gambar)' : ''}`);
                 }
                 
-                setTimeout(() => renderAnnouncement(), 100);
+                setTimeout(() => {
+                    renderAnnouncement();
+                    if (typeof renderFullAnnouncementList === 'function') {
+                        renderFullAnnouncementList();
+                    }
+                }, 100);
             })
             .catch(err => {
                 console.error("Delete error:", err);
@@ -471,11 +678,73 @@ function deleteAnnouncement(announcementId) {
     });
 }
 
+// ======================= FULL ANNOUNCEMENT LIST (UNTUK TAB) =======================
+
+function renderFullAnnouncementList() {
+    const container = document.getElementById('fullAnnouncementList');
+    if (!container) return;
+    
+    db.ref('announcements/active').once('value', (snapshot) => {
+        const data = snapshot.val();
+        if (!data) {
+            container.innerHTML = '<div style="text-align:center; padding:40px;">📭 Belum ada pengumuman</div>';
+            return;
+        }
+        
+        const announcements = Object.keys(data).map(key => ({ id: key, ...data[key] }));
+        announcements.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+        
+        let html = '<div style="display:flex; flex-direction:column; gap:15px;">';
+        announcements.forEach(ann => {
+            const priorityClass = ann.priority === 'high' ? 'announcement-high' : (ann.priority === 'low' ? 'announcement-low' : 'announcement-normal');
+            const createdDate = ann.createdAt ? new Date(ann.createdAt).toLocaleString('id-ID') : '-';
+            let expiryInfo = '';
+            if (ann.expiryDate) expiryInfo += `📅 Berakhir: ${formatIndonesianDate(ann.expiryDate)}`;
+            if (ann.expiryTime) expiryInfo += ` ${ann.expiryTime}`;
+            if (!expiryInfo) expiryInfo = '⏰ Tidak terbatas';
+            
+            let imageHtml = '';
+            if (ann.imageUrl && ann.imageUrl !== 'null' && ann.imageUrl !== 'undefined') {
+                imageHtml = `
+                    <div style="margin-top: 10px;">
+                        <img src="${ann.imageUrl}" 
+                             style="max-width: 100%; max-height: 150px; border-radius: 12px; cursor: pointer; object-fit: cover;"
+                             onclick="viewAnnouncementImage('${ann.imageUrl}')"
+                             onerror="this.style.display='none'">
+                    </div>
+                `;
+            }
+            
+            html += `
+                <div class="announcement-item ${priorityClass}" style="padding:15px; border-radius:12px; background:var(--bg-hover);">
+                    <div class="announcement-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:10px;">
+                        <span class="announcement-title" style="font-weight:bold; font-size:1.1rem;">📢 ${escapeHtmlAnn(ann.title)}</span>
+                        <div style="display:flex; gap:8px;">
+                            <button class="btn-icon" onclick="editAnnouncement('${ann.id}')" title="Edit">✏️</button>
+                            <button class="btn-icon delete" onclick="deleteAnnouncement('${ann.id}')" title="Hapus">🗑️</button>
+                        </div>
+                    </div>
+                    <div class="announcement-message" style="margin-bottom:10px;">${escapeHtmlAnn(ann.message)}</div>
+                    ${imageHtml}
+                    <div class="announcement-footer" style="font-size:0.7rem; color:var(--text-muted); display:flex; gap:15px; flex-wrap:wrap; margin-top:10px;">
+                        <span>👤 ${escapeHtmlAnn(ann.createdBy || 'Admin')}</span>
+                        <span>📅 ${createdDate}</span>
+                        <span>${expiryInfo}</span>
+                        <span>${ann.priority === 'high' ? '🔴 Penting' : (ann.priority === 'low' ? '🔵 Rendah' : '🟢 Normal')}</span>
+                    </div>
+                </div>
+            `;
+        });
+        html += '</div>';
+        container.innerHTML = html;
+    });
+}
+
 // ======================= EXPIRY CHECKER =======================
 
 function checkExpiredAnnouncements() {
     console.log("⏰ Checking for expired announcements...");
-    db.ref('announcements/active').once('value', (snapshot) => {
+    db.ref('announcements/active').once('value', async (snapshot) => {
         const data = snapshot.val();
         if (!data) return;
         const now = new Date();
@@ -483,8 +752,8 @@ function checkExpiredAnnouncements() {
         const currentDate = formatDateToString(now);
         let hasExpired = false;
         let expiredTitles = [];
-        Object.keys(data).forEach(key => {
-            const ann = data[key];
+        
+        for (const [key, ann] of Object.entries(data)) {
             let isExpired = false;
             if (!ann.isActive) isExpired = true;
             else if (ann.expiryDate && ann.expiryTime) {
@@ -495,12 +764,22 @@ function checkExpiredAnnouncements() {
             } else if (ann.expiryTime) {
                 if (currentTime >= ann.expiryTime) isExpired = true;
             }
+            
             if (isExpired) {
                 expiredTitles.push(ann.title);
-                db.ref(`announcements/active/${key}`).remove();
+                // Hapus gambar dari storage
+                if (ann.imageUrl && typeof deleteFromSupabase === 'function') {
+                    try {
+                        await deleteFromSupabase(ann.imageUrl);
+                    } catch (err) {
+                        console.warn("Gagal hapus gambar expired:", err);
+                    }
+                }
+                await db.ref(`announcements/active/${key}`).remove();
                 hasExpired = true;
             }
-        });
+        }
+        
         if (hasExpired) {
             console.log(`🗑️ Removed expired announcements: ${expiredTitles.join(', ')}`);
             setTimeout(() => renderAnnouncement(), 100);
@@ -630,10 +909,11 @@ function cleanupAnnouncementSystem() {
     }
     announcementDataReadyListenerAdded = false;
     announcementUiReadyListenerAdded = false;
+    currentAnnouncementImageFile = null;
     console.log("🧹 Announcement system cleaned up");
 }
 
-// ======================= INISIALISASI (TANPA AUTO-INIT) =======================
+// ======================= INISIALISASI =======================
 
 setupAnnouncementDataReadyListener();
 setupAnnouncementUiReadyListener();
@@ -658,6 +938,10 @@ window.deleteAnnouncement = deleteAnnouncement;
 window.createTestAnnouncement = createTestAnnouncement;
 window.debugCheckAnnouncements = debugCheckAnnouncements;
 window.cleanupAnnouncementSystem = cleanupAnnouncementSystem;
-window.initAnnouncementSystem = initAnnouncementSystem; // alias
+window.initAnnouncementSystem = initAnnouncementListener;
+window.renderFullAnnouncementList = renderFullAnnouncementList;
+window.viewAnnouncementImage = viewAnnouncementImage;
+window.previewAnnouncementImage = previewAnnouncementImage;
+window.removeAnnouncementImage = removeAnnouncementImage;
 
-console.log("✅ announcement.js V3.2 loaded - Dengan log aktivitas untuk pengumuman");
+console.log("✅ announcement.js V4.0 loaded - Dengan upload gambar pengumuman & log aktivitas");
