@@ -1,4 +1,4 @@
-// ai-summary.js - VERSION 3.1 (Role-Based Access: Admin/Guru/Developer Only)
+// ai-summary.js - VERSION 3.2 (FIXED: Role-Based Access - Admin/Guru/Developer)
 // AI Summary Absensi - Hanya untuk role admin, guru, dan developer
 
 // Konfigurasi API
@@ -7,42 +7,40 @@ const AI_PROVIDERS = {
         url: "https://api.groq.com/openai/v1/chat/completions",
         key: "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",
         model: "llama3-70b-8192"
-    },
-    huggingface: {
-        url: "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.3",
-        key: ""
     }
 };
 
 let aiSummaryInitialized = false;
 let currentAIAnalysis = null;
+let aiCheckInterval = null;
 
 // ======================= CEK AKSES ========================
 
 function hasAIAccess() {
     if (!currentUser) return false;
     // Hanya Admin, Guru, dan Developer yang dapat mengakses AI Summary
-    return (currentUser.role === 'admin' || currentUser.role === 'guru' || currentUser.role === 'developer');
+    const allowedRoles = ['admin', 'guru', 'developer'];
+    return allowedRoles.includes(currentUser.role);
 }
 
 // ======================= INISIALISASI ========================
 
 function initAISummary() {
-    if (aiSummaryInitialized) return;
-    if (!currentUser) {
-        setTimeout(initAISummary, 1000);
+    if (aiSummaryInitialized) {
+        console.log("🤖 AI Summary already initialized");
         return;
     }
     
-    // Cek akses - jika siswa, jangan inisialisasi
+    // Cek akses - jika tidak punya akses, jangan inisialisasi
     if (!hasAIAccess()) {
-        console.log("🔒 AI Summary: Hanya untuk Admin, Guru, dan Developer. Akses ditolak untuk role:", currentUser.role);
+        console.log("🔒 AI Summary: Akses ditolak untuk role:", currentUser?.role);
         return;
     }
     
     aiSummaryInitialized = true;
     console.log("🤖 AI Summary module initialized for role:", currentUser.role);
     
+    // Tunggu DOM siap
     setTimeout(() => {
         addAISummaryButton();
         addFloatingAISummaryButton();
@@ -50,40 +48,104 @@ function initAISummary() {
 }
 
 function addAISummaryButton() {
-    // Double check akses sebelum menambahkan tombol
+    // Double check akses
     if (!hasAIAccess()) return;
     
-    let statsGrid = document.getElementById('dashboardStatsGrid') || document.querySelector('.stats-grid');
+    let statsGrid = document.getElementById('dashboardStatsGrid');
     if (!statsGrid) {
+        statsGrid = document.querySelector('.stats-grid');
+    }
+    
+    if (!statsGrid) {
+        console.log("⏳ Menunggu stats grid untuk AI button...");
         setTimeout(addAISummaryButton, 500);
         return;
     }
     
-    if (document.getElementById('aiSummaryBtnContainer')) return;
+    // Cek apakah tombol sudah ada
+    if (document.getElementById('aiSummaryBtnContainer')) {
+        console.log("✅ AI Summary button already exists");
+        return;
+    }
     
     const aiButton = document.createElement('div');
     aiButton.className = 'stat-card-new';
     aiButton.id = 'aiSummaryBtnContainer';
-    aiButton.style.cssText = `cursor:pointer; background:linear-gradient(135deg,#667eea,#764ba2); transition:transform 0.2s; border-radius:20px; padding:20px; text-align:center;`;
+    aiButton.setAttribute('data-role', currentUser.role);
+    aiButton.style.cssText = `
+        cursor: pointer;
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        transition: transform 0.2s;
+        border-radius: 20px;
+        padding: 20px;
+        text-align: center;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    `;
     aiButton.onclick = () => openAISummaryModal();
     aiButton.onmouseenter = () => aiButton.style.transform = 'scale(1.02)';
     aiButton.onmouseleave = () => aiButton.style.transform = 'scale(1)';
-    aiButton.innerHTML = `<div style="color:white;">🤖 AI Summary</div><div style="color:white; font-size:1.2rem;">Analisis Cerdas</div>`;
+    aiButton.innerHTML = `
+        <div class="stat-title-new" style="color: white;">🤖 AI Summary</div>
+        <div class="stat-number" style="color: white; font-size: 1.2rem;">Analisis Cerdas</div>
+        <div class="stat-percent" style="color: rgba(255,255,255,0.8);">Klik untuk analisis</div>
+    `;
     
-    statsGrid.appendChild(aiButton);
-    console.log("✅ AI Summary button added for", currentUser?.role);
-    
-    // Floating button
-    if (!document.getElementById('floatingAiSummaryBtn')) {
-        const floatingBtn = document.createElement('button');
-        floatingBtn.id = 'floatingAiSummaryBtn';
-        floatingBtn.innerHTML = '🤖';
-        floatingBtn.title = 'AI Summary Absensi (Admin/Guru/Developer)';
-        floatingBtn.onclick = () => openAISummaryModal();
-        floatingBtn.style.cssText = `position:fixed; bottom:170px; right:20px; width:56px; height:56px; border-radius:50%; background:linear-gradient(135deg,#667eea,#764ba2); color:white; display:flex; align-items:center; justify-content:center; cursor:pointer; box-shadow:0 4px 15px rgba(0,0,0,0.3); z-index:999; border:none; font-size:28px;`;
-        document.body.appendChild(floatingBtn);
-        console.log("✅ Floating AI button added");
+    // Cari posisi yang tepat (setelah kartu Terlambat atau di akhir)
+    const terlambatCard = document.getElementById('statTerlambat')?.closest('.stat-card-new');
+    if (terlambatCard && terlambatCard.nextSibling) {
+        statsGrid.insertBefore(aiButton, terlambatCard.nextSibling);
+    } else {
+        statsGrid.appendChild(aiButton);
     }
+    
+    console.log("✅ AI Summary button added to dashboard for role:", currentUser.role);
+}
+
+function addFloatingAISummaryButton() {
+    // Double check akses
+    if (!hasAIAccess()) return;
+    
+    if (document.getElementById('floatingAiSummaryBtn')) {
+        console.log("✅ Floating AI button already exists");
+        return;
+    }
+    
+    const floatingBtn = document.createElement('button');
+    floatingBtn.id = 'floatingAiSummaryBtn';
+    floatingBtn.innerHTML = '🤖';
+    floatingBtn.title = 'AI Summary Absensi';
+    floatingBtn.onclick = () => openAISummaryModal();
+    floatingBtn.style.cssText = `
+        position: fixed;
+        bottom: 170px;
+        right: 20px;
+        width: 56px;
+        height: 56px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        z-index: 999;
+        border: none;
+        font-size: 28px;
+        transition: transform 0.2s;
+    `;
+    
+    floatingBtn.addEventListener('mouseenter', () => {
+        floatingBtn.style.transform = 'scale(1.1)';
+        floatingBtn.style.boxShadow = '0 6px 20px rgba(0,0,0,0.4)';
+    });
+    floatingBtn.addEventListener('mouseleave', () => {
+        floatingBtn.style.transform = 'scale(1)';
+        floatingBtn.style.boxShadow = '0 4px 15px rgba(0,0,0,0.3)';
+    });
+    
+    document.body.appendChild(floatingBtn);
+    console.log("✅ Floating AI button added for role:", currentUser.role);
 }
 
 async function openAISummaryModal() {
@@ -100,13 +162,13 @@ async function openAISummaryModal() {
         document.body.insertAdjacentHTML('beforeend', `
             <div id="modal-ai-summary" class="modal-overlay">
                 <div class="modal-box" style="max-width:700px; max-height:85vh; overflow-y:auto;">
-                    <div class="modal-title" style="display:flex; justify-content:space-between;">
+                    <div class="modal-title" style="display:flex; justify-content:space-between; align-items:center;">
                         <span>🤖 AI Summary Absensi</span>
-                        <span onclick="closeModal('modal-ai-summary')" style="cursor:pointer;">✖</span>
+                        <span onclick="closeModal('modal-ai-summary')" style="cursor:pointer; font-size:24px;">✖</span>
                     </div>
                     <div style="padding:20px;" id="aiSummaryContent">
                         <div style="text-align:center; padding:40px;">
-                            <div style="font-size:48px;">🚀</div>
+                            <div style="font-size:48px; margin-bottom:16px;">🚀</div>
                             <h3>Menganalisis data...</h3>
                             <div class="loading-spinner" style="margin-top:20px;"></div>
                         </div>
@@ -128,7 +190,6 @@ async function openAISummaryModal() {
     
     const contentDiv = document.getElementById('aiSummaryContent');
     if (contentDiv && analysis) {
-        // Tampilkan badge role di header
         const roleBadge = currentUser?.role === 'admin' ? '👑 ADMIN' : (currentUser?.role === 'guru' ? '👨‍🏫 GURU' : '👨‍💻 DEVELOPER');
         
         contentDiv.innerHTML = `
@@ -146,13 +207,15 @@ async function openAISummaryModal() {
                 <div class="ai-summary-content" style="line-height:1.6;">${analysis.html}</div>
             </div>
         `;
-        document.getElementById('aiExportBtn').style.display = 'inline-block';
-        document.getElementById('aiCopyBtn').style.display = 'inline-block';
+        
+        const exportBtn = document.getElementById('aiExportBtn');
+        const copyBtn = document.getElementById('aiCopyBtn');
+        if (exportBtn) exportBtn.style.display = 'inline-block';
+        if (copyBtn) copyBtn.style.display = 'inline-block';
     }
 }
 
 async function generateAnalysis() {
-    // Cek akses sebelum generate
     if (!hasAIAccess()) {
         return { 
             provider: 'Akses Ditolak', 
@@ -162,7 +225,7 @@ async function generateAnalysis() {
     
     const data = collectAttendanceData();
     if (!data || data.totalStudents === 0) {
-        return { provider: 'Fallback', html: '<p>Data absensi tidak tersedia</p>' };
+        return { provider: 'Fallback', html: '<p>📭 Data absensi tidak tersedia. Silakan tambahkan data siswa dan absensi terlebih dahulu.</p>' };
     }
     
     // Coba panggil Groq API
@@ -189,9 +252,10 @@ async function callGroqAPI(data) {
 - Statistik kelas: ${Object.entries(data.classStats).map(([k,v]) => `${k}:${v.persen}%`).join(', ')}
 
 Format HTML dengan:
-<h2>Ringkasan Eksekutif</h2><p>...</p>
-<h2>Poin Penting</h2><ul><li>...</li></ul>
-<h2>Rekomendasi</h2><ul><li>...</li></ul>`;
+<h2>📊 Ringkasan Eksekutif</h2><p>...</p>
+<h2>📌 Poin Penting</h2><ul><li>...</li></ul>
+<h2>💡 Rekomendasi</h2><ul><li>...</li></ul>
+<h2>🔮 Prediksi</h2><p>...</p>`;
 
     const response = await fetch(AI_PROVIDERS.groq.url, {
         method: 'POST',
@@ -220,7 +284,7 @@ function collectAttendanceData() {
     const thisMonth = now.getMonth();
     const thisYear = now.getFullYear();
     
-    const validStudents = (dbData.users || []).filter(s => s && s.nama && s.nama !== 'Tidak Diketahui');
+    const validStudents = (dbData.users || []).filter(s => s && s.nama && s.nama !== 'Tidak Diketahui' && s.nama.trim() !== '');
     const monthAttendance = (dbData.attendance || []).filter(a => {
         if (!a.date) return false;
         const d = new Date(a.date);
@@ -230,7 +294,7 @@ function collectAttendanceData() {
     const studentStats = validStudents.map(student => {
         const records = monthAttendance.filter(a => a.studentId == student.id);
         const hadir = records.filter(r => r.status === 'Hadir' || r.status === 'Pulang').length;
-        return { id: student.id, nama: student.nama, kelas: student.kelas, hadir, total: records.length };
+        return { id: student.id, nama: student.nama, kelas: student.kelas || '-', hadir, total: records.length };
     });
     
     studentStats.sort((a, b) => b.hadir - a.hadir);
@@ -276,10 +340,10 @@ function generateStaticAnalysisHTML(data) {
         
         <h2>📌 POIN PENTING</h2>
         <h3>✅ 5 Siswa dengan Kehadiran Terbaik:</h3>
-        <ul>${data.topPerformers.map(s => `<li><strong>${s.nama}</strong> (${s.kelas || '-'}) - ${s.hadir} hari hadir</li>`).join('') || '<li>Belum ada data</li>'}</ul>
+        <ul>${data.topPerformers.map(s => `<li><strong>${s.nama}</strong> (${s.kelas}) - ${s.hadir} hari hadir</li>`).join('') || '<li>Belum ada data</li>'}</ul>
         
         <h3>⚠️ 5 Siswa yang Perlu Perhatian:</h3>
-        <ul>${data.lowestAttendance.map(s => `<li><strong>${s.nama}</strong> (${s.kelas || '-'}) - ${s.hadir}/${s.total} hari (${s.total > 0 ? ((s.hadir/s.total)*100).toFixed(1) : 0}%)</li>`).join('') || '<li>Semua siswa memiliki kehadiran baik</li>'}</ul>
+        <ul>${data.lowestAttendance.map(s => `<li><strong>${s.nama}</strong> (${s.kelas}) - ${s.hadir}/${s.total} hari (${s.total > 0 ? ((s.hadir/s.total)*100).toFixed(1) : 0}%)</li>`).join('') || '<li>Semua siswa memiliki kehadiran baik</li>'}</ul>
         
         <h3>🏫 Statistik per Kelas:</h3>
         <ul>${Object.entries(data.classStats).map(([k, v]) => `<li>${k}: <strong>${v.persen}%</strong> kehadiran (${v.hadir} dari ${v.total * 20} total)</li>`).join('')}</ul>
@@ -301,7 +365,6 @@ function generateStaticAnalysisHTML(data) {
 }
 
 function copyAISummaryToClipboard() {
-    // Cek akses
     if (!hasAIAccess()) {
         if (typeof showToast === 'function') showToast("🔒 Akses ditolak!", "error");
         return;
@@ -317,7 +380,6 @@ function copyAISummaryToClipboard() {
 }
 
 function exportAISummaryToPDF() {
-    // Cek akses
     if (!hasAIAccess()) {
         if (typeof showToast === 'function') showToast("🔒 Akses ditolak!", "error");
         return;
@@ -337,6 +399,7 @@ function exportAISummaryToPDF() {
         .header{text-align:center;margin-bottom:30px;padding-bottom:15px;border-bottom:2px solid #667eea}
         .footer{text-align:center;margin-top:30px;padding-top:15px;font-size:10px;color:#888;border-top:1px solid #ddd}
         .role-badge{background:#00bcd4;color:white;padding:4px 12px;border-radius:20px;display:inline-block;font-size:12px}
+        @media print{button{display:none}}
     </style></head><body>
     <div class="header"><h1>🤖 AI SUMMARY ABSENSI</h1><p>Dicetak oleh: ${roleText}</p><p>${new Date().toLocaleString('id-ID')}</p></div>
     ${html}
@@ -347,13 +410,32 @@ function exportAISummaryToPDF() {
     if (typeof showToast === 'function') showToast("📄 Membuka halaman print", "info");
 }
 
-// Fungsi untuk menghapus tombol AI Summary jika diperlukan (misal saat logout)
 function removeAISummaryButtons() {
     const btn = document.getElementById('aiSummaryBtnContainer');
     if (btn) btn.remove();
     const floatingBtn = document.getElementById('floatingAiSummaryBtn');
     if (floatingBtn) floatingBtn.remove();
     console.log("🗑️ AI Summary buttons removed");
+}
+
+// Fungsi untuk mengecek dan inisialisasi ulang saat role berubah atau user login
+function checkAndInitAI() {
+    if (currentUser && hasAIAccess()) {
+        if (!aiSummaryInitialized) {
+            console.log("🔄 Initializing AI Summary for user:", currentUser.nama, "Role:", currentUser.role);
+            initAISummary();
+        } else if (!document.getElementById('aiSummaryBtnContainer')) {
+            // Tombol hilang tapi seharusnya ada, tambahkan lagi
+            console.log("🔄 Re-adding AI Summary buttons");
+            addAISummaryButton();
+            addFloatingAISummaryButton();
+        }
+    } else if (currentUser && !hasAIAccess()) {
+        // User tidak punya akses, hapus tombol jika ada
+        if (document.getElementById('aiSummaryBtnContainer') || document.getElementById('floatingAiSummaryBtn')) {
+            removeAISummaryButtons();
+        }
+    }
 }
 
 // Ekspor ke global
@@ -363,20 +445,48 @@ window.copyAISummaryToClipboard = copyAISummaryToClipboard;
 window.exportAISummaryToPDF = exportAISummaryToPDF;
 window.hasAIAccess = hasAIAccess;
 window.removeAISummaryButtons = removeAISummaryButtons;
+window.checkAndInitAI = checkAndInitAI;
 
-// Auto init dengan pengecekan role
-setTimeout(() => { 
+// Setup interval untuk mengecek user dan inisialisasi (sampai berhasil)
+let initAttempts = 0;
+const maxAttempts = 30;
+
+function waitForUserAndInit() {
     if (typeof currentUser !== 'undefined' && currentUser) {
         if (hasAIAccess()) {
+            console.log("🎯 User detected:", currentUser.nama, "Role:", currentUser.role, "- Initializing AI Summary");
             initAISummary();
         } else {
-            console.log("🔒 AI Summary: Role", currentUser?.role, "tidak memiliki akses. Tombol tidak ditampilkan.");
+            console.log("🔒 AI Summary: Role", currentUser.role, "tidak memiliki akses");
         }
-    } else {
-        setTimeout(() => {
-            if (currentUser && hasAIAccess()) initAISummary();
-        }, 2000);
+        return;
     }
-}, 1000);
+    
+    initAttempts++;
+    if (initAttempts < maxAttempts) {
+        setTimeout(waitForUserAndInit, 500);
+    } else {
+        console.log("⚠️ AI Summary: Max attempts reached, waiting for user login");
+    }
+}
 
-console.log("✅ ai-summary.js V3.1 loaded - Role-based access: Admin/Guru/Developer only");
+// Mulai inisialisasi
+setTimeout(waitForUserAndInit, 1000);
+
+// Juga listen untuk event 'uiReady' dari ui.js
+window.addEventListener('uiReady', (e) => {
+    if (e.detail && e.detail.currentUser) {
+        console.log("📡 uiReady event received for AI Summary");
+        setTimeout(() => checkAndInitAI(), 500);
+    }
+});
+
+// Listen untuk 'dataReady' event
+window.addEventListener('dataReady', () => {
+    if (currentUser && hasAIAccess() && !aiSummaryInitialized) {
+        console.log("📡 dataReady event received, initializing AI Summary");
+        initAISummary();
+    }
+});
+
+console.log("✅ ai-summary.js V3.2 loaded - Role-based access: Admin/Guru/Developer only");
