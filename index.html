@@ -136,6 +136,27 @@
             margin-top: 0 !important;
         }
         
+        /* Dashboard Role Info */
+        .dashboard-role-info {
+            margin-bottom: 15px;
+            padding: 10px 15px;
+            background: var(--bg-hover);
+            border-radius: 12px;
+            border-left: 4px solid #00bcd4;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .dashboard-role-info .role-badge-small {
+            background: var(--bg-card);
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+        
         /* ======================== STYLE UNTUK AVATAR SISWA ======================== */
         .student-avatar,
         .attendance-student-avatar,
@@ -371,6 +392,10 @@
             #rekapPerSiswaCustomRange input {
                 width: 100%;
             }
+            
+            .dashboard-role-info {
+                font-size: 0.85rem;
+            }
         }
         
         .navbar-right {
@@ -446,6 +471,10 @@
 
         body.light-mode .rekap-per-siswa-container {
             background: #ffffff;
+        }
+        
+        body.light-mode .dashboard-role-info {
+            background: #f1f5f9;
         }
     </style>
 </head>
@@ -615,6 +644,9 @@
         <!-- SEMUA TAB CONTENT -->
         <div id="tab-dashboard" class="tab-content active">
             <div class="dashboard-modern-new">
+                <!-- Dashboard Role Info akan ditambahkan oleh JS -->
+                <div id="dashboardRoleInfo" style="margin-bottom: 15px;"></div>
+                
                 <div class="stats-grid">
                     <div class="stat-card-new">
                         <div class="stat-title-new">Total Siswa</div>
@@ -689,7 +721,7 @@
                             <th>Aksi</th>
                         </tr>
                     </thead>
-                    <tbody id="tbody-attendance"><tr><td colspan="8">Memuat data...</td></tr></tbody>
+                    <tbody id="tbody-attendance"><tr><td colspan="8">Memuat data...<\/td><\/tr></tbody>
                 </table>
             </div>
         </div>
@@ -715,7 +747,7 @@
                 <div class="search-box"><input type="text" id="searchStudentName" placeholder="🔍 Cari nama siswa..." oninput="renderStudentsTable()"></div>
             </div>
             <div class="table-container">
-                <tr>
+                <table>
                     <thead>
                         <tr>
                             <th>Foto</th>
@@ -727,7 +759,7 @@
                             <th>Aksi</th>
                         </tr>
                     </thead>
-                    <tbody id="tbody-students"><tr><td colspan="7">Memuat data...</td></tr></tbody>
+                    <tbody id="tbody-students"><tr><td colspan="7">Memuat data...<\/td><\/tr></tbody>
                 </table>
             </div>
         </div>
@@ -748,7 +780,7 @@
             <div id="generatedKeyDisplay" style="display:none;"></div>
             <h4 class="role-admin role-guru">📋 Daftar Kode Aktif</h4>
             <div class="table-container role-admin role-guru">
-                <tr>
+                <table>
                     <thead><tr><th>Kode</th><th>Status</th><th>Dibuat</th><th>Pengguna</th><th>Aksi</th></tr></thead>
                     <tbody id="tbody-codes"></tbody>
                 </table>
@@ -784,7 +816,7 @@
                             <th>Persentase</th><th>Status</th>
                         </tr>
                     </thead>
-                    <tbody id="rekapTbody"><tr><td colspan="12">Memuat data...</td></tr></tbody>
+                    <tbody id="rekapTbody"><tr><td colspan="12">Memuat data...<\/td><\/tr></tbody>
                 </table>
             </div>
 
@@ -867,7 +899,7 @@
             </div>
             <div class="table-container">
                 <table id="logsTable"><thead><tr><th>🕒 Waktu</th><th>👤 Pengguna</th><th>🎭 Role</th><th>📌 Aksi</th><th>📝 Detail</th><th>🌐 IP</th></tr></thead>
-                <tbody id="logsTbody"><tr><td colspan="6" style="text-align:center; padding:40px;">⏳ Memuat log aktivitas...</td></tr></tbody>
+                <tbody id="logsTbody"><tr><td colspan="6" style="text-align:center; padding:40px;">⏳ Memuat log aktivitas...<\/td><\/tr></tbody>
                 </table>
                 <div id="logsPagination" style="display: flex; justify-content: center; gap: 10px; margin-top: 20px;"></div>
             </div>
@@ -938,7 +970,7 @@
     <script src="js/auth.js"></script>
     <script src="js/logger.js"></script>
     <script src="js/ui.js"></script>
-    script src="js/dashboard.js"></script>
+    <script src="js/dashboard.js"></script>
     <script src="js/chat.js"></script>
     <script src="js/friends.js"></script>
     <script src="js/status.js"></script>
