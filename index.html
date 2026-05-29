@@ -121,9 +121,52 @@
             color: white;
         }
         
-        /* Sembunyikan sidebar menu dan floating chat button */
-        .sidebar-menu, .mobile-navbar, .floating-chat-btn, .floating-friends-btn, .floating-status-btn, .floating-announcement-btn {
+        /* Sembunyikan sidebar menu dan floating buttons lainnya */
+        .sidebar-menu, .mobile-navbar, .floating-chat-btn, .floating-friends-btn, .floating-status-btn {
             display: none !important;
+        }
+        
+        /* FLOATING ANNOUNCEMENT BUTTON - Hanya ini yang tampil di kanan bawah */
+        .floating-announcement-btn {
+            position: fixed !important;
+            bottom: 100px !important;
+            right: 20px !important;
+            width: 56px !important;
+            height: 56px !important;
+            border-radius: 50% !important;
+            background: linear-gradient(135deg, #ff9800, #f44336) !important;
+            color: white !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            cursor: pointer !important;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3) !important;
+            z-index: 999 !important;
+            transition: transform 0.2s, box-shadow 0.2s !important;
+            border: none !important;
+            font-size: 28px !important;
+        }
+        
+        .floating-announcement-btn:hover {
+            transform: scale(1.1);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+        }
+        
+        .floating-announcement-btn .announcement-badge-count {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background: #f44336;
+            color: white;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            font-size: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            border: 2px solid white;
         }
         
         /* Nav tabs juga disembunyikan karena sudah pakai dropdown */
@@ -157,7 +200,7 @@
             font-weight: 500;
         }
         
-        /* ======================== STYLE UNTUK AVATAR SISWA ======================== */
+        /* Style untuk avatar siswa */
         .student-avatar,
         .attendance-student-avatar,
         .rekap-student-avatar {
@@ -177,8 +220,7 @@
             box-shadow: 0 2px 12px rgba(0, 188, 212, 0.4);
             border-color: #00bcd4;
         }
-
-        /* Badge status akun siswa */
+        
         .badge-account {
             background: #4caf50;
             color: white;
@@ -200,202 +242,13 @@
             display: inline-block;
             vertical-align: middle;
         }
-
-        /* Badge NEW untuk siswa baru */
-        .badge-new-student {
-            background: #ff9800;
-            color: white;
-            font-size: 9px;
-            padding: 2px 6px;
-            border-radius: 20px;
-            margin-left: 6px;
-            display: inline-block;
-            vertical-align: middle;
-        }
-
-        /* Skeleton loading untuk avatar */
-        .avatar-skeleton {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            background: linear-gradient(90deg, #2c2c3a 25%, #3a3a4a 50%, #2c2c3a 75%);
-            background-size: 200% 100%;
-            animation: skeleton-loading 1.5s infinite;
-        }
-
-        @keyframes skeleton-loading {
-            0% { background-position: 200% 0; }
-            100% { background-position: -200% 0; }
-        }
-
-        /* ======================== REKAP PER SISWA STYLES ======================== */
+        
         .rekap-per-siswa-container {
             margin-top: 30px;
             padding: 20px;
             background: var(--bg-card);
             border-radius: 20px;
             border: 1px solid var(--border-color);
-        }
-
-        .rekap-per-siswa-header {
-            display: flex;
-            gap: 20px;
-            align-items: center;
-            margin-bottom: 25px;
-            padding-bottom: 20px;
-            border-bottom: 1px solid var(--border);
-            flex-wrap: wrap;
-        }
-
-        .rekap-per-siswa-header .rekap-student-avatar {
-            width: 80px;
-            height: 80px;
-            border: 3px solid #00bcd4;
-        }
-
-        .rekap-stat-card {
-            text-align: center;
-            padding: 10px 18px;
-            border-radius: 12px;
-            min-width: 70px;
-        }
-
-        .rekap-stat-card .stat-number {
-            font-size: 28px;
-            font-weight: bold;
-        }
-
-        .rekap-stat-card .stat-label {
-            font-size: 12px;
-            color: var(--text-muted);
-        }
-
-        .rekap-grade-badge {
-            padding: 6px 14px;
-            border-radius: 20px;
-            font-weight: bold;
-        }
-
-        .rekap-footer {
-            margin-top: 15px;
-            padding-top: 10px;
-            text-align: center;
-            font-size: 11px;
-            color: var(--text-muted);
-            border-top: 1px solid var(--border);
-        }
-
-        /* Select untuk rekap per siswa */
-        .rekap-per-siswa-select-wrapper {
-            display: flex;
-            gap: 10px;
-            align-items: center;
-            flex-wrap: wrap;
-            margin-bottom: 15px;
-        }
-
-        .rekap-per-siswa-select-wrapper select {
-            flex: 2;
-            min-width: 250px;
-            padding: 10px 14px;
-            border-radius: 30px;
-            background: var(--bg-secondary);
-            border: 1px solid var(--border);
-            color: var(--text-primary);
-        }
-
-        .rekap-per-siswa-select-wrapper button {
-            padding: 10px 20px;
-        }
-
-        /* Periode wrapper untuk rekap per siswa */
-        .rekap-per-siswa-period-wrapper {
-            margin-bottom: 20px;
-            padding: 15px;
-            background: var(--bg-hover);
-            border-radius: 16px;
-        }
-
-        .rekap-per-siswa-period-wrapper select,
-        .rekap-per-siswa-period-wrapper input {
-            transition: all 0.2s ease;
-        }
-
-        .rekap-per-siswa-period-wrapper select:focus,
-        .rekap-per-siswa-period-wrapper input:focus {
-            outline: none;
-            border-color: #00bcd4;
-            box-shadow: 0 0 0 2px rgba(0, 188, 212, 0.2);
-        }
-
-        /* Responsive untuk avatar dan rekap */
-        @media (max-width: 768px) {
-            .dropdown-navbar {
-                flex-direction: column;
-                align-items: stretch;
-            }
-            .dropdown-menu-container {
-                justify-content: center;
-            }
-            .navbar-right {
-                justify-content: center;
-                padding-bottom: 10px;
-            }
-            .dropdown-content {
-                position: fixed;
-                top: auto;
-                left: 10px;
-                right: 10px;
-                width: auto;
-            }
-            
-            .student-avatar,
-            .attendance-student-avatar {
-                width: 32px;
-                height: 32px;
-            }
-            
-            .rekap-per-siswa-header {
-                flex-direction: column;
-                text-align: center;
-            }
-            
-            .rekap-per-siswa-header .rekap-student-avatar {
-                width: 60px;
-                height: 60px;
-            }
-            
-            .rekap-per-siswa-select-wrapper {
-                flex-direction: column;
-            }
-            
-            .rekap-per-siswa-select-wrapper select {
-                width: 100%;
-            }
-
-            .rekap-per-siswa-period-wrapper div {
-                flex-direction: column;
-                align-items: stretch !important;
-            }
-            
-            .rekap-per-siswa-period-wrapper select,
-            .rekap-per-siswa-period-wrapper input,
-            .rekap-per-siswa-period-wrapper button {
-                width: 100%;
-            }
-            
-            #rekapPerSiswaCustomRange {
-                flex-direction: column;
-                width: 100%;
-            }
-            
-            #rekapPerSiswaCustomRange input {
-                width: 100%;
-            }
-            
-            .dashboard-role-info {
-                font-size: 0.85rem;
-            }
         }
         
         .navbar-right {
@@ -434,7 +287,6 @@
             background: #dc2626;
         }
         
-        /* Overlay untuk menutup dropdown saat klik di luar */
         .dropdown-overlay {
             position: fixed;
             top: 0;
@@ -457,24 +309,29 @@
         body.light-mode .dropdown-btn {
             background: #f1f5f9;
         }
-
-        /* Light mode untuk avatar */
+        
         body.light-mode .student-avatar,
-        body.light-mode .attendance-student-avatar,
-        body.light-mode .rekap-student-avatar {
+        body.light-mode .attendance-student-avatar {
             border-color: #e2e8f0;
         }
-
-        body.light-mode .avatar-skeleton {
-            background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%);
-        }
-
-        body.light-mode .rekap-per-siswa-container {
-            background: #ffffff;
-        }
         
-        body.light-mode .dashboard-role-info {
-            background: #f1f5f9;
+        @media (max-width: 768px) {
+            .dropdown-navbar {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .dropdown-menu-container {
+                justify-content: center;
+            }
+            .navbar-right {
+                justify-content: center;
+                padding-bottom: 10px;
+            }
+            
+            .floating-announcement-btn {
+                bottom: 100px !important;
+                right: 20px !important;
+            }
         }
     </style>
 </head>
@@ -485,6 +342,9 @@
     
     <!-- Overlay untuk menutup dropdown -->
     <div id="dropdownOverlay" class="dropdown-overlay" onclick="closeAllDropdowns()"></div>
+
+    <!-- FLOATING ANNOUNCEMENT BUTTON - Hanya tombol pengumuman -->
+    <button id="floatingAnnouncementBtn" class="floating-announcement-btn" onclick="openAnnouncementModal()" title="Pengumuman">📢</button>
 
     <!-- AUTH SECTION -->
     <div id="auth-section">
@@ -548,10 +408,9 @@
     <!-- DASHBOARD -->
     <div id="dashboard-section" style="display:none;">
         
-        <!-- DROPDOWN NAVBAR (Pengganti Sidebar) - Click to Open -->
+        <!-- DROPDOWN NAVBAR -->
         <div class="dropdown-navbar">
             <div class="dropdown-menu-container">
-                <!-- Menu Utama -->
                 <div class="dropdown" id="dropdownMain">
                     <button class="dropdown-btn" onclick="toggleDropdown('dropdownMain')">📊 Menu Utama ▼</button>
                     <div class="dropdown-content" id="dropdownMainContent">
@@ -563,7 +422,6 @@
                     </div>
                 </div>
                 
-                <!-- Sosial & Chat -->
                 <div class="dropdown" id="dropdownSocial">
                     <button class="dropdown-btn" onclick="toggleDropdown('dropdownSocial')">👥 Sosial & Chat ▼</button>
                     <div class="dropdown-content" id="dropdownSocialContent">
@@ -573,7 +431,6 @@
                     </div>
                 </div>
                 
-                <!-- Manajemen (Admin/Guru/Developer) -->
                 <div class="dropdown" id="dropdownManage">
                     <button class="dropdown-btn" onclick="toggleDropdown('dropdownManage')">⚙️ Manajemen ▼</button>
                     <div class="dropdown-content" id="dropdownManageContent">
@@ -583,7 +440,6 @@
                     </div>
                 </div>
                 
-                <!-- Profil -->
                 <div class="dropdown" id="dropdownProfile">
                     <button class="dropdown-btn" onclick="toggleDropdown('dropdownProfile')">👤 Profil ▼</button>
                     <div class="dropdown-content" id="dropdownProfileContent">
@@ -604,7 +460,7 @@
             </div>
         </div>
 
-        <!-- HEADER BAR (Desktop & Mobile) -->
+        <!-- HEADER BAR -->
         <div class="header-bar">
             <div class="header-left">
                 <img id="headerSchoolLogo" class="school-logo" src="" alt="Logo" style="display: none;">
@@ -631,7 +487,7 @@
             <div id="announcementList"></div>
         </div>
 
-        <!-- STATUS BAR (DENGAN TOMBOL BUAT STATUS) -->
+        <!-- STATUS BAR -->
         <div class="status-bar-container" id="statusBarContainer" style="margin-bottom: 20px;">
             <div class="status-header">
                 <h4>📸 Status Update</h4>
@@ -644,49 +500,22 @@
         <!-- SEMUA TAB CONTENT -->
         <div id="tab-dashboard" class="tab-content active">
             <div class="dashboard-modern-new">
-                <!-- Dashboard Role Info akan ditambahkan oleh JS -->
                 <div id="dashboardRoleInfo" style="margin-bottom: 15px;"></div>
-                
                 <div class="stats-grid">
-                    <div class="stat-card-new">
-                        <div class="stat-title-new">Total Siswa</div>
-                        <div class="stat-number" id="statTotalSiswaNew">0</div>
-                        <div class="stat-percent positive" id="statTrendSiswa">+0% dari bulan lalu</div>
-                    </div>
-                    <div class="stat-card-new">
-                        <div class="stat-title-new">Hadir Hari Ini</div>
-                        <div class="stat-number" id="statHadirHariIni">0</div>
-                        <div class="stat-percent positive" id="statPersenHadir">0% dari total siswa</div>
-                    </div>
-                    <div class="stat-card-new">
-                        <div class="stat-title-new">Tidak Hadir</div>
-                        <div class="stat-number" id="statTidakHadir">0</div>
-                        <div class="stat-percent negative" id="statPersenTidakHadir">0% dari total siswa</div>
-                    </div>
-                    <div class="stat-card-new">
-                        <div class="stat-title-new">Terlambat</div>
-                        <div class="stat-number" id="statTerlambat">0</div>
-                        <div class="stat-percent neutral" id="statPersenTerlambat">0% dari total siswa</div>
-                    </div>
+                    <div class="stat-card-new"><div class="stat-title-new">Total Siswa</div><div class="stat-number" id="statTotalSiswaNew">0</div><div class="stat-percent positive" id="statTrendSiswa">+0% dari bulan lalu</div></div>
+                    <div class="stat-card-new"><div class="stat-title-new">Hadir Hari Ini</div><div class="stat-number" id="statHadirHariIni">0</div><div class="stat-percent positive" id="statPersenHadir">0% dari total siswa</div></div>
+                    <div class="stat-card-new"><div class="stat-title-new">Tidak Hadir</div><div class="stat-number" id="statTidakHadir">0</div><div class="stat-percent negative" id="statPersenTidakHadir">0% dari total siswa</div></div>
+                    <div class="stat-card-new"><div class="stat-title-new">Terlambat</div><div class="stat-number" id="statTerlambat">0</div><div class="stat-percent neutral" id="statPersenTerlambat">0% dari total siswa</div></div>
                 </div>
                 <div class="dashboard-two-col-new">
-                    <div class="chart-col">
-                        <div class="section-title"><span>📊 Statistik Kehadiran (Mingguan)</span></div>
-                        <div class="weekly-chart-container"><canvas id="weeklyBarChart" height="200"></canvas></div>
-                    </div>
-                    <div class="class-col">
-                        <div class="section-title"><span>🏫 Kehadiran per Kelas</span><small class="text-small">Tertinggi</small></div>
-                        <div id="classAttendanceList"><div class="class-item"><div class="class-name"><span>Memuat...</span><span>0%</span></div><div class="progress-bar"><div class="progress-fill" style="width:0%"></div></div></div></div>
-                    </div>
+                    <div class="chart-col"><div class="section-title"><span>📊 Statistik Kehadiran (Mingguan)</span></div><div class="weekly-chart-container"><canvas id="weeklyBarChart" height="200"></canvas></div></div>
+                    <div class="class-col"><div class="section-title"><span>🏫 Kehadiran per Kelas</span><small class="text-small">Tertinggi</small></div><div id="classAttendanceList"><div class="class-item"><div class="class-name"><span>Memuat...</span><span>0%</span></div><div class="progress-bar"><div class="progress-fill" style="width:0%"></div></div></div></div></div>
                 </div>
-                <div class="chart-col" style="width:100%">
-                    <div class="section-title"><span>📋 Absensi Terbaru</span><button class="btn-link" onclick="switchTab('attendance')">Lihat Semua →</button></div>
-                    <div id="recentAttendanceList" class="recent-list"><div class="recent-item">Memuat data terbaru...</div></div>
-                </div>
+                <div class="chart-col" style="width:100%"><div class="section-title"><span>📋 Absensi Terbaru</span><button class="btn-link" onclick="switchTab('attendance')">Lihat Semua →</button></div><div id="recentAttendanceList" class="recent-list"><div class="recent-item">Memuat data terbaru...</div></div></div>
             </div>
         </div>
 
-        <!-- TAB ATTENDANCE - UPDATE HEADER TABEL DENGAN KOLOM FOTO -->
+        <!-- TAB ATTENDANCE -->
         <div id="tab-attendance" class="tab-content">
             <div class="controls-bar">
                 <div class="filter-group"><label>Kelas:</label><select id="filterKelas" onchange="renderTable()"><option value="all">Semua</option></select></div>
@@ -700,255 +529,31 @@
                     <button class="btn-action btn-success" onclick="exportToExcel()">📥 Download Excel</button>
                 </div>
             </div>
-            <div class="chart-container" style="margin-bottom: 20px;">
-                <div style="background: var(--bg-card); border-radius: 20px; padding: 15px;">
-                    <h4 style="margin:0 0 10px 0;">📊 Ringkasan Hari Ini</h4>
-                    <div style="max-width: 250px; margin: 0 auto;"><canvas id="attendanceDonutChart" style="max-height: 200px;"></canvas></div>
-                    <div id="todayStatsText" class="text-small text-center" style="margin-top: 10px;"></div>
-                </div>
-            </div>
-            <div class="table-container">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Foto</th>
-                            <th>Waktu</th>
-                            <th>ID FP</th>
-                            <th>Nama</th>
-                            <th>Kelas</th>
-                            <th>Jurusan</th>
-                            <th>Status</th>
-                            <th>Aksi</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tbody-attendance"><tr><td colspan="8">Memuat data...<\/td><\/tr></tbody>
-                </table>
-            </div>
+            <div class="chart-container" style="margin-bottom:20px;"><div style="background:var(--bg-card); border-radius:20px; padding:15px;"><h4 style="margin:0 0 10px 0;">📊 Ringkasan Hari Ini</h4><div style="max-width:250px; margin:0 auto;"><canvas id="attendanceDonutChart" style="max-height:200px;"></canvas></div><div id="todayStatsText" class="text-small text-center" style="margin-top:10px;"></div></div></div>
+            <div class="table-container"><table><thead><tr><th>Foto</th><th>Waktu</th><th>ID FP</th><th>Nama</th><th>Kelas</th><th>Jurusan</th><th>Status</th><th>Aksi</th></tr></thead><tbody id="tbody-attendance"><tr><td colspan="8">Memuat data...</td></tr></tbody></table></div>
         </div>
 
-        <!-- TAB STUDENTS - UPDATE HEADER TABEL DENGAN KOLOM FOTO -->
+        <!-- TAB STUDENTS -->
         <div id="tab-students" class="tab-content">
-            <div class="controls-bar"><div style="display: flex; gap:10px; flex-wrap:wrap; width:100%;">
-                <input type="hidden" id="editMode" value="add">
-                <div class="filter-group"><label>ID FP:</label><input type="number" id="newId" placeholder="ID" style="width:80px;"></div>
-                <div class="filter-group"><label>Nama:</label><input type="text" id="newNama" placeholder="Nama Siswa" style="width:200px;"></div>
-                <div class="filter-group"><label>Kelas:</label><select id="newKelas"></select></div>
-                <div class="filter-group"><label>Jurusan:</label><select id="newJurusan"></select></div>
-                <div class="filter-group"><label>Delay:</label><select id="delayUnit"><option value="minutes">Menit</option><option value="hours">Jam</option></select></div>
-                <div class="filter-group" id="delayMinutesGroup"><input type="number" id="delayMinutesValue" value="60" style="width:70px;"><span>menit</span></div>
-                <div class="filter-group" id="delayHoursGroup" style="display:none;"><select id="delayHoursValue"></select><span>jam</span></div>
-                <input type="hidden" id="newDelay" value="60">
-                <button class="btn-action role-guru role-admin" id="btnSaveStudent" onclick="saveStudent()">➕ Simpan Siswa</button>
-                <button class="btn-action btn-danger hidden role-guru role-admin" id="btnCancelStudent" onclick="resetStudentForm()">Batal</button>
-            </div></div>
-            <div class="controls-bar">
-                <div class="filter-group"><label>Kelas:</label><select id="filterStudentKelas" onchange="renderStudentsTable()"><option value="all">Semua</option></select></div>
-                <div class="filter-group"><label>Jurusan:</label><select id="filterStudentJurusan" onchange="renderStudentsTable()"><option value="all">Semua</option></select></div>
-                <div class="search-box"><input type="text" id="searchStudentName" placeholder="🔍 Cari nama siswa..." oninput="renderStudentsTable()"></div>
-            </div>
-            <div class="table-container">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Foto</th>
-                            <th>ID FP</th>
-                            <th>Nama</th>
-                            <th>Kelas</th>
-                            <th>Jurusan</th>
-                            <th>Delay</th>
-                            <th>Aksi</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tbody-students"><tr><td colspan="7">Memuat data...<\/td><\/tr></tbody>
-                </table>
-            </div>
+            <div class="controls-bar"><div style="display:flex; gap:10px; flex-wrap:wrap; width:100%;"><input type="hidden" id="editMode" value="add"><div class="filter-group"><label>ID FP:</label><input type="number" id="newId" placeholder="ID" style="width:80px;"></div><div class="filter-group"><label>Nama:</label><input type="text" id="newNama" placeholder="Nama Siswa" style="width:200px;"></div><div class="filter-group"><label>Kelas:</label><select id="newKelas"></select></div><div class="filter-group"><label>Jurusan:</label><select id="newJurusan"></select></div><div class="filter-group"><label>Delay:</label><select id="delayUnit"><option value="minutes">Menit</option><option value="hours">Jam</option></select></div><div class="filter-group" id="delayMinutesGroup"><input type="number" id="delayMinutesValue" value="60" style="width:70px;"><span>menit</span></div><div class="filter-group" id="delayHoursGroup" style="display:none;"><select id="delayHoursValue"></select><span>jam</span></div><input type="hidden" id="newDelay" value="60"><button class="btn-action role-guru role-admin" id="btnSaveStudent" onclick="saveStudent()">➕ Simpan Siswa</button><button class="btn-action btn-danger hidden role-guru role-admin" id="btnCancelStudent" onclick="resetStudentForm()">Batal</button></div></div>
+            <div class="controls-bar"><div class="filter-group"><label>Kelas:</label><select id="filterStudentKelas" onchange="renderStudentsTable()"><option value="all">Semua</option></select></div><div class="filter-group"><label>Jurusan:</label><select id="filterStudentJurusan" onchange="renderStudentsTable()"><option value="all">Semua</option></select></div><div class="search-box"><input type="text" id="searchStudentName" placeholder="🔍 Cari nama siswa..." oninput="renderStudentsTable()"></div></div>
+            <div class="table-container"><table><thead><tr><th>Foto</th><th>ID FP</th><th>Nama</th><th>Kelas</th><th>Jurusan</th><th>Delay</th><th>Aksi</th></tr></thead><tbody id="tbody-students"><tr><td colspan="7">Memuat data...</td></tr></tbody></table></div>
         </div>
 
-        <div id="tab-users" class="tab-content role-admin role-guru">
-            <div class="controls-bar"><h4>🔑 Generate Kode Pendaftaran</h4></div>
-            <div class="key-box role-admin role-guru">
-                <div style="flex:1;">
-                    <div style="margin-bottom:10px;">
-                        <label><input type="radio" name="genTarget" value="siswa" checked onchange="toggleGenerateInput()"> 👨‍🎓 Untuk Siswa</label>
-                        <label><input type="radio" name="genTarget" value="guru" onchange="toggleGenerateInput()"> 👨‍🏫 Untuk Guru</label>
-                    </div>
-                    <div id="group-select-siswa"><select id="selectStudentForCode"><option value="">-- Pilih Siswa --</option></select></div>
-                    <small class="text-small" id="gen-desc">🔒 Kode akan dikunci ke ID Siswa terpilih.</small>
-                </div>
-                <button class="btn-action btn-secondary" onclick="generateRegistrationCode()">✨ Generate Kode</button>
-            </div>
-            <div id="generatedKeyDisplay" style="display:none;"></div>
-            <h4 class="role-admin role-guru">📋 Daftar Kode Aktif</h4>
-            <div class="table-container role-admin role-guru">
-                <table>
-                    <thead><tr><th>Kode</th><th>Status</th><th>Dibuat</th><th>Pengguna</th><th>Aksi</th></tr></thead>
-                    <tbody id="tbody-codes"></tbody>
-                </table>
-            </div>
-            <div class="controls-bar role-admin role-guru"><h4>👥 Daftar Pengguna</h4><div class="search-box"><input type="text" id="searchUser" placeholder="🔍 Cari user..." oninput="renderUsersTable()"></div></div>
-            <div class="table-container role-admin role-guru">
-                <table>
-                    <thead><tr><th>Foto</th><th>Nama</th><th>Email</th><th>Role</th><th>Detail</th><th>Aksi</th></tr></thead>
-                    <tbody id="tbody-users"></tbody>
-                </table>
-            </div>
-        </div>
+        <!-- TAB USERS, REKAP, FRIENDS, CHAT, LOGS, CONFIG, GUIDE -->
+        <div id="tab-users" class="tab-content role-admin role-guru"><div class="controls-bar"><h4>🔑 Generate Kode Pendaftaran</h4></div><div class="key-box role-admin role-guru"><div style="flex:1;"><div style="margin-bottom:10px;"><label><input type="radio" name="genTarget" value="siswa" checked onchange="toggleGenerateInput()"> 👨‍🎓 Untuk Siswa</label><label><input type="radio" name="genTarget" value="guru" onchange="toggleGenerateInput()"> 👨‍🏫 Untuk Guru</label></div><div id="group-select-siswa"><select id="selectStudentForCode"><option value="">-- Pilih Siswa --</option></select></div><small class="text-small" id="gen-desc">🔒 Kode akan dikunci ke ID Siswa terpilih.</small></div><button class="btn-action btn-secondary" onclick="generateRegistrationCode()">✨ Generate Kode</button></div><div id="generatedKeyDisplay" style="display:none;"></div><h4 class="role-admin role-guru">📋 Daftar Kode Aktif</h4><div class="table-container role-admin role-guru"></table><thead><tr><th>Kode</th><th>Status</th><th>Dibuat</th><th>Pengguna</th><th>Aksi</th></tr></thead><tbody id="tbody-codes"></tbody></table></div><div class="controls-bar role-admin role-guru"><h4>👥 Daftar Pengguna</h4><div class="search-box"><input type="text" id="searchUser" placeholder="🔍 Cari user..." oninput="renderUsersTable()"></div></div><div class="table-container role-admin role-guru"><table><thead><tr><th>Foto</th><th>Nama</th><th>Email</th><th>Role</th><th>Detail</th><th>Aksi</th></tr></thead><tbody id="tbody-users"></tbody></table></div></div>
 
-        <!-- TAB REKAP - DENGAN FITUR REKAP PER SISWA -->
-        <div id="tab-rekap" class="tab-content">
-            <div class="controls-bar">
-                <div class="filter-group"><label>📅 Periode:</label><select id="rekapPeriod" onchange="loadRekap()"><option value="minggu">Minggu Ini</option><option value="bulan">Bulan Ini</option><option value="semester">Semester Ini</option><option value="custom">Custom Range</option></select></div>
-                <div id="customRangeGroup" style="display: none; gap:10px;"><input type="date" id="rekapStartDate"><span>s/d</span><input type="date" id="rekapEndDate"></div>
-                <div style="margin-left:auto; display:flex; gap:10px;"><button class="btn-action btn-success" onclick="exportRekapToExcel()">📥 Excel</button><button class="btn-action btn-primary" onclick="exportRekapToPDF()">📄 PDF</button></div>
-            </div>
-            <div class="chart-container" style="margin-bottom:25px;">
-                <div style="display:flex; flex-wrap:wrap; gap:20px;">
-                    <div style="flex:1; min-width:250px;"><canvas id="rekapPieChart" style="max-height:300px;"></canvas><p class="text-small text-center">Distribusi Status</p></div>
-                    <div style="flex:2; min-width:300px;"><canvas id="rekapBarChart" style="max-height:300px;"></canvas><p class="text-small text-center">Absensi per Hari</p></div>
-                </div>
-            </div>
-            <div class="table-container">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>No</th><th>ID FP</th><th>Nama</th><th>Kelas</th><th>Jurusan</th>
-                            <th>Total Hari</th><th>Hadir</th><th>Sakit</th><th>Izin</th><th>Alpha</th>
-                            <th>Persentase</th><th>Status</th>
-                        </tr>
-                    </thead>
-                    <tbody id="rekapTbody"><tr><td colspan="12">Memuat data...<\/td><\/tr></tbody>
-                </table>
-            </div>
+        <div id="tab-rekap" class="tab-content"><div class="controls-bar"><div class="filter-group"><label>📅 Periode:</label><select id="rekapPeriod" onchange="loadRekap()"><option value="minggu">Minggu Ini</option><option value="bulan">Bulan Ini</option><option value="semester">Semester Ini</option><option value="custom">Custom Range</option></select></div><div id="customRangeGroup" style="display:none; gap:10px;"><input type="date" id="rekapStartDate"><span>s/d</span><input type="date" id="rekapEndDate"></div><div style="margin-left:auto; display:flex; gap:10px;"><button class="btn-action btn-success" onclick="exportRekapToExcel()">📥 Excel</button><button class="btn-action btn-primary" onclick="exportRekapToPDF()">📄 PDF</button></div></div><div class="chart-container" style="margin-bottom:25px;"><div style="display:flex; flex-wrap:wrap; gap:20px;"><div style="flex:1; min-width:250px;"><canvas id="rekapPieChart" style="max-height:300px;"></canvas><p class="text-small text-center">Distribusi Status</p></div><div style="flex:2; min-width:300px;"><canvas id="rekapBarChart" style="max-height:300px;"></canvas><p class="text-small text-center">Absensi per Hari</p></div></div></div><div class="table-container"><table><thead><tr><th>No</th><th>ID FP</th><th>Nama</th><th>Kelas</th><th>Jurusan</th><th>Total Hari</th><th>Hadir</th><th>Sakit</th><th>Izin</th><th>Alpha</th><th>Persentase</th><th>Status</th></tr></thead><tbody id="rekapTbody"><tr><td colspan="12">Memuat data...</td></tr></tbody></table></div><div class="rekap-per-siswa-container" id="rekapPerSiswaContainer" style="margin-top:30px; display:none;"><div class="section-title" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:20px;"><span>📋 Detail Rekap Per Siswa</span><div style="display:flex; gap:10px;"><button class="btn-action btn-success" onclick="exportCurrentRekapPerSiswaToExcel()">📥 Export Excel</button><button class="btn-action btn-primary" onclick="exportCurrentRekapPerSiswaToPDF()">📄 Export PDF</button></div></div><div class="rekap-per-siswa-select-wrapper"><select id="rekapPerSiswaSelect"><option value="">-- Pilih Siswa --</option></select></div><div class="rekap-per-siswa-period-wrapper"><div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;"><label style="font-weight:500;">📅 Periode:</label><select id="rekapPerSiswaPeriod"><option value="minggu">📆 Minggu Ini</option><option value="bulan">📅 Bulan Ini</option><option value="semester">📚 Semester Ini</option><option value="tahun">🗓️ Tahun Ini</option><option value="pertama">⭐ Pertama Kali Absensi</option><option value="custom">📅 Custom Range</option></select><div id="rekapPerSiswaCustomRange" style="display:none; gap:10px; align-items:center; flex-wrap:wrap;"><input type="date" id="rekapPerSiswaStartDate"><span>s/d</span><input type="date" id="rekapPerSiswaEndDate"></div><button class="btn-action btn-primary" onclick="loadRekapPerSiswa()">🔍 Tampilkan Rekap</button></div></div><div id="rekapPerSiswaPeriodLabel" class="text-small" style="margin-bottom:15px; color:var(--text-muted); text-align:center;"></div><div id="rekapPerSiswaContent"><div style="text-align:center; padding:40px; color:var(--text-muted);">👈 Pilih siswa, pilih periode, lalu klik "Tampilkan Rekap" untuk melihat detail absensi per siswa</div></div></div></div>
 
-            <!-- ======================= REKAP PER SISWA SECTION ======================= -->
-            <div class="rekap-per-siswa-container" id="rekapPerSiswaContainer" style="margin-top: 30px; display: none;">
-                <div class="section-title" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 20px;">
-                    <span>📋 Detail Rekap Per Siswa</span>
-                    <div style="display: flex; gap: 10px;">
-                        <button class="btn-action btn-success" onclick="exportRekapPerSiswaToExcel()">📥 Export Excel</button>
-                        <button class="btn-action btn-primary" onclick="exportRekapPerSiswaToPDF()">📄 Export PDF</button>
-                    </div>
-                </div>
-                
-                <!-- Pilihan Siswa -->
-                <div class="rekap-per-siswa-select-wrapper">
-                    <select id="rekapPerSiswaSelect">
-                        <option value="">-- Pilih Siswa --</option>
-                    </select>
-                </div>
-                
-                <!-- Pilihan Periode -->
-                <div class="rekap-per-siswa-period-wrapper">
-                    <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-                        <label style="font-weight: 500;">📅 Periode:</label>
-                        <select id="rekapPerSiswaPeriod">
-                            <option value="minggu">📆 Minggu Ini</option>
-                            <option value="bulan">📅 Bulan Ini</option>
-                            <option value="semester">📚 Semester Ini</option>
-                            <option value="tahun">🗓️ Tahun Ini</option>
-                            <option value="pertama">⭐ Pertama Kali Absensi</option>
-                            <option value="custom">📅 Custom Range</option>
-                        </select>
-                        <div id="rekapPerSiswaCustomRange" style="display: none; gap: 10px; align-items: center; flex-wrap: wrap;">
-                            <input type="date" id="rekapPerSiswaStartDate">
-                            <span>s/d</span>
-                            <input type="date" id="rekapPerSiswaEndDate">
-                        </div>
-                        <button class="btn-action btn-primary" onclick="loadRekapPerSiswa()">🔍 Tampilkan Rekap</button>
-                    </div>
-                </div>
-                
-                <!-- Label periode yang dipilih -->
-                <div id="rekapPerSiswaPeriodLabel" class="text-small" style="margin-bottom: 15px; color: var(--text-muted); text-align: center;"></div>
-                
-                <!-- Container hasil rekap -->
-                <div id="rekapPerSiswaContent">
-                    <div style="text-align:center; padding:40px; color: var(--text-muted);">
-                        👈 Pilih siswa, pilih periode, lalu klik "Tampilkan Rekap" untuk melihat detail absensi per siswa
-                    </div>
-                </div>
-            </div>
-        </div>
+        <div id="tab-friends" class="tab-content"><div class="friends-container"><div class="friends-search-section"><h4>🔍 Cari Teman</h4><div class="search-box" style="display:flex; gap:10px;"><input type="email" id="searchFriendEmail" placeholder="Cari berdasarkan email..." style="flex:1;"><button class="btn-action btn-primary" onclick="searchUserByEmail()">Cari</button></div><div id="searchResult" style="margin-top:10px; display:none;"></div></div><hr><div class="friends-requests-section"><h4>📨 Permintaan Pertemanan <span id="friendRequestBadge" class="request-badge" style="display:none;">0</span></h4><div id="friendRequestsList" class="friends-list"><p class="text-small">Tidak ada permintaan</p></div></div><hr><div class="friends-list-section"><h4>👥 Daftar Teman <span id="friendsCount" class="count-badge">0</span></h4><div id="friendsList" class="friends-list"><p class="text-small">Belum ada teman</p></div></div></div></div>
 
-        <div id="tab-friends" class="tab-content">
-            <div class="friends-container">
-                <div class="friends-search-section"><h4>🔍 Cari Teman</h4><div class="search-box" style="display:flex; gap:10px;"><input type="email" id="searchFriendEmail" placeholder="Cari berdasarkan email..." style="flex:1;"><button class="btn-action btn-primary" onclick="searchUserByEmail()">Cari</button></div><div id="searchResult" style="margin-top:10px; display:none;"></div></div>
-                <hr>
-                <div class="friends-requests-section"><h4>📨 Permintaan Pertemanan <span id="friendRequestBadge" class="request-badge" style="display:none;">0</span></h4><div id="friendRequestsList" class="friends-list"><p class="text-small">Tidak ada permintaan</p></div></div>
-                <hr>
-                <div class="friends-list-section"><h4>👥 Daftar Teman <span id="friendsCount" class="count-badge">0</span></h4><div id="friendsList" class="friends-list"><p class="text-small">Belum ada teman</p></div></div>
-            </div>
-        </div>
+        <div id="tab-chat" class="tab-content"><div class="chat-header-info" style="margin-bottom:15px;"><h3>💬 Pesan dengan Teman</h3><p class="text-small">Hanya bisa chat dengan teman yang sudah terdaftar.</p></div><div id="chatPanel" class="chat-panel" style="min-height:500px;"><div class="chat-loading" style="text-align:center; padding:40px; color:var(--text-muted);">⏳ Memuat fitur chat...</div></div></div>
 
-        <div id="tab-chat" class="tab-content">
-            <div class="chat-header-info" style="margin-bottom:15px;">
-                <h3>💬 Pesan dengan Teman</h3>
-                <p class="text-small">Hanya bisa chat dengan teman yang sudah terdaftar.</p>
-            </div>
-            <div id="chatPanel" class="chat-panel" style="min-height: 500px;">
-                <div class="chat-loading" style="text-align: center; padding: 40px; color: var(--text-muted);">⏳ Memuat fitur chat...</div>
-            </div>
-        </div>
+        <div id="tab-logs" class="tab-content role-admin role-guru role-developer"><div class="controls-bar"><div class="filter-group"><label>🔍 Filter Aksi:</label><select id="logActionFilter" onchange="renderLogsTable()"><option value="all">Semua Aksi</option></select></div><div class="filter-group"><label>📅 Mulai:</label><input type="date" id="logStartDate" onchange="renderLogsTable()"></div><div class="filter-group"><label>📅 Sampai:</label><input type="date" id="logEndDate" onchange="renderLogsTable()"></div><button class="btn-action btn-secondary" onclick="renderLogsTable()" style="margin-left:auto;">🔄 Refresh</button></div><div class="table-container"><table id="logsTable"><thead><tr><th>🕒 Waktu</th><th>👤 Pengguna</th><th>🎭 Role</th><th>📌 Aksi</th><th>📝 Detail</th><th>🌐 IP</th></tr></thead><tbody id="logsTbody"><tr><td colspan="6" style="text-align:center; padding:40px;">⏳ Memuat log aktivitas...</td></tr></tbody></table><div id="logsPagination" style="display:flex; justify-content:center; gap:10px; margin-top:20px;"></div></div></div>
 
-        <div id="tab-logs" class="tab-content role-admin role-guru role-developer">
-            <div class="controls-bar">
-                <div class="filter-group"><label>🔍 Filter Aksi:</label><select id="logActionFilter" onchange="renderLogsTable()"><option value="all">Semua Aksi</option></select></div>
-                <div class="filter-group"><label>📅 Mulai:</label><input type="date" id="logStartDate" onchange="renderLogsTable()"></div>
-                <div class="filter-group"><label>📅 Sampai:</label><input type="date" id="logEndDate" onchange="renderLogsTable()"></div>
-                <button class="btn-action btn-secondary" onclick="renderLogsTable()" style="margin-left: auto;">🔄 Refresh</button>
-            </div>
-            <div class="table-container">
-                <table id="logsTable"><thead><tr><th>🕒 Waktu</th><th>👤 Pengguna</th><th>🎭 Role</th><th>📌 Aksi</th><th>📝 Detail</th><th>🌐 IP</th></tr></thead>
-                <tbody id="logsTbody"><tr><td colspan="6" style="text-align:center; padding:40px;">⏳ Memuat log aktivitas...<\/td><\/tr></tbody>
-                </table>
-                <div id="logsPagination" style="display: flex; justify-content: center; gap: 10px; margin-top: 20px;"></div>
-            </div>
-        </div>
+        <div id="tab-config" class="tab-content role-admin role-guru role-developer"><div class="guide-container"><h3>⚙️ Pengaturan Sistem</h3><div class="form-group" id="logoSettingGroup"><label>🏫 Logo Sekolah</label><div style="display:flex; align-items:center; gap:20px; flex-wrap:wrap;"><div class="logo-preview-wrapper" onclick="document.getElementById('logoFileInput').click()" style="cursor:pointer;"><img id="schoolLogoPreview" class="school-logo-preview" src="" alt="Logo"><div class="logo-upload-hint">Klik untuk ganti</div></div><div style="flex:1;"><input type="file" id="logoFileInput" hidden accept="image/*" onchange="uploadSchoolLogo(this)"><button class="btn-action btn-danger role-admin" onclick="removeSchoolLogo()" id="btnRemoveLogo" style="display:none;">🗑️ Hapus</button></div></div></div><hr><div class="form-group"><label>🏫 Nama Sekolah</label><div style="display:flex; gap:10px;"><input type="text" id="inputSchoolName" placeholder="Nama Sekolah" style="flex:1;"><button class="btn-action btn-primary role-admin" onclick="saveSchoolName()">Simpan</button></div></div><div class="form-group"><label>📋 Tipe Sekolah</label><div style="display:flex; gap:10px;"><select id="schoolTypeSelect" style="flex:1;"><option value="smp">SMP</option><option value="smk">SMK</option><option value="both">SMP & SMK</option></select><button class="btn-action btn-primary role-admin" id="btnSaveSchoolType" onclick="saveSchoolType()">Simpan</button></div></div><hr><div id="classesManager"><h4>📚 Daftar Kelas</h4><div id="classesList" style="margin-bottom:10px; min-height:50px;"></div><div style="display:flex; gap:10px; flex-wrap:wrap;"><input type="text" id="newClassInput" placeholder="Contoh: VII A, X RPL" style="flex:2;"><button class="btn-action btn-success role-admin" onclick="addClass()">➕ Tambah</button><button class="btn-action btn-primary role-admin" id="btnSaveClasses" onclick="saveClasses()">💾 Simpan</button></div></div><div id="majorsManager" style="display:none;"><h4>🎓 Daftar Jurusan (SMK)</h4><div id="majorsList" style="margin-bottom:10px; min-height:50px;"></div><div style="display:flex; gap:10px;"><input type="text" id="newMajorInput" placeholder="Contoh: RPL, TKJ" style="flex:2;"><button class="btn-action btn-success role-admin" onclick="addMajor()">➕ Tambah</button><button class="btn-action btn-primary role-admin" id="btnSaveMajors" onclick="saveMajors()">💾 Simpan</button></div></div><hr><div class="form-group"><label>⏰ Delay Pulang Global</label><div style="display:flex; gap:10px; flex-wrap:wrap;"><select id="globalDelayUnit"><option value="minutes">Menit</option><option value="hours">Jam</option></select><div id="globalDelayMinutesGroup"><input type="number" id="globalDelayMinutesValue" value="60" style="width:80px;"> menit</div><div id="globalDelayHoursGroup" style="display:none;"><select id="globalDelayHoursValue" style="width:80px;"></select> jam</div><button class="btn-action btn-primary role-admin" onclick="saveGlobalDelay()">Simpan</button></div><div><small>Delay saat ini: <strong id="globalDelayDisplay">60 menit</strong></small></div></div><hr><h4>⏰ Pengaturan Jam Efektif & Hari Libur</h4><div class="form-group"><label>🕒 Batas Waktu Terlambat (Jam Masuk)</label><div style="display:flex; gap:10px;"><input type="time" id="lateThresholdInput" value="07:30" style="width:120px;"><span>Siswa yang scan setelah jam ini akan dianggap TERLAMBAT</span></div></div><div class="form-group"><label>🏠 Minimal Jam Pulang</label><div style="display:flex; gap:10px;"><input type="time" id="minOutTimeInput" value="14:00" style="width:120px;"><span>Scan pulang sebelum jam ini akan mendapat peringatan</span></div></div><div class="form-group"><label>📅 Hari Libur Mingguan</label><div style="display:flex; gap:15px; flex-wrap:wrap;"><label><input type="checkbox" value="0"> Minggu</label><label><input type="checkbox" value="6"> Sabtu</label><label><input type="checkbox" value="1"> Senin</label><label><input type="checkbox" value="2"> Selasa</label><label><input type="checkbox" value="3"> Rabu</label><label><input type="checkbox" value="4"> Kamis</label><label><input type="checkbox" value="5"> Jumat</label></div></div><div class="form-group"><label>📆 Tanggal Libur Khusus</label><div style="display:flex; gap:10px;"><input type="date" id="holidayDateInput"><button class="btn-action btn-secondary" onclick="addHolidayDate()">➕ Tambah</button></div><div id="holidayDatesList" style="margin-top:10px;"></div></div><button class="btn-action btn-primary role-admin" onclick="saveAttendanceSettings()">💾 Simpan Pengaturan</button><div id="sensorStatusPanel" class="sensor-status-container" style="margin-top:20px; display:none;"><div class="sensor-header"><h4>🔍 STATUS 16 SENSOR FINGERPRINT</h4></div><div id="sensorGrid" class="sensor-grid"></div></div><div class="key-box role-admin"><div><strong>⚠️ Reset Data</strong><br><small>Hapus semua data</small></div><button class="btn-action btn-danger" onclick="resetSystemData()">Reset Semua</button></div></div></div>
 
-        <div id="tab-config" class="tab-content role-admin role-guru role-developer">
-            <div class="guide-container">
-                <h3>⚙️ Pengaturan Sistem</h3>
-                <div class="form-group" id="logoSettingGroup">
-                    <label>🏫 Logo Sekolah</label>
-                    <div style="display:flex; align-items:center; gap:20px; flex-wrap:wrap;">
-                        <div class="logo-preview-wrapper" onclick="document.getElementById('logoFileInput').click()" style="cursor:pointer;">
-                            <img id="schoolLogoPreview" class="school-logo-preview" src="" alt="Logo">
-                            <div class="logo-upload-hint">Klik untuk ganti</div>
-                        </div>
-                        <div style="flex:1;">
-                            <input type="file" id="logoFileInput" hidden accept="image/*" onchange="uploadSchoolLogo(this)">
-                            <button class="btn-action btn-danger role-admin" onclick="removeSchoolLogo()" id="btnRemoveLogo" style="display:none;">🗑️ Hapus</button>
-                        </div>
-                    </div>
-                </div>
-                <hr>
-                <div class="form-group"><label>🏫 Nama Sekolah</label><div style="display:flex; gap:10px;"><input type="text" id="inputSchoolName" placeholder="Nama Sekolah" style="flex:1;"><button class="btn-action btn-primary role-admin" onclick="saveSchoolName()">Simpan</button></div></div>
-                <div class="form-group"><label>📋 Tipe Sekolah</label><div style="display:flex; gap:10px;"><select id="schoolTypeSelect" style="flex:1;"><option value="smp">SMP</option><option value="smk">SMK</option><option value="both">SMP & SMK</option></select><button class="btn-action btn-primary role-admin" id="btnSaveSchoolType" onclick="saveSchoolType()">Simpan</button></div></div>
-                <hr>
-                <div id="classesManager"><h4>📚 Daftar Kelas</h4><div id="classesList" style="margin-bottom:10px; min-height:50px;"></div><div style="display:flex; gap:10px; flex-wrap:wrap;"><input type="text" id="newClassInput" placeholder="Contoh: VII A, X RPL" style="flex:2;"><button class="btn-action btn-success role-admin" onclick="addClass()">➕ Tambah</button><button class="btn-action btn-primary role-admin" id="btnSaveClasses" onclick="saveClasses()">💾 Simpan</button></div></div>
-                <div id="majorsManager" style="display:none;"><h4>🎓 Daftar Jurusan (SMK)</h4><div id="majorsList" style="margin-bottom:10px; min-height:50px;"></div><div style="display:flex; gap:10px;"><input type="text" id="newMajorInput" placeholder="Contoh: RPL, TKJ" style="flex:2;"><button class="btn-action btn-success role-admin" onclick="addMajor()">➕ Tambah</button><button class="btn-action btn-primary role-admin" id="btnSaveMajors" onclick="saveMajors()">💾 Simpan</button></div></div>
-                <hr>
-                <div class="form-group"><label>⏰ Delay Pulang Global</label><div style="display:flex; gap:10px; flex-wrap:wrap;"><select id="globalDelayUnit"><option value="minutes">Menit</option><option value="hours">Jam</option></select><div id="globalDelayMinutesGroup"><input type="number" id="globalDelayMinutesValue" value="60" style="width:80px;"> menit</div><div id="globalDelayHoursGroup" style="display:none;"><select id="globalDelayHoursValue" style="width:80px;"></select> jam</div><button class="btn-action btn-primary role-admin" onclick="saveGlobalDelay()">Simpan</button></div><div><small>Delay saat ini: <strong id="globalDelayDisplay">60 menit</strong></small></div></div>
-                <hr><h4>⏰ Pengaturan Jam Efektif & Hari Libur</h4>
-                <div class="form-group"><label>🕒 Batas Waktu Terlambat (Jam Masuk)</label><div style="display:flex; gap:10px;"><input type="time" id="lateThresholdInput" value="07:30" style="width:120px;"><span>Siswa yang scan setelah jam ini akan dianggap TERLAMBAT</span></div></div>
-                <div class="form-group"><label>🏠 Minimal Jam Pulang</label><div style="display:flex; gap:10px;"><input type="time" id="minOutTimeInput" value="14:00" style="width:120px;"><span>Scan pulang sebelum jam ini akan mendapat peringatan</span></div></div>
-                <div class="form-group"><label>📅 Hari Libur Mingguan</label><div style="display:flex; gap:15px; flex-wrap:wrap;"><label><input type="checkbox" value="0"> Minggu</label><label><input type="checkbox" value="6"> Sabtu</label><label><input type="checkbox" value="1"> Senin</label><label><input type="checkbox" value="2"> Selasa</label><label><input type="checkbox" value="3"> Rabu</label><label><input type="checkbox" value="4"> Kamis</label><label><input type="checkbox" value="5"> Jumat</label></div></div>
-                <div class="form-group"><label>📆 Tanggal Libur Khusus</label><div style="display:flex; gap:10px;"><input type="date" id="holidayDateInput"><button class="btn-action btn-secondary" onclick="addHolidayDate()">➕ Tambah</button></div><div id="holidayDatesList" style="margin-top:10px;"></div></div>
-                <button class="btn-action btn-primary role-admin" onclick="saveAttendanceSettings()">💾 Simpan Pengaturan</button>
-                <div id="sensorStatusPanel" class="sensor-status-container" style="margin-top:20px; display:none;"><div class="sensor-header"><h4>🔍 STATUS 16 SENSOR FINGERPRINT</h4></div><div id="sensorGrid" class="sensor-grid"></div></div>
-                <div class="key-box role-admin"><div><strong>⚠️ Reset Data</strong><br><small>Hapus semua data</small></div><button class="btn-action btn-danger" onclick="resetSystemData()">Reset Semua</button></div>
-            </div>
-        </div>
-
-        <div id="tab-guide" class="tab-content">
-            <div class="guide-container">
-                <h3>📘 Panduan Sistem Absensi Fingerprint</h3>
-                <p class="text-small">Sistem Absensi berbasis sidik jari dengan ESP32 dan real-time monitoring</p>
-                <details open><summary>1. 📝 Pendaftaran Akun</summary><div class="guide-box"><h4>Cara Mendaftar sebagai Siswa:</h4><ol><li>Pastikan Anda sudah terdaftar di database siswa (ID Fingerprint sudah ada)</li><li>Klik "Daftar disini" pada halaman login</li><li>Pilih role "Siswa"</li><li>Masukkan ID Generate (ID Fingerprint yang diberikan guru)</li><li>Masukkan Email dan Password (minimal 6 karakter)</li><li>Masukkan Kode Pendaftaran yang diberikan guru (bisa scan QR)</li><li>Klik "DAFTAR" dan tunggu konfirmasi</li></ol><h4>Cara Mendaftar sebagai Guru:</h4><ol><li>Klik "Daftar disini" pada halaman login</li><li>Pilih role "Guru"</li><li>Masukkan Nama Lengkap dan Mata Pelajaran</li><li>Masukkan Email dan Password</li><li>Masukkan Kode Pendaftaran Guru dari Admin</li><li>Klik "DAFTAR"</li></ol></div></details>
-                <details><summary>2. 🔐 Login & Keamanan</summary><div class="guide-box"><h4>Cara Login:</h4><ol><li>Masukkan Email dan Password yang sudah didaftarkan</li><li>Klik tombol "MASUK"</li></ol><h4>Lupa Password?</h4><ol><li>Klik "Lupa Password?" di halaman login</li><li>Masukkan email yang terdaftar</li><li>Klik "Kirim Link"</li></ol></div></details>
-                <div class="guide-footer"><hr><div class="text-small" style="text-align:center;"><p>📱 Sistem Absensi IoT - Fingerprint & Real-time</p><p>Dikembangkan oleh CV Haka Jaya | Versi 5.18 | © 2026</p></div></div>
-            </div>
-        </div>
+        <div id="tab-guide" class="tab-content"><div class="guide-container"><h3>📘 Panduan Sistem Absensi Fingerprint</h3><p class="text-small">Sistem Absensi berbasis sidik jari dengan ESP32 dan real-time monitoring</p><details open><summary>1. 📝 Pendaftaran Akun</summary><div class="guide-box"><h4>Cara Mendaftar sebagai Siswa:</h4><ol><li>Pastikan Anda sudah terdaftar di database siswa (ID Fingerprint sudah ada)</li><li>Klik "Daftar disini" pada halaman login</li><li>Pilih role "Siswa"</li><li>Masukkan ID Generate (ID Fingerprint yang diberikan guru)</li><li>Masukkan Email dan Password (minimal 6 karakter)</li><li>Masukkan Kode Pendaftaran yang diberikan guru (bisa scan QR)</li><li>Klik "DAFTAR" dan tunggu konfirmasi</li></ol><h4>Cara Mendaftar sebagai Guru:</h4><ol><li>Klik "Daftar disini" pada halaman login</li><li>Pilih role "Guru"</li><li>Masukkan Nama Lengkap dan Mata Pelajaran</li><li>Masukkan Email dan Password</li><li>Masukkan Kode Pendaftaran Guru dari Admin</li><li>Klik "DAFTAR"</li></ol></div></details><details><summary>2. 🔐 Login & Keamanan</summary><div class="guide-box"><h4>Cara Login:</h4><ol><li>Masukkan Email dan Password yang sudah didaftarkan</li><li>Klik tombol "MASUK"</li></ol><h4>Lupa Password?</h4><ol><li>Klik "Lupa Password?" di halaman login</li><li>Masukkan email yang terdaftar</li><li>Klik "Kirim Link"</li></ol></div></details><div class="guide-footer"><hr><div class="text-small" style="text-align:center;"><p>📱 Sistem Absensi IoT - Fingerprint & Real-time</p><p>Dikembangkan oleh CV Haka Jaya | Versi 5.18 | © 2026</p></div></div></div></div>
     </div>
 
     <!-- MODALS -->
@@ -957,13 +562,13 @@
     <div id="modal-forgot" class="modal-overlay"><div class="modal-box"><div class="modal-title"><span>🔐 Reset Password</span><span onclick="closeModal('modal-forgot')">✖</span></div><p>Masukkan email Anda</p><div class="form-group"><input type="email" id="forgotEmail" placeholder="Email"></div><div class="modal-actions"><button class="btn-cancel" onclick="closeModal('modal-forgot')">Batal</button><button class="btn-save" onclick="processForgot()">Kirim Link</button></div></div></div>
     <div id="modal-announcement" class="modal-overlay"><div class="modal-box"><div class="modal-title"><span>📢 Pengumuman</span><span onclick="closeModal('modal-announcement')">✖</span></div><input type="hidden" id="announcementId"><div class="form-group"><input type="text" id="annTitle" placeholder="Judul"></div><div class="form-group"><textarea id="annMessage" rows="3" placeholder="Isi"></textarea></div><div class="form-group"><select id="annPriority"><option value="low">🔵 Rendah</option><option value="normal" selected>🟢 Normal</option><option value="high">🔴 Penting</option></select></div><div class="form-group"><select id="annExpiryType" onchange="toggleExpiryInput()"><option value="none">Tanpa Batas</option><option value="time">Jam</option><option value="date">Tanggal</option><option value="both">Tanggal & Jam</option></select></div><div id="annExpiryDateGroup" class="form-group" style="display:none;"><input type="date" id="annExpiryDate"></div><div id="annExpiryTimeGroup" class="form-group" style="display:none;"><input type="time" id="annExpiryTime"></div><div class="modal-actions"><button class="btn-cancel" onclick="closeModal('modal-announcement')">Batal</button><button class="btn-save" onclick="saveAnnouncement()">Simpan</button></div></div></div>
     <div id="modal-friends" class="modal-overlay"><div class="modal-box" style="max-width:500px;"><div class="modal-title"><span>👥 Teman</span><span onclick="closeModal('modal-friends')">✖</span></div><div id="friendsPanel"></div></div></div>
-    <div id="modal-chat" class="modal-overlay"><div class="modal-box" style="max-width:800px; height:80vh;"><div class="modal-title"><span>💬 Pesan</span><span onclick="closeModal('modal-chat')">✖</span></div><div id="chatModalPanel" style="height:calc(100% - 60px); overflow: hidden;"><div class="chat-loading" style="text-align: center; padding: 40px; color: var(--text-muted);">⏳ Memuat chat...</div></div></div></div>
+    <div id="modal-chat" class="modal-overlay"><div class="modal-box" style="max-width:800px; height:80vh;"><div class="modal-title"><span>💬 Pesan</span><span onclick="closeModal('modal-chat')">✖</span></div><div id="chatModalPanel" style="height:calc(100% - 60px); overflow:hidden;"><div class="chat-loading" style="text-align:center; padding:40px; color:var(--text-muted);">⏳ Memuat chat...</div></div></div></div>
     <div id="modal-create-status" class="modal-overlay"><div class="modal-box"><div class="modal-title"><span>📸 Buat Status</span><span onclick="closeModal('modal-create-status')">✖</span></div><div class="form-group"><label>Teks</label><textarea id="statusText" rows="3" placeholder="Apa yang sedang terjadi?"></textarea></div><div class="form-group"><label>Gambar</label><input type="file" id="statusImageInput" accept="image/*" onchange="previewStatusImage(this)"><div id="statusImagePreviewContainer" style="display:none; margin-top:10px;"><img id="statusImagePreview" style="max-width:100%; border-radius:12px;"></div></div><div class="modal-actions"><button class="btn-cancel" onclick="closeModal('modal-create-status')">Batal</button><button class="btn-save" onclick="createStatus()">Upload Status</button></div></div></div>
     <div id="modal-status-viewer" class="modal-overlay"><div class="modal-box" style="background:#000;"><div id="statusViewerContent"></div></div></div>
     <div id="modal-absence" class="modal-overlay"><div class="modal-box" style="max-width:700px;"><div class="modal-title"><span>📋 Atur Ketidakhadiran</span><span onclick="closeModal('modal-absence')">✖</span></div><div class="modal-body"><div style="display:flex; gap:10px; flex-wrap:wrap;"><input type="date" id="absenceDate"><select id="absenceKelas"><option value="all">Semua Kelas</option></select><select id="absenceJurusan"><option value="all">Semua Jurusan</option></select><button class="btn-action" onclick="loadAbsenceList()">Tampilkan</button></div><div id="absenceListContainer" style="max-height:55vh; overflow-y:auto;"></div></div><div class="modal-actions"><button class="btn-cancel" onclick="closeModal('modal-absence')">Tutup</button><button class="btn-save" onclick="saveAllAbsenceStatus()">Simpan</button></div></div></div>
     <div id="modal-qr-scanner" class="modal-overlay"><div class="modal-box" style="max-width:500px;"><div class="modal-title"><span>📷 Scan QR Code</span><span onclick="closeModal('modal-qr-scanner')">✖</span></div><div id="qr-reader" style="width:100%;"></div><div id="qr-reader-results" style="margin-top:10px; text-align:center;"></div><div class="modal-actions"><button class="btn-cancel" onclick="closeModal('modal-qr-scanner')">Tutup</button></div></div></div>
 
-    <!-- SCRIPTS - URUTAN SANGAT PENTING! -->
+    <!-- SCRIPTS -->
     <script src="js/config.js"></script>
     <script src="js/supabase-config.js"></script>
     <script src="js/db.js"></script>
@@ -992,17 +597,14 @@
             var content = dropdown.querySelector('.dropdown-content');
             var isOpen = content.classList.contains('open');
             
-            // Tutup semua dropdown terlebih dahulu
             closeAllDropdowns();
             
-            // Jika yang diklik belum terbuka, buka
             if (!isOpen) {
                 content.classList.add('open');
                 document.getElementById('dropdownOverlay').classList.add('active');
             }
         }
         
-        // Fungsi untuk menutup semua dropdown
         function closeAllDropdowns() {
             var allContents = document.querySelectorAll('.dropdown-content');
             allContents.forEach(function(content) {
@@ -1011,15 +613,12 @@
             document.getElementById('dropdownOverlay').classList.remove('active');
         }
         
-        // Tutup dropdown saat tombol ESC ditekan
         document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape') {
-                closeAllDropdowns();
-            }
+            if (e.key === 'Escape') closeAllDropdowns();
         });
         
         document.addEventListener('DOMContentLoaded', function() {
-            console.log("DOM Ready - Initializing with Click-to-Open Dropdown Menu...");
+            console.log("DOM Ready - Initializing...");
             
             // Populate dropdown options
             var dh = document.getElementById('delayHoursValue');
@@ -1074,11 +673,6 @@
             }
             initTheme();
             
-            // Sembunyikan floating buttons yang tidak diperlukan
-            var floatingBtns = document.querySelectorAll('.floating-chat-btn, .floating-friends-btn, .floating-status-btn, .floating-announcement-btn');
-            floatingBtns.forEach(btn => btn.style.display = 'none');
-            
-            // Inisialisasi rekap per siswa
             setTimeout(function() {
                 if (typeof initRekapPerSiswa === 'function') {
                     initRekapPerSiswa();
