@@ -1,23 +1,29 @@
-// ai-summary.js - VERSION 3.0 (Hugging Face API + Groq Fallback)
-// AI Summary Absensi dengan multiple API provider
+// ai-summary.js - VERSION 3.1 (Role-Based Access: Admin/Guru/Developer Only)
+// AI Summary Absensi - Hanya untuk role admin, guru, dan developer
 
-// Konfigurasi API (coba salah satu yang aktif)
+// Konfigurasi API
 const AI_PROVIDERS = {
     groq: {
         url: "https://api.groq.com/openai/v1/chat/completions",
         key: "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",
         model: "llama3-70b-8192"
     },
-    // Hugging Face - gratis, daftar di huggingface.co/tos
     huggingface: {
         url: "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.3",
-        key: "" // Kosongkan dulu, bisa diisi nanti
+        key: ""
     }
 };
 
-let currentProvider = 'groq';
 let aiSummaryInitialized = false;
 let currentAIAnalysis = null;
+
+// ======================= CEK AKSES ========================
+
+function hasAIAccess() {
+    if (!currentUser) return false;
+    // Hanya Admin, Guru, dan Developer yang dapat mengakses AI Summary
+    return (currentUser.role === 'admin' || currentUser.role === 'guru' || currentUser.role === 'developer');
+}
 
 // ======================= INISIALISASI ========================
 
@@ -28,8 +34,14 @@ function initAISummary() {
         return;
     }
     
+    // Cek akses - jika siswa, jangan inisialisasi
+    if (!hasAIAccess()) {
+        console.log("🔒 AI Summary: Hanya untuk Admin, Guru, dan Developer. Akses ditolak untuk role:", currentUser.role);
+        return;
+    }
+    
     aiSummaryInitialized = true;
-    console.log("🤖 AI Summary module initialized");
+    console.log("🤖 AI Summary module initialized for role:", currentUser.role);
     
     setTimeout(() => {
         addAISummaryButton();
@@ -38,6 +50,9 @@ function initAISummary() {
 }
 
 function addAISummaryButton() {
+    // Double check akses sebelum menambahkan tombol
+    if (!hasAIAccess()) return;
+    
     let statsGrid = document.getElementById('dashboardStatsGrid') || document.querySelector('.stats-grid');
     if (!statsGrid) {
         setTimeout(addAISummaryButton, 500);
@@ -56,13 +71,14 @@ function addAISummaryButton() {
     aiButton.innerHTML = `<div style="color:white;">🤖 AI Summary</div><div style="color:white; font-size:1.2rem;">Analisis Cerdas</div>`;
     
     statsGrid.appendChild(aiButton);
-    console.log("✅ AI Summary button added");
+    console.log("✅ AI Summary button added for", currentUser?.role);
     
     // Floating button
     if (!document.getElementById('floatingAiSummaryBtn')) {
         const floatingBtn = document.createElement('button');
         floatingBtn.id = 'floatingAiSummaryBtn';
         floatingBtn.innerHTML = '🤖';
+        floatingBtn.title = 'AI Summary Absensi (Admin/Guru/Developer)';
         floatingBtn.onclick = () => openAISummaryModal();
         floatingBtn.style.cssText = `position:fixed; bottom:170px; right:20px; width:56px; height:56px; border-radius:50%; background:linear-gradient(135deg,#667eea,#764ba2); color:white; display:flex; align-items:center; justify-content:center; cursor:pointer; box-shadow:0 4px 15px rgba(0,0,0,0.3); z-index:999; border:none; font-size:28px;`;
         document.body.appendChild(floatingBtn);
@@ -71,6 +87,14 @@ function addAISummaryButton() {
 }
 
 async function openAISummaryModal() {
+    // Cek akses sebelum membuka modal
+    if (!hasAIAccess()) {
+        if (typeof showToast === 'function') {
+            showToast("🔒 Akses ditolak! Fitur AI Summary hanya untuk Admin, Guru, dan Developer.", "error");
+        }
+        return;
+    }
+    
     let modal = document.getElementById('modal-ai-summary');
     if (!modal) {
         document.body.insertAdjacentHTML('beforeend', `
@@ -104,15 +128,19 @@ async function openAISummaryModal() {
     
     const contentDiv = document.getElementById('aiSummaryContent');
     if (contentDiv && analysis) {
+        // Tampilkan badge role di header
+        const roleBadge = currentUser?.role === 'admin' ? '👑 ADMIN' : (currentUser?.role === 'guru' ? '👨‍🏫 GURU' : '👨‍💻 DEVELOPER');
+        
         contentDiv.innerHTML = `
             <div style="padding:20px;">
                 <div style="background:linear-gradient(135deg,#667eea20,#764ba220); border-radius:16px; padding:16px; margin-bottom:20px;">
-                    <div style="display:flex; align-items:center; gap:12px;">
+                    <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
                         <span style="font-size:32px;">🤖</span>
-                        <div>
+                        <div style="flex:1;">
                             <h3 style="margin:0;">Analisis Kehadiran</h3>
                             <p style="margin:0; font-size:12px;">${analysis.provider} • ${new Date().toLocaleString('id-ID')}</p>
                         </div>
+                        <div style="background:#00bcd4; padding:4px 12px; border-radius:20px; font-size:11px; color:white;">${roleBadge}</div>
                     </div>
                 </div>
                 <div class="ai-summary-content" style="line-height:1.6;">${analysis.html}</div>
@@ -124,6 +152,14 @@ async function openAISummaryModal() {
 }
 
 async function generateAnalysis() {
+    // Cek akses sebelum generate
+    if (!hasAIAccess()) {
+        return { 
+            provider: 'Akses Ditolak', 
+            html: '<div style="text-align:center; padding:40px;"><span style="font-size:48px;">🔒</span><h3>Akses Terbatas</h3><p>Fitur AI Summary hanya tersedia untuk:<br><strong>Admin, Guru, dan Developer</strong></p></div>' 
+        };
+    }
+    
     const data = collectAttendanceData();
     if (!data || data.totalStudents === 0) {
         return { provider: 'Fallback', html: '<p>Data absensi tidak tersedia</p>' };
@@ -260,27 +296,87 @@ function generateStaticAnalysisHTML(data) {
         
         <hr>
         <p style="font-size:11px; color:#888;">📅 Analisis diperbarui: ${new Date().toLocaleString('id-ID')}</p>
+        <p style="font-size:10px; color:#888; margin-top:10px;">🔒 Fitur ini hanya tersedia untuk Admin, Guru, dan Developer</p>
     `;
 }
 
 function copyAISummaryToClipboard() {
+    // Cek akses
+    if (!hasAIAccess()) {
+        if (typeof showToast === 'function') showToast("🔒 Akses ditolak!", "error");
+        return;
+    }
+    
     const text = document.querySelector('.ai-summary-content')?.innerText;
-    if (text) { navigator.clipboard.writeText(text); showToast("✅ Disalin", "success"); }
-    else showToast("Gagal menyalin", "error");
+    if (text) { 
+        navigator.clipboard.writeText(text); 
+        if (typeof showToast === 'function') showToast("✅ Analisis disalin ke clipboard", "success");
+    } else {
+        if (typeof showToast === 'function') showToast("Gagal menyalin", "error");
+    }
 }
 
 function exportAISummaryToPDF() {
+    // Cek akses
+    if (!hasAIAccess()) {
+        if (typeof showToast === 'function') showToast("🔒 Akses ditolak!", "error");
+        return;
+    }
+    
     const html = document.querySelector('.ai-summary-content')?.innerHTML;
     if (!html) return;
+    
     const win = window.open('', '_blank');
-    win.document.write(`<!DOCTYPE html><html><head><title>AI Summary</title><meta charset="UTF-8"><style>body{font-family:Arial;padding:30px}h2{color:#667eea}</style></head><body><h1>🤖 AI SUMMARY</h1>${html}<p>${new Date().toLocaleString()}</p><button onclick="window.print()">Cetak</button><button onclick="window.close()">Tutup</button></body></html>`);
+    const roleText = currentUser?.role === 'admin' ? 'Admin' : (currentUser?.role === 'guru' ? 'Guru' : 'Developer');
+    
+    win.document.write(`<!DOCTYPE html><html><head><title>AI Summary Absensi</title><meta charset="UTF-8"><style>
+        body{font-family:Arial,sans-serif;padding:30px;line-height:1.5}
+        h2{color:#667eea;margin-top:20px}
+        h3{color:#00bcd4;margin-top:15px}
+        ul{margin:10px 0}
+        .header{text-align:center;margin-bottom:30px;padding-bottom:15px;border-bottom:2px solid #667eea}
+        .footer{text-align:center;margin-top:30px;padding-top:15px;font-size:10px;color:#888;border-top:1px solid #ddd}
+        .role-badge{background:#00bcd4;color:white;padding:4px 12px;border-radius:20px;display:inline-block;font-size:12px}
+    </style></head><body>
+    <div class="header"><h1>🤖 AI SUMMARY ABSENSI</h1><p>Dicetak oleh: ${roleText}</p><p>${new Date().toLocaleString('id-ID')}</p></div>
+    ${html}
+    <div class="footer"><p>Sistem Absensi IoT - Fingerprint & Real-time</p><p>🔒 Fitur ini hanya untuk Admin, Guru, dan Developer</p></div>
+    <div style="text-align:center; margin-top:20px;"><button onclick="window.print()" style="padding:10px 20px; background:#667eea; color:white; border:none; border-radius:5px; cursor:pointer;">🖨️ Cetak PDF</button><button onclick="window.close()" style="padding:10px 20px; background:#666; color:white; border:none; border-radius:5px; cursor:pointer; margin-left:10px;">✖ Tutup</button></div>
+    </body></html>`);
     win.document.close();
+    if (typeof showToast === 'function') showToast("📄 Membuka halaman print", "info");
 }
 
+// Fungsi untuk menghapus tombol AI Summary jika diperlukan (misal saat logout)
+function removeAISummaryButtons() {
+    const btn = document.getElementById('aiSummaryBtnContainer');
+    if (btn) btn.remove();
+    const floatingBtn = document.getElementById('floatingAiSummaryBtn');
+    if (floatingBtn) floatingBtn.remove();
+    console.log("🗑️ AI Summary buttons removed");
+}
+
+// Ekspor ke global
 window.initAISummary = initAISummary;
 window.openAISummaryModal = openAISummaryModal;
 window.copyAISummaryToClipboard = copyAISummaryToClipboard;
 window.exportAISummaryToPDF = exportAISummaryToPDF;
+window.hasAIAccess = hasAIAccess;
+window.removeAISummaryButtons = removeAISummaryButtons;
 
-setTimeout(() => { if (typeof currentUser !== 'undefined' && currentUser) initAISummary(); else setTimeout(() => initAISummary(), 2000); }, 1000);
-console.log("✅ ai-summary.js V3.0 loaded");
+// Auto init dengan pengecekan role
+setTimeout(() => { 
+    if (typeof currentUser !== 'undefined' && currentUser) {
+        if (hasAIAccess()) {
+            initAISummary();
+        } else {
+            console.log("🔒 AI Summary: Role", currentUser?.role, "tidak memiliki akses. Tombol tidak ditampilkan.");
+        }
+    } else {
+        setTimeout(() => {
+            if (currentUser && hasAIAccess()) initAISummary();
+        }, 2000);
+    }
+}, 1000);
+
+console.log("✅ ai-summary.js V3.1 loaded - Role-based access: Admin/Guru/Developer only");
