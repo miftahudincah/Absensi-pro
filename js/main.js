@@ -1,7 +1,11 @@
-// main.js - VERSION 5.1 (PERBAIKAN: HAPUS CHART DI SINI, SERAHKAN KE UI.JS)
+// main.js - VERSION 5.2 (DENGAN ROLE-BASED DASHBOARD)
 // Fokus: Session persistence, Auth state handler, Periodic refresh,
-//        Dashboard modern real-time update (statistik, progress bar kelas, absensi terbaru)
-// PERUBAHAN: Menghapus pembuatan chart weeklyBarChart untuk mencegah konflik canvas
+//        Dashboard dengan filter berdasarkan role (siswa hanya lihat kelasnya sendiri)
+// PERUBAHAN V5.2: 
+//   - Integrasi dengan dashboard.js untuk role-based filtering
+//   - Siswa hanya melihat data kelas dan jurusannya sendiri
+//   - Guru/Admin/Developer melihat semua data
+// ============================================================================
 
 // ======================== GLOBAL VARIABLES ========================
 let refreshInterval = null;
@@ -51,7 +55,72 @@ function clearUserSession() {
     }
 }
 
-// ======================== DASHBOARD MODERN - UPDATE DARI dbData ========================
+// ======================== FUNGSI FILTER BERDASARKAN ROLE ========================
+
+/**
+ * Mendapatkan daftar siswa yang sesuai dengan role pengguna
+ * - Admin/Guru/Developer: semua siswa
+ * - Siswa: hanya siswa dengan kelas & jurusan yang sama
+ */
+function getFilteredStudentsForDashboard() {
+    if (!dbData.users) return [];
+    
+    // Filter siswa yang valid (punya nama)
+    const validStudents = dbData.users.filter(s => s && s.nama && s.nama !== 'Tidak Diketahui' && s.nama.trim() !== '');
+    
+    // Admin, Guru, Developer melihat semua siswa
+    if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'guru' || currentUser.role === 'developer')) {
+        console.log("📊 Full access: menampilkan semua siswa");
+        return validStudents;
+    }
+    
+    // Siswa hanya melihat data kelas dan jurusannya sendiri
+    if (currentUser && currentUser.role === 'siswa') {
+        const userKelas = currentUser.kelas;
+        const userJurusan = currentUser.jurusan;
+        
+        console.log(`📊 Student access: filter by kelas=${userKelas}, jurusan=${userJurusan}`);
+        
+        const filtered = validStudents.filter(s => {
+            const matchKelas = !userKelas || s.kelas === userKelas;
+            const matchJurusan = !userJurusan || s.jurusan === userJurusan;
+            return matchKelas && matchJurusan;
+        });
+        
+        console.log(`📊 Filtered students: ${filtered.length} dari ${validStudents.length} total`);
+        return filtered;
+    }
+    
+    return validStudents;
+}
+
+/**
+ * Mendapatkan data absensi yang sesuai dengan role pengguna
+ */
+function getFilteredAttendanceForDashboard() {
+    if (!dbData.attendance) return [];
+    
+    // Admin, Guru, Developer melihat semua absensi
+    if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'guru' || currentUser.role === 'developer')) {
+        return dbData.attendance;
+    }
+    
+    // Siswa hanya melihat absensi kelas dan jurusannya sendiri
+    if (currentUser && currentUser.role === 'siswa') {
+        const userKelas = currentUser.kelas;
+        const userJurusan = currentUser.jurusan;
+        
+        return dbData.attendance.filter(a => {
+            const matchKelas = !userKelas || a.kelas === userKelas;
+            const matchJurusan = !userJurusan || a.jurusan === userJurusan;
+            return matchKelas && matchJurusan;
+        });
+    }
+    
+    return dbData.attendance;
+}
+
+// ======================== DASHBOARD UPDATE DENGAN FILTER ROLE ========================
 
 async function updateDashboardModern() {
     if (!currentUser || typeof dbData === 'undefined' || !dbData) {
@@ -61,19 +130,31 @@ async function updateDashboardModern() {
     
     if (!dbData.attendance || dbData.attendance.length === 0) {
         console.log("⏳ Dashboard update skipped: attendance data not ready yet");
+        // Tetap tampilkan data siswa meskipun belum ada absensi
+        const filteredStudents = getFilteredStudentsForDashboard();
+        updateDashboardStatsOnly(filteredStudents.length);
         return;
     }
     
-    console.log("📊 Updating modern dashboard with real data from dbData...");
+    console.log("📊 Updating modern dashboard with role-based filtering...");
     
     try {
-        const students = dbData.users || [];
+        // Dapatkan data yang sudah difilter berdasarkan role
+        const students = getFilteredStudentsForDashboard();
+        const attendance = getFilteredAttendanceForDashboard();
+        
         const totalSiswa = students.length;
         const trendSiswa = totalSiswa > 0 ? "+" + Math.floor(Math.random() * 10) : "0";
         
         const today = new Date().toISOString().split('T')[0];
-        const todayAttendance = dbData.attendance.filter(a => a.date === today);
+        let todayAttendance = attendance.filter(a => a.date === today);
         
+        // Filter hari libur jika fungsi tersedia
+        if (typeof filterAttendanceByHoliday === 'function') {
+            todayAttendance = filterAttendanceByHoliday(todayAttendance);
+        }
+        
+        // Hitung statistik
         let hadir = 0;
         let tidakHadir = 0;
         let terlambat = 0;
@@ -86,6 +167,7 @@ async function updateDashboardModern() {
                     hadirSet.add(record.studentId);
                     hadir++;
                 }
+                // Cek keterlambatan (jam masuk > 07:30)
                 if (record.timeIn && record.timeIn > '07:30') {
                     terlambatSet.add(record.studentId);
                 }
@@ -98,28 +180,115 @@ async function updateDashboardModern() {
         const persenTidakHadir = totalSiswa > 0 ? ((tidakHadir / totalSiswa) * 100).toFixed(1) : 0;
         const persenTerlambat = totalSiswa > 0 ? ((terlambat / totalSiswa) * 100).toFixed(1) : 0;
         
-        const elTotalSiswa = document.getElementById('statTotalSiswaNew');
-        if (elTotalSiswa) elTotalSiswa.innerText = totalSiswa;
-        const elTrendSiswa = document.getElementById('statTrendSiswa');
-        if (elTrendSiswa) elTrendSiswa.innerHTML = `${trendSiswa} dari bulan lalu`;
-        
-        const elHadir = document.getElementById('statHadirHariIni');
-        if (elHadir) elHadir.innerText = hadir;
-        const elPersenHadir = document.getElementById('statPersenHadir');
-        if (elPersenHadir) elPersenHadir.innerHTML = `${persenHadir}% dari total siswa`;
-        
-        const elTidakHadir = document.getElementById('statTidakHadir');
-        if (elTidakHadir) elTidakHadir.innerText = tidakHadir;
-        const elPersenTidakHadir = document.getElementById('statPersenTidakHadir');
-        if (elPersenTidakHadir) elPersenTidakHadir.innerHTML = `${persenTidakHadir}% dari total siswa`;
-        
-        const elTerlambat = document.getElementById('statTerlambat');
-        if (elTerlambat) elTerlambat.innerText = terlambat;
-        const elPersenTerlambat = document.getElementById('statPersenTerlambat');
-        if (elPersenTerlambat) elPersenTerlambat.innerHTML = `${persenTerlambat}% dari total siswa`;
+        // Update statistik cards
+        updateDashboardStatsUI(totalSiswa, hadir, tidakHadir, terlambat, persenHadir, persenTidakHadir, persenTerlambat, trendSiswa);
         
         // ========== Kehadiran per Kelas (progress bar) ==========
-        const kelasMap = new Map();
+        renderClassAttendanceForDashboard(students, attendance, today);
+        
+        // ========== Absensi Terbaru (5 data terakhir) ==========
+        renderRecentAttendanceForDashboard(attendance);
+        
+        // ========== Update info role di dashboard ==========
+        updateDashboardRoleInfoUI();
+        
+        // ========== GRAFIK MINGGUAN ==========
+        if (typeof window.updateDashboardChart === 'function') {
+            // Untuk chart, gunakan data attendance yang sudah difilter
+            window.updateDashboardChart();
+        }
+        
+        console.log(`✅ Dashboard updated: ${totalSiswa} siswa, ${hadir} hadir hari ini`);
+        
+    } catch (err) {
+        console.error("Error updating dashboard modern:", err);
+    }
+}
+
+function updateDashboardStatsOnly(totalSiswa) {
+    const elTotalSiswa = document.getElementById('statTotalSiswaNew');
+    if (elTotalSiswa) elTotalSiswa.innerText = totalSiswa;
+    
+    const elTrendSiswa = document.getElementById('statTrendSiswa');
+    if (elTrendSiswa) elTrendSiswa.innerHTML = `0 dari periode lalu`;
+    
+    const elHadir = document.getElementById('statHadirHariIni');
+    if (elHadir) elHadir.innerText = '0';
+    
+    const elPersenHadir = document.getElementById('statPersenHadir');
+    if (elPersenHadir) elPersenHadir.innerHTML = `0% dari total siswa`;
+    
+    const elTidakHadir = document.getElementById('statTidakHadir');
+    if (elTidakHadir) elTidakHadir.innerText = totalSiswa;
+    
+    const elPersenTidakHadir = document.getElementById('statPersenTidakHadir');
+    if (elPersenTidakHadir) elPersenTidakHadir.innerHTML = `100% dari total siswa`;
+    
+    const elTerlambat = document.getElementById('statTerlambat');
+    if (elTerlambat) elTerlambat.innerText = '0';
+    
+    const elPersenTerlambat = document.getElementById('statPersenTerlambat');
+    if (elPersenTerlambat) elPersenTerlambat.innerHTML = `0% dari total siswa`;
+}
+
+function updateDashboardStatsUI(totalSiswa, hadir, tidakHadir, terlambat, persenHadir, persenTidakHadir, persenTerlambat, trendSiswa) {
+    const elTotalSiswa = document.getElementById('statTotalSiswaNew');
+    if (elTotalSiswa) elTotalSiswa.innerText = totalSiswa;
+    
+    const elTrendSiswa = document.getElementById('statTrendSiswa');
+    if (elTrendSiswa) elTrendSiswa.innerHTML = `${trendSiswa} dari periode lalu`;
+    
+    const elHadir = document.getElementById('statHadirHariIni');
+    if (elHadir) elHadir.innerText = hadir;
+    
+    const elPersenHadir = document.getElementById('statPersenHadir');
+    if (elPersenHadir) elPersenHadir.innerHTML = `${persenHadir}% dari total siswa`;
+    
+    const elTidakHadir = document.getElementById('statTidakHadir');
+    if (elTidakHadir) elTidakHadir.innerText = tidakHadir;
+    
+    const elPersenTidakHadir = document.getElementById('statPersenTidakHadir');
+    if (elPersenTidakHadir) elPersenTidakHadir.innerHTML = `${persenTidakHadir}% dari total siswa`;
+    
+    const elTerlambat = document.getElementById('statTerlambat');
+    if (elTerlambat) elTerlambat.innerText = terlambat;
+    
+    const elPersenTerlambat = document.getElementById('statPersenTerlambat');
+    if (elPersenTerlambat) elPersenTerlambat.innerHTML = `${persenTerlambat}% dari total siswa`;
+}
+
+function renderClassAttendanceForDashboard(students, attendance, today) {
+    const container = document.getElementById('classAttendanceList');
+    if (!container) return;
+    
+    let kelasMap = new Map();
+    
+    // Untuk siswa, hanya tampilkan kelasnya sendiri
+    if (currentUser && currentUser.role === 'siswa') {
+        const userKelas = currentUser.kelas;
+        const userJurusan = currentUser.jurusan;
+        
+        if (userKelas) {
+            const siswaDiKelas = students.filter(s => s.kelas === userKelas && s.jurusan === userJurusan);
+            const hadirDiKelas = new Set();
+            
+            attendance.forEach(record => {
+                if (record.date === today && (record.status === 'Hadir' || record.status === 'Pulang')) {
+                    const student = students.find(s => s.id == record.studentId);
+                    if (student && student.kelas === userKelas && student.jurusan === userJurusan) {
+                        hadirDiKelas.add(record.studentId);
+                    }
+                }
+            });
+            
+            const total = siswaDiKelas.length;
+            const hadir = hadirDiKelas.size;
+            const persen = total > 0 ? (hadir / total) * 100 : 0;
+            
+            kelasMap.set(userKelas, { total, hadir, persen: persen.toFixed(1) });
+        }
+    } else {
+        // Admin/Guru/Developer: tampilkan semua kelas
         students.forEach(s => {
             const kelas = s.kelas || 'Tanpa Kelas';
             if (!kelasMap.has(kelas)) {
@@ -128,69 +297,123 @@ async function updateDashboardModern() {
             kelasMap.get(kelas).total++;
         });
         
-        todayAttendance.forEach(record => {
-            const student = students.find(s => s.id == record.studentId);
-            if (student && student.kelas) {
-                const kelas = student.kelas;
-                if (kelasMap.has(kelas) && (record.status === 'Hadir' || record.status === 'Pulang')) {
-                    kelasMap.get(kelas).hadir++;
+        attendance.forEach(record => {
+            if (record.date === today && (record.status === 'Hadir' || record.status === 'Pulang')) {
+                const student = students.find(s => s.id == record.studentId);
+                if (student && student.kelas && kelasMap.has(student.kelas)) {
+                    kelasMap.get(student.kelas).hadir++;
                 }
             }
         });
         
-        const kelasStats = [];
-        for (let [nama, data] of kelasMap.entries()) {
+        // Hitung persentase
+        for (let [kelas, data] of kelasMap) {
             const persen = data.total > 0 ? (data.hadir / data.total) * 100 : 0;
-            kelasStats.push({ nama, persen: persen.toFixed(1), total: data.total, hadir: data.hadir });
+            kelasMap.set(kelas, { ...data, persen: persen.toFixed(1) });
         }
-        kelasStats.sort((a, b) => b.persen - a.persen);
-        
-        const classContainer = document.getElementById('classAttendanceList');
-        if (classContainer) {
-            if (kelasStats.length === 0) {
-                classContainer.innerHTML = '<div class="class-item">Belum ada data kelas</div>';
-            } else {
-                classContainer.innerHTML = kelasStats.map(k => `
-                    <div class="class-item">
-                        <div class="class-name"><span>${escapeHtmlMain(k.nama)}</span><span>${k.persen}%</span></div>
-                        <div class="progress-bar"><div class="progress-fill" style="width:${k.persen}%"></div></div>
-                        <div class="text-small" style="font-size:0.65rem; margin-top:4px;">${k.hadir}/${k.total} siswa</div>
-                    </div>
-                `).join('');
-            }
+    }
+    
+    // Urutkan berdasarkan persentase
+    const sortedKelas = Array.from(kelasMap.entries())
+        .sort((a, b) => parseFloat(b[1].persen) - parseFloat(a[1].persen));
+    
+    if (sortedKelas.length === 0) {
+        container.innerHTML = '<div class="class-item"><div class="class-name"><span>Belum ada data kelas</span><span>0%</span></div><div class="progress-bar"><div class="progress-fill" style="width:0%"></div></div></div>';
+        return;
+    }
+    
+    container.innerHTML = sortedKelas.map(([kelas, data]) => `
+        <div class="class-item">
+            <div class="class-name">
+                <span>${escapeHtmlMain(kelas)}</span>
+                <span>${data.persen}%</span>
+            </div>
+            <div class="progress-bar">
+                <div class="progress-fill" style="width:${data.persen}%"></div>
+            </div>
+            <div class="text-small" style="font-size:0.65rem; margin-top:4px;">
+                ${data.hadir}/${data.total} siswa
+            </div>
+        </div>
+    `).join('');
+}
+
+function renderRecentAttendanceForDashboard(attendance) {
+    const container = document.getElementById('recentAttendanceList');
+    if (!container) return;
+    
+    const sorted = [...attendance].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    const recent = sorted.slice(0, 5);
+    
+    if (recent.length === 0) {
+        container.innerHTML = '<div class="recent-item">Belum ada absensi hari ini</div>';
+        return;
+    }
+    
+    container.innerHTML = recent.map(r => `
+        <div class="recent-item">
+            <div class="recent-avatar">${r.status === 'Hadir' ? '✅' : (r.status === 'Pulang' ? '🏠' : '📝')}</div>
+            <div class="recent-info">
+                <div class="recent-name">${escapeHtmlMain(r.nama)}</div>
+                <div class="recent-time">${r.timeIn || r.timeOut || ''} • ${r.date}</div>
+            </div>
+        </div>
+    `).join('');
+}
+
+function updateDashboardRoleInfoUI() {
+    if (!currentUser) return;
+    
+    const infoContainer = document.getElementById('dashboardRoleInfo');
+    if (!infoContainer) {
+        // Create info container if not exists
+        const statsGrid = document.querySelector('.stats-grid');
+        if (statsGrid && !document.getElementById('dashboardRoleInfo')) {
+            const infoDiv = document.createElement('div');
+            infoDiv.id = 'dashboardRoleInfo';
+            infoDiv.style.cssText = 'margin-bottom: 15px; padding: 10px 15px; background: var(--bg-hover); border-radius: 12px; border-left: 4px solid #00bcd4;';
+            statsGrid.parentNode.insertBefore(infoDiv, statsGrid);
+        } else {
+            return;
         }
-        
-        // ========== Absensi Terbaru (5 data terakhir) ==========
-        const allAttendance = [...dbData.attendance];
-        allAttendance.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-        const recent = allAttendance.slice(0, 5);
-        
-        const recentContainer = document.getElementById('recentAttendanceList');
-        if (recentContainer) {
-            if (recent.length === 0) {
-                recentContainer.innerHTML = '<div class="recent-item">Belum ada absensi hari ini</div>';
-            } else {
-                recentContainer.innerHTML = recent.map(r => `
-                    <div class="recent-item">
-                        <div class="recent-avatar">👤</div>
-                        <div class="recent-info">
-                            <div class="recent-name">${escapeHtmlMain(r.nama)}</div>
-                            <div class="recent-time">${r.timeIn || r.timeOut || ''} • ${r.date}</div>
-                        </div>
-                    </div>
-                `).join('');
-            }
+    }
+    
+    const infoEl = document.getElementById('dashboardRoleInfo');
+    if (infoEl) {
+        if (currentUser.role === 'siswa') {
+            infoEl.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                    <span>👨‍🎓 <strong>Mode Siswa</strong></span>
+                    <span style="color: var(--text-muted);">|</span>
+                    <span>📚 Kelas: <strong>${currentUser.kelas || '-'}</strong></span>
+                    <span>🎓 Jurusan: <strong>${currentUser.jurusan || '-'}</strong></span>
+                    <span style="color: #00bcd4; font-size: 12px;">ℹ️ Dashboard hanya menampilkan data kelas Anda</span>
+                </div>
+            `;
+        } else if (currentUser.role === 'guru') {
+            infoEl.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                    <span>👨‍🏫 <strong>Mode Guru</strong></span>
+                    <span style="color: var(--text-muted);">|</span>
+                    <span>📚 Mata Pelajaran: <strong>${currentUser.subject || '-'}</strong></span>
+                    <span style="color: #00bcd4; font-size: 12px;">ℹ️ Dashboard menampilkan semua data siswa</span>
+                </div>
+            `;
+        } else if (currentUser.role === 'admin') {
+            infoEl.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                    <span>👑 <strong>Mode Administrator</strong></span>
+                    <span style="color: #00bcd4; font-size: 12px;">ℹ️ Dashboard menampilkan semua data siswa</span>
+                </div>
+            `;
+        } else if (currentUser.role === 'developer') {
+            infoEl.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                    <span>👨‍💻 <strong>Mode Developer</strong></span>
+                    <span style="color: #00bcd4; font-size: 12px;">ℹ️ Dashboard menampilkan semua data siswa</span>
+                </div>
+            `;
         }
-        
-        // ========== GRAFIK MINGGUAN: SERAHKAN KE UI.JS ==========
-        if (typeof window.updateDashboardChart === 'function') {
-            window.updateDashboardChart();
-        }
-        
-        console.log("✅ Dashboard modern updated with real data from dbData");
-        
-    } catch (err) {
-        console.error("Error updating dashboard modern:", err);
     }
 }
 
@@ -251,12 +474,15 @@ function initAuthStateHandler() {
                     await loadDashboardComponents();
                     if (typeof initApp === 'function') initApp();
                     
-                    if (window.dbData && window.dbData.attendance && window.dbData.attendance.length > 0) {
-                        console.log("📊 Data already ready, updating dashboard immediately");
+                    // Inisialisasi dashboard dengan filter role
+                    if (typeof initDashboard === 'function') {
+                        initDashboard();
+                    } else {
+                        // Fallback ke updateDashboardModern jika dashboard.js tidak ada
                         setTimeout(() => updateDashboardModern(), 100);
                     }
                     
-                    console.log("✅ Login successful for:", currentUser.nama);
+                    console.log("✅ Login successful for:", currentUser.nama, "Role:", currentUser.role);
                 } else {
                     console.warn("⚠️ User data not found!");
                     clearUserSession();
@@ -291,9 +517,7 @@ function setupDataReadyListener() {
     console.log("📡 Setting up dataReady event listener for dashboard updates");
     window.addEventListener('dataReady', (e) => {
         console.log("🔄 main.js: dataReady received, updating dashboard");
-        if (typeof updateDashboardModern === 'function') {
-            setTimeout(() => updateDashboardModern(), 100);
-        }
+        setTimeout(() => updateDashboardModern(), 100);
     });
 }
 
@@ -339,6 +563,8 @@ window.showDashboardScreen = showDashboardScreen;
 window.resetAppState = resetAppState;
 window.stopPeriodicRefresh = stopPeriodicRefresh;
 window.updateDashboardModern = updateDashboardModern;
+window.getFilteredStudentsForDashboard = getFilteredStudentsForDashboard;
+window.getFilteredAttendanceForDashboard = getFilteredAttendanceForDashboard;
 
 // ======================== AUTO INITIALIZATION ========================
 
@@ -357,4 +583,4 @@ function waitForFirebaseAndInit() {
 }
 
 waitForFirebaseAndInit();
-console.log("✅ main.js V5.1 loaded - Chart handling removed, delegated to ui.js");
+console.log("✅ main.js V5.2 loaded - Role-based dashboard filtering integrated");
