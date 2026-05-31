@@ -1,0 +1,396 @@
+/* ==================== CUSTOM STYLES ==================== */
+/* Style yang sebelumnya ada di <style> tag index.html */
+
+/* DROPDOWN MENU STYLES - Click to Open */
+.dropdown-navbar {
+    background: var(--bg-card);
+    border-bottom: 1px solid var(--border);
+    padding: 0 20px;
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.dropdown-menu-container {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding: 10px 0;
+}
+
+.dropdown {
+    position: relative;
+}
+
+.dropdown-btn {
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    padding: 10px 18px;
+    border-radius: 30px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-primary);
+    transition: all 0.2s;
+}
+
+.dropdown-btn:hover {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary);
+}
+
+.dropdown-content {
+    position: absolute;
+    top: 110%;
+    left: 0;
+    background: var(--bg-card);
+    min-width: 200px;
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+    z-index: 1001;
+    display: none;
+    border: 1px solid var(--border);
+}
+
+.dropdown-content.open {
+    display: block;
+}
+
+.dropdown-content button {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 18px;
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: none;
+    color: var(--text-primary);
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+.dropdown-content button:hover {
+    background: var(--primary);
+    color: white;
+}
+
+.dropdown-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 999;
+    display: none;
+}
+
+.dropdown-overlay.active {
+    display: block;
+}
+
+/* FLOATING BUTTONS */
+.floating-chat-btn, 
+.floating-friends-btn, 
+.floating-status-btn, 
+.floating-announcement-btn, 
+.floating-ai-summary-btn {
+    display: none !important;
+}
+
+/* AI ASSISTANT BUTTON */
+#aiAssistantBtn {
+    position: fixed;
+    bottom: 100px;
+    right: 20px;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #00bcd4, #2196f3);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+    z-index: 998;
+    border: none;
+    font-size: 28px;
+    transition: transform 0.2s;
+}
+
+#aiAssistantBtn:hover {
+    transform: scale(1.1);
+}
+
+/* AI CHAT MESSAGES */
+.ai-message {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.ai-message.ai-user {
+    flex-direction: row-reverse;
+}
+
+.ai-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #00bcd4, #2196f3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    flex-shrink: 0;
+}
+
+.ai-message.ai-user .ai-avatar {
+    background: var(--primary);
+}
+
+.ai-bubble {
+    background: var(--bg-hover);
+    padding: 10px 15px;
+    border-radius: 18px;
+    max-width: 80%;
+    line-height: 1.5;
+    white-space: pre-wrap;
+}
+
+.ai-message.ai-user .ai-bubble {
+    background: var(--primary);
+    color: white;
+}
+
+.typing-dot {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #888;
+    margin: 0 2px;
+    animation: typing 1.4s infinite both;
+}
+
+.typing-dot:nth-child(1) { animation-delay: -0.32s; }
+.typing-dot:nth-child(2) { animation-delay: -0.16s; }
+
+@keyframes typing {
+    0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); }
+    40% { opacity: 1; transform: scale(1.2); }
+}
+
+/* AI SUMMARY CARD STYLES */
+.ai-summary-card {
+    background: linear-gradient(135deg, #667eea, #764ba2) !important;
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+
+.ai-summary-card:hover {
+    transform: scale(1.02);
+}
+
+.ai-summary-card .stat-title-new,
+.ai-summary-card .stat-number,
+.ai-summary-card .stat-percent {
+    color: white !important;
+}
+
+.ai-summary-card .stat-number {
+    font-size: 1.2rem !important;
+}
+
+/* AI Summary Modal Content */
+.ai-summary-content {
+    line-height: 1.6;
+}
+
+.ai-summary-content h2 {
+    color: #667eea;
+    margin-top: 20px;
+    margin-bottom: 10px;
+}
+
+.ai-summary-content h3 {
+    color: #00bcd4;
+    margin-top: 15px;
+    margin-bottom: 8px;
+}
+
+.ai-summary-content ul {
+    margin: 8px 0 8px 20px;
+}
+
+.ai-summary-content li {
+    margin: 4px 0;
+}
+
+.loading-spinner {
+    display: inline-block;
+    width: 40px;
+    height: 40px;
+    border: 4px solid rgba(255,255,255,0.3);
+    border-radius: 50%;
+    border-top-color: #667eea;
+    animation: spin 1s ease-in-out infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Nav tabs disembunyikan */
+.nav-tabs {
+    display: none !important;
+}
+
+.header-bar {
+    margin-top: 0 !important;
+}
+
+.dashboard-role-info {
+    margin-bottom: 15px;
+    padding: 10px 15px;
+    background: var(--bg-hover);
+    border-radius: 12px;
+    border-left: 4px solid #00bcd4;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+/* Avatar styles */
+.student-avatar,
+.attendance-student-avatar,
+.rekap-student-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
+    transition: transform 0.2s, box-shadow 0.2s;
+    cursor: pointer;
+    border: 2px solid transparent;
+}
+
+.student-avatar:hover,
+.attendance-student-avatar:hover,
+.rekap-student-avatar:hover {
+    transform: scale(1.1);
+    box-shadow: 0 2px 12px rgba(0, 188, 212, 0.4);
+    border-color: #00bcd4;
+}
+
+.badge-account {
+    background: #4caf50;
+    color: white;
+    font-size: 9px;
+    padding: 2px 6px;
+    border-radius: 20px;
+    margin-left: 6px;
+    display: inline-block;
+    vertical-align: middle;
+}
+
+.badge-no-account {
+    background: #888;
+    color: white;
+    font-size: 9px;
+    padding: 2px 6px;
+    border-radius: 20px;
+    margin-left: 6px;
+    display: inline-block;
+    vertical-align: middle;
+}
+
+.navbar-right {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.navbar-user {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--bg-input);
+    padding: 5px 15px;
+    border-radius: 30px;
+}
+
+.navbar-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.navbar-logout {
+    background: #ef4444;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 30px;
+    color: white;
+    cursor: pointer;
+    font-weight: 500;
+}
+
+.navbar-logout:hover {
+    background: #dc2626;
+}
+
+/* Theme Toggle Button */
+#themeToggleBtn {
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    cursor: pointer;
+    padding: 8px 12px;
+    border-radius: 30px;
+    font-size: 1.2rem;
+    transition: all 0.2s;
+    min-width: 44px;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#themeToggleBtn:hover {
+    background: var(--primary);
+    transform: scale(1.05);
+}
+
+@media (max-width: 768px) {
+    .dropdown-navbar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .dropdown-menu-container {
+        justify-content: center;
+    }
+    .navbar-right {
+        justify-content: center;
+        padding-bottom: 10px;
+    }
+    #aiAssistantBtn {
+        bottom: 80px;
+        right: 15px;
+        width: 48px;
+        height: 48px;
+        font-size: 24px;
+    }
+}
