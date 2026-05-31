@@ -38,7 +38,7 @@
         /* DROPDOWN MENU STYLES - Click to Open */
         .dropdown-navbar {
             background: var(--bg-card);
-            border-bottom: 1px solid var(--border-color);
+            border-bottom: 1px solid var(--border);
             padding: 0 20px;
             position: sticky;
             top: 0;
@@ -62,8 +62,8 @@
         }
         
         .dropdown-btn {
-            background: var(--bg-secondary);
-            border: 1px solid var(--border-color);
+            background: var(--bg-input);
+            border: 1px solid var(--border);
             padding: 10px 18px;
             border-radius: 30px;
             font-size: 0.85rem;
@@ -77,9 +77,9 @@
         }
         
         .dropdown-btn:hover {
-            background: var(--primary-color);
+            background: var(--primary);
             color: white;
-            border-color: var(--primary-color);
+            border-color: var(--primary);
         }
         
         .dropdown-content {
@@ -89,11 +89,11 @@
             background: var(--bg-card);
             min-width: 200px;
             border-radius: 12px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            box-shadow: var(--shadow);
             overflow: hidden;
             z-index: 1001;
             display: none;
-            border: 1px solid var(--border-color);
+            border: 1px solid var(--border);
         }
         
         .dropdown-content.open {
@@ -116,7 +116,7 @@
         }
         
         .dropdown-content button:hover {
-            background: var(--primary-color);
+            background: var(--primary);
             color: white;
         }
         
@@ -251,22 +251,12 @@
             margin-bottom: 8px;
         }
         
-        .ai-summary-content h4 {
-            color: #ff9800;
-            margin-top: 12px;
-            margin-bottom: 6px;
-        }
-        
         .ai-summary-content ul {
             margin: 8px 0 8px 20px;
         }
         
         .ai-summary-content li {
             margin: 4px 0;
-        }
-        
-        .ai-summary-content strong {
-            color: #00bcd4;
         }
         
         .loading-spinner {
@@ -347,14 +337,6 @@
             vertical-align: middle;
         }
         
-        .rekap-per-siswa-container {
-            margin-top: 30px;
-            padding: 20px;
-            background: var(--bg-card);
-            border-radius: 20px;
-            border: 1px solid var(--border-color);
-        }
-        
         .navbar-right {
             display: flex;
             align-items: center;
@@ -365,7 +347,7 @@
             display: flex;
             align-items: center;
             gap: 10px;
-            background: var(--bg-secondary);
+            background: var(--bg-input);
             padding: 5px 15px;
             border-radius: 30px;
         }
@@ -393,8 +375,8 @@
         
         /* Theme Toggle Button */
         #themeToggleBtn {
-            background: var(--bg-secondary);
-            border: 1px solid var(--border-color);
+            background: var(--bg-input);
+            border: 1px solid var(--border);
             cursor: pointer;
             padding: 8px 12px;
             border-radius: 30px;
@@ -408,7 +390,7 @@
         }
         
         #themeToggleBtn:hover {
-            background: var(--primary-color);
+            background: var(--primary);
             transform: scale(1.05);
         }
         
@@ -424,20 +406,6 @@
         
         .dropdown-overlay.active {
             display: block;
-        }
-        
-        body.light-mode .dropdown-content {
-            background: #ffffff;
-            border-color: #e2e8f0;
-        }
-        
-        body.light-mode .dropdown-btn {
-            background: #f1f5f9;
-        }
-        
-        body.light-mode #themeToggleBtn {
-            background: #f1f5f9;
-            border-color: #e2e8f0;
         }
         
         @media (max-width: 768px) {
@@ -667,21 +635,21 @@
                 </div>
             </div>
             <div class="chart-container" style="margin-bottom:20px;"><div style="background:var(--bg-card); border-radius:20px; padding:15px;"><h4 style="margin:0 0 10px 0;">📊 Ringkasan Hari Ini</h4><div style="max-width:250px; margin:0 auto;"><canvas id="attendanceDonutChart" style="max-height:200px;"></canvas></div><div id="todayStatsText" class="text-small text-center" style="margin-top:10px;"></div></div></div>
-            <div class="table-container"><table><thead><tr><th>Foto</th><th>Waktu</th><th>ID FP</th><th>Nama</th><th>Kelas</th><th>Jurusan</th><th>Status</th><th>Aksi</th></tr></thead><tbody id="tbody-attendance"><tr><td colspan="8">Memuat数据...快</td></tr></tbody></table></div>
+            <div class="table-container"><table><thead><tr><th>Foto</th><th>Waktu</th><th>ID FP</th><th>Nama</th><th>Kelas</th><th>Jurusan</th><th>Status</th><th>Aksi</th></tr></thead><tbody id="tbody-attendance"><tr><td colspan="8">Memuat data...<\/td><\/tr></tbody></table></div>
         </div>
 
         <!-- TAB STUDENTS -->
         <div id="tab-students" class="tab-content">
             <div class="controls-bar"><div style="display:flex; gap:10px; flex-wrap:wrap; width:100%;"><input type="hidden" id="editMode" value="add"><div class="filter-group"><label>ID FP:</label><input type="number" id="newId" placeholder="ID" style="width:80px;"></div><div class="filter-group"><label>Nama:</label><input type="text" id="newNama" placeholder="Nama Siswa" style="width:200px;"></div><div class="filter-group"><label>Kelas:</label><select id="newKelas"></select></div><div class="filter-group"><label>Jurusan:</label><select id="newJurusan"></select></div><div class="filter-group"><label>Delay:</label><select id="delayUnit"><option value="minutes">Menit</option><option value="hours">Jam</option></select></div><div class="filter-group" id="delayMinutesGroup"><input type="number" id="delayMinutesValue" value="60" style="width:70px;"><span>menit</span></div><div class="filter-group" id="delayHoursGroup" style="display:none;"><select id="delayHoursValue"></select><span>jam</span></div><input type="hidden" id="newDelay" value="60"><button class="btn-action role-guru role-admin" id="btnSaveStudent" onclick="saveStudent()">➕ Simpan Siswa</button><button class="btn-action btn-danger hidden role-guru role-admin" id="btnCancelStudent" onclick="resetStudentForm()">Batal</button></div></div>
             <div class="controls-bar"><div class="filter-group"><label>Kelas:</label><select id="filterStudentKelas" onchange="renderStudentsTable()"><option value="all">Semua</option></select></div><div class="filter-group"><label>Jurusan:</label><select id="filterStudentJurusan" onchange="renderStudentsTable()"><option value="all">Semua</option></select></div><div class="search-box"><input type="text" id="searchStudentName" placeholder="🔍 Cari nama siswa..." oninput="renderStudentsTable()"></div></div>
-            <div class="table-container"><table><thead><tr><th>Foto</th><th>ID FP</th><th>Nama</th><th>Kelas</th><th>Jurusan</th><th>Delay</th><th>Aksi</th></tr></thead><tbody id="tbody-students"><tr><td colspan="7">Memuat数据...</td></tr></tbody></table></div>
+            <div class="table-container"><table><thead><tr><th>Foto</th><th>ID FP</th><th>Nama</th><th>Kelas</th><th>Jurusan</th><th>Delay</th><th>Aksi</th></tr></thead><tbody id="tbody-students"><tr><td colspan="7">Memuat data...<\/td><\/tr></tbody></table></div>
         </div>
 
         <!-- TAB USERS -->
-        <div id="tab-users" class="tab-content role-admin role-guru"><div class="controls-bar"><h4>🔑 Generate Kode Pendaftaran</h4></div><div class="key-box role-admin role-guru"><div style="flex:1;"><div style="margin-bottom:10px;"><label><input type="radio" name="genTarget" value="siswa" checked onchange="toggleGenerateInput()"> 👨‍🎓 Untuk Siswa</label><label><input type="radio" name="genTarget" value="guru" onchange="toggleGenerateInput()"> 👨‍🏫 Untuk Guru</label></div><div id="group-select-siswa"><select id="selectStudentForCode"><option value="">-- Pilih Siswa --</option></select></div><small class="text-small" id="gen-desc">🔒 Kode akan dikunci ke ID Siswa terpilih.</small></div><button class="btn-action btn-secondary" onclick="generateRegistrationCode()">✨ Generate Kode</button></div><div id="generatedKeyDisplay" style="display:none;"></div><h4 class="role-admin role-guru">📋 Daftar Kode Aktif</h4><div class="table-container role-admin role-guru"><table><thead><tr><th>Kode</th><th>Status</th><th>Dibuat</th><th>Pengguna</th><th>Aksi</th></tr></thead><tbody id="tbody-codes"></tbody></table></div><div class="controls-bar role-admin role-guru"><h4>👥 Daftar Pengguna</h4><div class="search-box"><input type="text" id="searchUser" placeholder="🔍 Cari user..." oninput="renderUsersTable()"></div></div><div class="table-container role-admin role-guru"><table><thead><tr><th>Foto</th><th>Nama</th><th>Email</th><th>Role</th><th>Detail</th><th>Aksi</th></tr></thead><tbody id="tbody-users"></tbody></table></div></div>
+        <div id="tab-users" class="tab-content role-admin role-guru"><div class="controls-bar"><h4>🔑 Generate Kode Pendaftaran</h4></div><div class="key-box role-admin role-guru"><div style="flex:1;"><div style="margin-bottom:10px;"><label><input type="radio" name="genTarget" value="siswa" checked onchange="toggleGenerateInput()"> 👨‍🎓 Untuk Siswa</label><label><input type="radio" name="genTarget" value="guru" onchange="toggleGenerateInput()"> 👨‍🏫 Untuk Guru</label></div><div id="group-select-siswa"><select id="selectStudentForCode"><option value="">-- Pilih Siswa --</option></select></div><small class="text-small" id="gen-desc">🔒 Kode akan dikunci ke ID Siswa terpilih.</small></div><button class="btn-action btn-secondary" onclick="generateRegistrationCode()">✨ Generate Kode</button></div><div id="generatedKeyDisplay" style="display:none;"></div><h4 class="role-admin role-guru">📋 Daftar Kode Aktif</h4><div class="table-container role-admin role-guru"></table><thead><tr><th>Kode</th><th>Status</th><th>Dibuat</th><th>Pengguna</th><th>Aksi</th></tr></thead><tbody id="tbody-codes"></tbody></table></div><div class="controls-bar role-admin role-guru"><h4>👥 Daftar Pengguna</h4><div class="search-box"><input type="text" id="searchUser" placeholder="🔍 Cari user..." oninput="renderUsersTable()"></div></div><div class="table-container role-admin role-guru"><table><thead><tr><th>Foto</th><th>Nama</th><th>Email</th><th>Role</th><th>Detail</th><th>Aksi</th></tr></thead><tbody id="tbody-users"></tbody></table></div></div>
 
         <!-- TAB REKAP -->
-        <div id="tab-rekap" class="tab-content"><div class="controls-bar"><div class="filter-group"><label>📅 Periode:</label><select id="rekapPeriod" onchange="loadRekap()"><option value="minggu">Minggu Ini</option><option value="bulan">Bulan Ini</option><option value="semester">Semester Ini</option><option value="custom">Custom Range</option></select></div><div id="customRangeGroup" style="display:none; gap:10px;"><input type="date" id="rekapStartDate"><span>s/d</span><input type="date" id="rekapEndDate"></div><div style="margin-left:auto; display:flex; gap:10px;"><button class="btn-action btn-success" onclick="exportRekapToExcel()">📥 Excel</button><button class="btn-action btn-primary" onclick="exportRekapToPDF()">📄 PDF</button></div></div><div class="chart-container" style="margin-bottom:25px;"><div style="display:flex; flex-wrap:wrap; gap:20px;"><div style="flex:1; min-width:250px;"><canvas id="rekapPieChart" style="max-height:300px;"></canvas><p class="text-small text-center">Distribusi Status</p></div><div style="flex:2; min-width:300px;"><canvas id="rekapBarChart" style="max-height:300px;"></canvas><p class="text-small text-center">Absensi per Hari</p></div></div></div><div class="table-container"><table><thead><tr><th>No</th><th>ID FP</th><th>Nama</th><th>Kelas</th><th>Jurusan</th><th>Total Hari</th><th>Hadir</th><th>Sakit</th><th>Izin</th><th>Alpha</th><th>Persentase</th><th>Status</th></tr></thead><tbody id="rekapTbody"><tr><td colspan="12">Memuat数据...<\/td><\/tr></tbody></table></div><div class="rekap-per-siswa-container" id="rekapPerSiswaContainer" style="margin-top:30px; display:none;"><div class="section-title" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:20px;"><span>📋 Detail Rekap Per Siswa</span><div style="display:flex; gap:10px;"><button class="btn-action btn-success" onclick="exportCurrentRekapPerSiswaToExcel()">📥 Export Excel</button><button class="btn-action btn-primary" onclick="exportCurrentRekapPerSiswaToPDF()">📄 Export PDF</button></div></div><div class="rekap-per-siswa-select-wrapper"><select id="rekapPerSiswaSelect"><option value="">-- Pilih Siswa --</option></select></div><div class="rekap-per-siswa-period-wrapper"><div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;"><label style="font-weight:500;">📅 Periode:</label><select id="rekapPerSiswaPeriod"><option value="minggu">📆 Minggu Ini</option><option value="bulan">📅 Bulan Ini</option><option value="semester">📚 Semester Ini</option><option value="tahun">🗓️ Tahun Ini</option><option value="pertama">⭐ Pertama Kali Absensi</option><option value="custom">📅 Custom Range</option></select><div id="rekapPerSiswaCustomRange" style="display:none; gap:10px; align-items:center; flex-wrap:wrap;"><input type="date" id="rekapPerSiswaStartDate"><span>s/d</span><input type="date" id="rekapPerSiswaEndDate"></div><button class="btn-action btn-primary" onclick="loadRekapPerSiswa()">🔍 Tampilkan Rekap</button></div></div><div id="rekapPerSiswaPeriodLabel" class="text-small" style="margin-bottom:15px; color:var(--text-muted); text-align:center;"></div><div id="rekapPerSiswaContent"><div style="text-align:center; padding:40px; color:var(--text-muted);">👈 Pilih siswa, pilih periode, lalu klik "Tampilkan Rekap" untuk melihat detail absensi per siswa</div></div></div></div>
+        <div id="tab-rekap" class="tab-content"><div class="controls-bar"><div class="filter-group"><label>📅 Periode:</label><select id="rekapPeriod" onchange="loadRekap()"><option value="minggu">Minggu Ini</option><option value="bulan">Bulan Ini</option><option value="semester">Semester Ini</option><option value="custom">Custom Range</option></select></div><div id="customRangeGroup" style="display:none; gap:10px;"><input type="date" id="rekapStartDate"><span>s/d</span><input type="date" id="rekapEndDate"></div><div style="margin-left:auto; display:flex; gap:10px;"><button class="btn-action btn-success" onclick="exportRekapToExcel()">📥 Excel</button><button class="btn-action btn-primary" onclick="exportRekapToPDF()">📄 PDF</button></div></div><div class="chart-container" style="margin-bottom:25px;"><div style="display:flex; flex-wrap:wrap; gap:20px;"><div style="flex:1; min-width:250px;"><canvas id="rekapPieChart" style="max-height:300px;"></canvas><p class="text-small text-center">Distribusi Status</p></div><div style="flex:2; min-width:300px;"><canvas id="rekapBarChart" style="max-height:300px;"></canvas><p class="text-small text-center">Absensi per Hari</p></div></div></div><div class="table-container"><table><thead><tr><th>No</th><th>ID FP</th><th>Nama</th><th>Kelas</th><th>Jurusan</th><th>Total Hari</th><th>Hadir</th><th>Sakit</th><th>Izin</th><th>Alpha</th><th>Persentase</th><th>Status</th></tr></thead><tbody id="rekapTbody"><tr><td colspan="12">Memuat data...<\/td><\/tr></tbody></table></div><div class="rekap-per-siswa-container" id="rekapPerSiswaContainer" style="margin-top:30px; display:none;"><div class="section-title" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:20px;"><span>📋 Detail Rekap Per Siswa</span><div style="display:flex; gap:10px;"><button class="btn-action btn-success" onclick="exportCurrentRekapPerSiswaToExcel()">📥 Export Excel</button><button class="btn-action btn-primary" onclick="exportCurrentRekapPerSiswaToPDF()">📄 Export PDF</button></div></div><div class="rekap-per-siswa-select-wrapper"><select id="rekapPerSiswaSelect"><option value="">-- Pilih Siswa --</option></select></div><div class="rekap-per-siswa-period-wrapper"><div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;"><label style="font-weight:500;">📅 Periode:</label><select id="rekapPerSiswaPeriod"><option value="minggu">📆 Minggu Ini</option><option value="bulan">📅 Bulan Ini</option><option value="semester">📚 Semester Ini</option><option value="tahun">🗓️ Tahun Ini</option><option value="pertama">⭐ Pertama Kali Absensi</option><option value="custom">📅 Custom Range</option></select><div id="rekapPerSiswaCustomRange" style="display:none; gap:10px; align-items:center; flex-wrap:wrap;"><input type="date" id="rekapPerSiswaStartDate"><span>s/d</span><input type="date" id="rekapPerSiswaEndDate"></div><button class="btn-action btn-primary" onclick="loadRekapPerSiswa()">🔍 Tampilkan Rekap</button></div></div><div id="rekapPerSiswaPeriodLabel" class="text-small" style="margin-bottom:15px; color:var(--text-muted); text-align:center;"></div><div id="rekapPerSiswaContent"><div style="text-align:center; padding:40px; color:var(--text-muted);">👈 Pilih siswa, pilih periode, lalu klik "Tampilkan Rekap" untuk melihat detail absensi per siswa</div></div></div></div>
 
         <!-- TAB FRIENDS -->
         <div id="tab-friends" class="tab-content">
@@ -850,44 +818,59 @@
     <script src="js/ai-assistant.js"></script>
 
     <script>
-        // ======================== THEME TOGGLE ========================
+        // ======================== THEME TOGGLE - DIAMBIL DARI main.js ========================
+        // Fungsi ini akan di-override oleh main.js, tapi sebagai fallback
+        
         function initTheme() {
-            const savedTheme = localStorage.getItem('theme') || 'dark';
+            var savedTheme = localStorage.getItem('theme') || 'dark';
             applyTheme(savedTheme);
             
-            const themeToggleBtn = document.getElementById('themeToggleBtn');
+            var themeToggleBtn = document.getElementById('themeToggleBtn');
             if (themeToggleBtn) {
-                const newToggleBtn = themeToggleBtn.cloneNode(true);
+                // Hapus event listener lama
+                var newToggleBtn = themeToggleBtn.cloneNode(true);
                 themeToggleBtn.parentNode.replaceChild(newToggleBtn, themeToggleBtn);
                 
                 newToggleBtn.addEventListener('click', function(e) {
                     e.preventDefault();
-                    const currentTheme = document.body.classList.contains('light-mode') ? 'light' : 'dark';
-                    const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+                    var currentTheme = document.body.classList.contains('light-mode') ? 'light' : 'dark';
+                    var newTheme = currentTheme === 'light' ? 'dark' : 'light';
                     applyTheme(newTheme);
                 });
             }
         }
         
         function applyTheme(theme) {
-            const isLight = theme === 'light';
-            const toggleBtn = document.getElementById('themeToggleBtn');
+            var isLight = theme === 'light';
+            var toggleBtn = document.getElementById('themeToggleBtn');
             
             if (isLight) {
                 document.body.classList.add('light-mode');
                 if (toggleBtn) toggleBtn.innerHTML = '☀️';
+                console.log("🌞 Light mode activated (via inline script)");
             } else {
                 document.body.classList.remove('light-mode');
                 if (toggleBtn) toggleBtn.innerHTML = '🌙';
+                console.log("🌙 Dark mode activated (via inline script)");
             }
             
             localStorage.setItem('theme', theme);
             
-            if (typeof updateDashboardChart === 'function') setTimeout(updateDashboardChart, 100);
-            if (typeof updateAttendanceDonutChart === 'function') updateAttendanceDonutChart();
-            if (typeof loadRekap === 'function' && document.getElementById('tab-rekap')?.classList.contains('active')) loadRekap();
+            // Refresh charts jika ada
+            setTimeout(function() {
+                if (typeof window.updateDashboardChart === 'function') {
+                    window.updateDashboardChart();
+                }
+                if (typeof window.updateAttendanceDonutChart === 'function') {
+                    window.updateAttendanceDonutChart();
+                }
+                if (typeof window.loadRekap === 'function' && document.getElementById('tab-rekap') && document.getElementById('tab-rekap').classList.contains('active')) {
+                    window.loadRekap();
+                }
+            }, 100);
         }
         
+        // ======================== DROPDOWN FUNCTIONS ========================
         function toggleDropdown(dropdownId) {
             var dropdown = document.getElementById(dropdownId);
             var content = dropdown.querySelector('.dropdown-content');
@@ -900,7 +883,7 @@
         }
         
         function closeAllDropdowns() {
-            document.querySelectorAll('.dropdown-content').forEach(c => c.classList.remove('open'));
+            document.querySelectorAll('.dropdown-content').forEach(function(c) { c.classList.remove('open'); });
             document.getElementById('dropdownOverlay').classList.remove('active');
         }
         
@@ -909,70 +892,72 @@
         function renderFullAnnouncementList() {
             var container = document.getElementById('fullAnnouncementList');
             if (!container) return;
-            db.ref('announcements/active').once('value', (snapshot) => {
+            db.ref('announcements/active').once('value', function(snapshot) {
                 var data = snapshot.val();
                 if (!data) { container.innerHTML = '<div style="text-align:center; padding:40px;">📭 Belum ada pengumuman</div>'; return; }
-                var announcements = Object.keys(data).map(key => ({ id: key, ...data[key] }));
-                announcements.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+                var announcements = Object.keys(data).map(function(key) { return { id: key, ...data[key] }; });
+                announcements.sort(function(a, b) { return (b.createdAt || 0) - (a.createdAt || 0); });
                 var html = '<div style="display:flex; flex-direction:column; gap:15px;">';
-                announcements.forEach(ann => {
+                announcements.forEach(function(ann) {
                     var priorityClass = ann.priority === 'high' ? 'announcement-high' : (ann.priority === 'low' ? 'announcement-low' : 'announcement-normal');
                     var createdDate = ann.createdAt ? new Date(ann.createdAt).toLocaleString('id-ID') : '-';
                     var expiryInfo = '';
-                    if (ann.expiryDate) expiryInfo += `📅 Berakhir: ${ann.expiryDate}`;
-                    if (ann.expiryTime) expiryInfo += ` ${ann.expiryTime}`;
+                    if (ann.expiryDate) expiryInfo += '📅 Berakhir: ' + ann.expiryDate;
+                    if (ann.expiryTime) expiryInfo += ' ' + ann.expiryTime;
                     if (!expiryInfo) expiryInfo = '⏰ Tidak terbatas';
                     var imageHtml = '';
                     if (ann.imageUrl && ann.imageUrl !== 'null' && ann.imageUrl !== 'undefined') {
-                        imageHtml = `<div style="margin-top:10px;"><img src="${ann.imageUrl}" style="max-width:100%; max-height:150px; border-radius:12px; cursor:pointer; object-fit:cover;" onclick="viewAnnouncementImage('${ann.imageUrl}')" onerror="this.style.display='none'"></div>`;
+                        imageHtml = '<div style="margin-top:10px;"><img src="' + ann.imageUrl + '" style="max-width:100%; max-height:150px; border-radius:12px; cursor:pointer; object-fit:cover;" onclick="viewAnnouncementImage(\'' + ann.imageUrl + '\')" onerror="this.style.display=\'none\'"></div>';
                     }
-                    html += `<div class="announcement-item ${priorityClass}" style="padding:15px; border-radius:12px; background:var(--bg-hover);">
-                        <div class="announcement-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:10px;">
-                            <span class="announcement-title" style="font-weight:bold; font-size:1.1rem;">📢 ${escapeHtml(ann.title)}</span>
-                            <div style="display:flex; gap:8px;"><button class="btn-icon" onclick="editAnnouncement('${ann.id}')" title="Edit">✏️</button><button class="btn-icon delete" onclick="deleteAnnouncement('${ann.id}')" title="Hapus">🗑️</button></div>
-                        </div>
-                        <div class="announcement-message" style="margin-bottom:10px;">${escapeHtml(ann.message)}</div>
-                        ${imageHtml}
-                        <div class="announcement-footer" style="font-size:0.7rem; color:var(--text-muted); display:flex; gap:15px; flex-wrap:wrap; margin-top:10px;">
-                            <span>👤 ${escapeHtml(ann.createdBy || 'Admin')}</span>
-                            <span>📅 ${createdDate}</span>
-                            <span>${expiryInfo}</span>
-                            <span>${ann.priority === 'high' ? '🔴 Penting' : (ann.priority === 'low' ? '🔵 Rendah' : '🟢 Normal')}</span>
-                        </div>
-                    </div>`;
+                    html += '<div class="announcement-item ' + priorityClass + '" style="padding:15px; border-radius:12px; background:var(--bg-hover);">' +
+                        '<div class="announcement-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:10px;">' +
+                            '<span class="announcement-title" style="font-weight:bold; font-size:1.1rem;">📢 ' + escapeHtml(ann.title) + '</span>' +
+                            '<div style="display:flex; gap:8px;"><button class="btn-icon" onclick="editAnnouncement(\'' + ann.id + '\')" title="Edit">✏️</button><button class="btn-icon delete" onclick="deleteAnnouncement(\'' + ann.id + '\')" title="Hapus">🗑️</button></div>' +
+                        '</div>' +
+                        '<div class="announcement-message" style="margin-bottom:10px;">' + escapeHtml(ann.message) + '</div>' +
+                        imageHtml +
+                        '<div class="announcement-footer" style="font-size:0.7rem; color:var(--text-muted); display:flex; gap:15px; flex-wrap:wrap; margin-top:10px;">' +
+                            '<span>👤 ' + escapeHtml(ann.createdBy || 'Admin') + '</span>' +
+                            '<span>📅 ' + createdDate + '</span>' +
+                            '<span>' + expiryInfo + '</span>' +
+                            '<span>' + (ann.priority === 'high' ? '🔴 Penting' : (ann.priority === 'low' ? '🔵 Rendah' : '🟢 Normal')) + '</span>' +
+                        '</div>' +
+                    '</div>';
                 });
                 html += '</div>';
                 container.innerHTML = html;
             });
         }
         
-        function escapeHtml(str) { if (!str) return ''; return str.replace(/[&<>]/g, m => m === '&' ? '&amp;' : m === '<' ? '&lt;' : '&gt;'); }
+        function escapeHtml(str) { if (!str) return ''; return str.replace(/[&<>]/g, function(m) { return m === '&' ? '&amp;' : m === '<' ? '&lt;' : '&gt;'; }); }
         
         var originalSwitchTab = window.switchTab;
         if (originalSwitchTab) {
             window.switchTab = function(tabId) {
                 originalSwitchTab(tabId);
                 if (tabId === 'announcement_list') { setTimeout(renderFullAnnouncementList, 100); }
-                if (tabId === 'chat') { setTimeout(() => { if (typeof forceRenderChat === 'function') forceRenderChat(); }, 100); }
-                if (tabId === 'friends') { setTimeout(() => { if (typeof loadFriendRequests === 'function') loadFriendRequests(); if (typeof loadFriendsList === 'function') loadFriendsList(); }, 100); }
+                if (tabId === 'chat') { setTimeout(function() { if (typeof forceRenderChat === 'function') forceRenderChat(); }, 100); }
+                if (tabId === 'friends') { setTimeout(function() { if (typeof loadFriendRequests === 'function') loadFriendRequests(); if (typeof loadFriendsList === 'function') loadFriendsList(); }, 100); }
             };
         }
         
-        // Close AI Assistant Modal
         function closeAIAssistantModal() {
-            const modal = document.getElementById('modal-ai-assistant');
+            var modal = document.getElementById('modal-ai-assistant');
             if (modal) modal.classList.remove('open');
             if (typeof window.closeAIAssistantModal === 'function') window.closeAIAssistantModal();
         }
         
+        // ======================== DOM READY ========================
         document.addEventListener('DOMContentLoaded', function() {
             console.log("DOM Ready - Initializing...");
             
+            // Inisialisasi dropdown hours
             var dh = document.getElementById('delayHoursValue');
             if(dh && dh.children.length===0) for(var i=1;i<=24;i++) dh.innerHTML+='<option value="'+i+'">'+i+' Jam</option>';
             var gh = document.getElementById('globalDelayHoursValue');
             if(gh && gh.children.length===0) for(var j=1;j<=24;j++) gh.innerHTML+='<option value="'+j+'">'+j+'</option>';
             
+            // Event listeners untuk delay inputs
             var dm = document.getElementById('delayMinutesValue');
             if(dm && !dm._listenerAdded) { dm.addEventListener('input',function(){var h=document.getElementById('newDelay');if(h)h.value=this.value;}); dm._listenerAdded=true; }
             var dh2 = document.getElementById('delayHoursValue');
@@ -987,6 +972,7 @@
             if(gdu && !gdu._listenerAdded) { gdu.addEventListener('change',function(){if(typeof toggleGlobalDelayInput==='function') toggleGlobalDelayInput();}); gdu._listenerAdded=true; }
             setTimeout(function(){ if(typeof toggleDelayInput==='function') toggleDelayInput(); if(typeof toggleGlobalDelayInput==='function') toggleGlobalDelayInput(); },100);
             
+            // Rekap custom range
             var periodSelect=document.getElementById('rekapPeriod'), customRangeGroup=document.getElementById('customRangeGroup');
             if(periodSelect && customRangeGroup) {
                 var today=new Date(), startDate=new Date(); startDate.setDate(today.getDate()-30);
@@ -996,9 +982,14 @@
                 function toggleCustomRange(){ customRangeGroup.style.display=periodSelect.value==='custom'?'flex':'none'; }
                 periodSelect.addEventListener('change',toggleCustomRange); toggleCustomRange();
             }
-
-            initTheme();
             
+            // Inisialisasi tema - akan dijalankan, tapi main.js juga akan menjalankan
+            // Kita panggil setelah delay kecil untuk memastikan DOM siap
+            setTimeout(function() {
+                initTheme();
+            }, 50);
+            
+            // Inisialisasi modul lain
             setTimeout(function() {
                 if (typeof initRekapPerSiswa === 'function') { initRekapPerSiswa(); console.log("✅ Rekap per Siswa initialized"); }
                 if (typeof initAISummary === 'function') { initAISummary(); console.log("✅ AI Summary initialized"); }
@@ -1009,6 +1000,7 @@
             }, 1500);
         });
         
+        // ======================== GLOBAL FUNCTIONS ========================
         function showToast(msg,type){ var t=document.getElementById('toast'); if(t){ t.textContent=msg; t.style.borderLeftColor=type==='error'?'#f44336':'#00bcd4'; t.className='toast show'; setTimeout(function(){ t.className=t.className.replace('show',''); },3000); } }
         function closeModal(id){ var m=document.getElementById(id); if(m) m.classList.remove('open'); }
         function toggleFriendsModal() { var modal = document.getElementById('modal-friends'); if(modal) { modal.classList.add('open'); if(typeof renderFriendsPanel === 'function') renderFriendsPanel(); } }
