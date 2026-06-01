@@ -1,7 +1,9 @@
-// main.js - VERSION 5.2 (DENGAN ROLE-BASED DASHBOARD)
+// main.js - VERSION 5.3 (DENGAN ROLE-BASED DASHBOARD & THEME MANAGEMENT)
 // Fokus: Session persistence, Auth state handler, Periodic refresh,
 //        Dashboard dengan filter berdasarkan role (siswa hanya lihat kelasnya sendiri)
-// PERUBAHAN V5.2: 
+//        Theme management dark/light mode
+// PERUBAHAN V5.3: 
+//   - Menambahkan fitur Dark/Light Mode
 //   - Integrasi dengan dashboard.js untuk role-based filtering
 //   - Siswa hanya melihat data kelas dan jurusannya sendiri
 //   - Guru/Admin/Developer melihat semua data
@@ -554,6 +556,166 @@ function resetAppState() {
     console.log("✅ App state reset complete");
 }
 
+// ======================== THEME MANAGEMENT (DARK/LIGHT MODE) ========================
+
+/**
+ * Inisialisasi tema (dark/light mode)
+ * - Membaca preferensi dari localStorage
+ * - Menerapkan tema yang sesuai
+ * - Menambahkan event listener ke tombol toggle
+ */
+function initTheme() {
+    console.log("🎨 Initializing theme system...");
+    
+    // Baca tema yang tersimpan, default ke 'dark'
+    const savedTheme = localStorage.getItem('theme') || 'dark';
+    
+    // Terapkan tema
+    applyTheme(savedTheme);
+    
+    // Setup tombol toggle tema
+    const themeToggleBtn = document.getElementById('themeToggleBtn');
+    if (themeToggleBtn) {
+        // Hapus event listener lama jika ada (untuk mencegah duplikasi)
+        const newToggleBtn = themeToggleBtn.cloneNode(true);
+        themeToggleBtn.parentNode.replaceChild(newToggleBtn, themeToggleBtn);
+        
+        // Tambah event listener baru
+        newToggleBtn.addEventListener('click', () => {
+            const currentTheme = document.body.classList.contains('light-mode') ? 'light' : 'dark';
+            const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+            applyTheme(newTheme);
+        });
+        
+        console.log("✅ Theme toggle button initialized");
+    } else {
+        console.warn("⚠️ Theme toggle button not found");
+    }
+}
+
+/**
+ * Menerapkan tema ke seluruh halaman
+ * @param {string} theme - 'dark' atau 'light'
+ */
+function applyTheme(theme) {
+    const isLight = theme === 'light';
+    const toggleBtn = document.getElementById('themeToggleBtn');
+    
+    // Terapkan class ke body
+    if (isLight) {
+        document.body.classList.add('light-mode');
+        if (toggleBtn) toggleBtn.innerHTML = '☀️';
+        console.log("🌞 Light mode activated");
+    } else {
+        document.body.classList.remove('light-mode');
+        if (toggleBtn) toggleBtn.innerHTML = '🌙';
+        console.log("🌙 Dark mode activated");
+    }
+    
+    // Simpan ke localStorage
+    localStorage.setItem('theme', theme);
+    
+    // Update komponen yang membutuhkan refresh tema
+    refreshThemeDependentComponents();
+}
+
+/**
+ * Refresh komponen yang bergantung pada tema (chart, dll)
+ */
+function refreshThemeDependentComponents() {
+    // Update dashboard chart jika ada
+    if (typeof updateDashboardChart === 'function') {
+        setTimeout(() => {
+            try {
+                updateDashboardChart();
+                console.log("📊 Dashboard chart refreshed for theme change");
+            } catch(e) {
+                console.warn("Failed to refresh dashboard chart:", e);
+            }
+        }, 100);
+    }
+    
+    // Update attendance donut chart jika ada
+    if (typeof updateAttendanceDonutChart === 'function') {
+        setTimeout(() => {
+            try {
+                updateAttendanceDonutChart();
+                console.log("🍩 Attendance donut chart refreshed for theme change");
+            } catch(e) {
+                console.warn("Failed to refresh attendance donut chart:", e);
+            }
+        }, 150);
+    }
+    
+    // Update rekap charts jika tab rekap aktif
+    if (typeof loadRekap === 'function' && document.getElementById('tab-rekap')?.classList.contains('active')) {
+        setTimeout(() => {
+            try {
+                loadRekap();
+                console.log("📊 Rekap charts refreshed for theme change");
+            } catch(e) {
+                console.warn("Failed to refresh rekap charts:", e);
+            }
+        }, 200);
+    }
+    
+    // Update weekly chart jika ada
+    const weeklyChartCanvas = document.getElementById('weeklyBarChart');
+    if (weeklyChartCanvas && window.dashboardChart) {
+        // Chart akan otomatis update dengan warna baru karena menggunakan CSS variables
+        console.log("📈 Weekly chart will use new theme colors");
+    }
+    
+    // Update sensor status panel jika ada
+    const sensorPanel = document.getElementById('sensorStatusPanel');
+    if (sensorPanel && sensorPanel.style.display !== 'none') {
+        if (typeof refreshSensorStatus === 'function') {
+            setTimeout(() => {
+                try {
+                    refreshSensorStatus();
+                    console.log("🔍 Sensor status refreshed for theme change");
+                } catch(e) {
+                    console.warn("Failed to refresh sensor status:", e);
+                }
+            }, 300);
+        }
+    }
+}
+
+/**
+ * Mendapatkan tema saat ini
+ * @returns {string} 'dark' atau 'light'
+ */
+function getCurrentTheme() {
+    return document.body.classList.contains('light-mode') ? 'light' : 'dark';
+}
+
+/**
+ * Toggle tema secara manual (alternatif)
+ */
+function toggleTheme() {
+    const currentTheme = getCurrentTheme();
+    const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+    applyTheme(newTheme);
+}
+
+/**
+ * Mendapatkan warna chart berdasarkan tema aktif
+ * @returns {object} Warna untuk chart
+ */
+function getChartColorsByTheme() {
+    const isLight = document.body.classList.contains('light-mode');
+    return {
+        gridColor: isLight ? '#e0e0e0' : '#333333',
+        tickColor: isLight ? '#666666' : '#cccccc',
+        labelColor: isLight ? '#333333' : '#ffffff',
+        tooltipBackground: isLight ? 'rgba(255,255,255,0.9)' : 'rgba(0,0,0,0.8)',
+        tooltipColor: isLight ? '#333333' : '#ffffff',
+        backgroundColor: isLight ? '#ffffff' : '#1a1d24',
+        borderColor: isLight ? '#e2e8f0' : '#2a2e3a'
+    };
+}
+
 // ======================== EKSPOR KE GLOBAL ========================
 window.forceRefreshAllData = forceRefreshAllData;
 window.saveUserToLocalStorage = saveUserToLocalStorage;
@@ -566,6 +728,14 @@ window.updateDashboardModern = updateDashboardModern;
 window.getFilteredStudentsForDashboard = getFilteredStudentsForDashboard;
 window.getFilteredAttendanceForDashboard = getFilteredAttendanceForDashboard;
 
+// Ekspor fungsi tema
+window.initTheme = initTheme;
+window.applyTheme = applyTheme;
+window.toggleTheme = toggleTheme;
+window.getCurrentTheme = getCurrentTheme;
+window.getChartColorsByTheme = getChartColorsByTheme;
+window.refreshThemeDependentComponents = refreshThemeDependentComponents;
+
 // ======================== AUTO INITIALIZATION ========================
 
 function waitForFirebaseAndInit() {
@@ -575,6 +745,16 @@ function waitForFirebaseAndInit() {
         return;
     }
     setupDataReadyListener();
+    
+    // Inisialisasi tema setelah DOM siap
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+            setTimeout(() => initTheme(), 50);
+        });
+    } else {
+        setTimeout(() => initTheme(), 50);
+    }
+    
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', () => setTimeout(() => initAuthStateHandler(), 100));
     } else {
@@ -583,4 +763,4 @@ function waitForFirebaseAndInit() {
 }
 
 waitForFirebaseAndInit();
-console.log("✅ main.js V5.2 loaded - Role-based dashboard filtering integrated");
+console.log("✅ main.js V5.3 loaded - Role-based dashboard filtering & Theme management integrated");
