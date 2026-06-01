@@ -394,3 +394,168 @@
         font-size: 24px;
     }
 }
+
+/* ==================== ANIMASI NAMA SEKOLAH - PERUBAHAN WARNA BERULANG ==================== */
+
+/* Animasi perubahan warna - lebih dinamis dengan 6 warna */
+@keyframes schoolNameColorShift {
+    0% {
+        color: #ffd700;
+        text-shadow: 0 0 5px rgba(255, 215, 0, 0.5);
+    }
+    15% {
+        color: #ffaa00;
+        text-shadow: 0 0 10px rgba(255, 170, 0, 0.6);
+    }
+    30% {
+        color: #ff6600;
+        text-shadow: 0 0 15px rgba(255, 102, 0, 0.7);
+    }
+    45% {
+        color: #ff3366;
+        text-shadow: 0 0 15px rgba(255, 51, 102, 0.7);
+    }
+    60% {
+        color: #9c27b0;
+        text-shadow: 0 0 15px rgba(156, 39, 176, 0.7);
+    }
+    75% {
+        color: #00bcd4;
+        text-shadow: 0 0 12px rgba(0, 188, 212, 0.6);
+    }
+    100% {
+        color: #2196f3;
+        text-shadow: 0 0 8px rgba(33, 150, 243, 0.5);
+    }
+}
+
+/* Animasi untuk light mode */
+@keyframes schoolNameColorShiftLight {
+    0% { color: #d4a017; }
+    15% { color: #e6a800; }
+    30% { color: #cc6b00; }
+    45% { color: #c2185b; }
+    60% { color: #7b1fa2; }
+    75% { color: #0097a7; }
+    100% { color: #0288d1; }
+}
+
+/* Efek bounce ringan saat hover */
+@keyframes schoolNameBounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-4px); }
+}
+
+/* Efek glow berkelanjutan */
+@keyframes schoolNameGlow {
+    0% {
+        text-shadow: 0 0 5px rgba(255, 215, 0, 0.3);
+    }
+    50% {
+        text-shadow: 0 0 20px rgba(0, 188, 212, 0.5), 0 0 8px rgba(255, 215, 0, 0.3);
+    }
+    100% {
+        text-shadow: 0 0 5px rgba(33, 150, 243, 0.3);
+    }
+}
+
+/* Class untuk elemen nama sekolah - ANIMASI WARNA BERULANG */
+.school-name-animated {
+    display: inline-block;
+    font-weight: 800;
+    transition: all 0.3s ease;
+    position: relative;
+    letter-spacing: 0.5px;
+    animation: schoolNameColorShift 4s ease-in-out infinite;
+}
+
+/* Efek tambahan: kombinasi animated dengan pulse ringan */
+.school-name-pulse {
+    animation: schoolNameColorShift 4s ease-in-out infinite, schoolNameGlow 2s ease-in-out infinite;
+}
+
+/* Hover effect dengan bounce dan glow */
+.school-name-animated:hover {
+    animation: schoolNameColorShift 4s ease-in-out infinite, schoolNameBounce 0.5s ease-in-out, schoolNameGlow 1s ease-in-out;
+    cursor: pointer;
+}
+
+/* Light mode version */
+body.light-mode .school-name-animated {
+    animation: schoolNameColorShiftLight 4s ease-in-out infinite;
+}
+
+body.light-mode .school-name-animated:hover {
+    animation: schoolNameColorShiftLight 4s ease-in-out infinite, schoolNameBounce 0.5s ease-in-out, schoolNameGlow 1s ease-in-out;
+}
+
+/* Responsif untuk mobile */
+@media (max-width: 768px) {
+    .school-name-animated {
+        animation: schoolNameColorShift 3s ease-in-out infinite;
+    }
+    body.light-mode .school-name-animated {
+        animation: schoolNameColorShiftLight 3s ease-in-out infinite;
+    }
+}
+
+/* Tooltip style untuk nama sekolah */
+#schoolNameDisplay[title] {
+    position: relative;
+}
+
+#schoolNameDisplay[title]:hover::after {
+    content: attr(title);
+    position: absolute;
+    bottom: -30px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 5px 10px;
+    border-radius: 8px;
+    font-size: 12px;
+    white-space: nowrap;
+    z-index: 100;
+    pointer-events: none;
+}
+
+/* Branding Footer */
+.branding-footer {
+    text-align: center;
+    padding: 15px 20px;
+    margin-top: 30px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.branding-footer .branding-logo {
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+}
+
+/* ==================== SCROLLBAR CUSTOM ==================== */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--bg-hover);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--primary);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #00bcd4;
+}
