@@ -1,0 +1,972 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <meta name="referrer" content="no-referrer">
+    <title>Sistem Absensi IoT - Fingerprint & Real-time</title>
+    <link rel="icon" type="image/png" href="logo/hakatech.png">
+    <link rel="shortcut icon" type="image/png" href="logo/hakatech.png">
+
+    <!-- Google Fonts: Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
+
+    <!-- CSS -->
+    <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="css/layout.css">
+    <link rel="stylesheet" href="css/components.css">
+    <link rel="stylesheet" href="css/modules.css">
+    <link rel="stylesheet" href="css/responsive.css">
+    <link rel="stylesheet" href="css/custom.css">
+    <link rel="stylesheet" href="css/wow-effects.css">
+    
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+    <!-- Supabase SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-functions-compat.js"></script>
+
+    <!-- QR Code -->
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    
+    <style>
+        /* ==================== ROOT VARIABLES ==================== */
+        :root {
+            --bg-gradient-start-dark: #0a0f1f;
+            --bg-gradient-end-dark: #141b2b;
+            --bg-card-dark: #1a1f2f;
+            --bg-input-dark: #1f2a3a;
+            --border-dark: #2a3a4a;
+            --text-primary-dark: #eef2ff;
+            --text-secondary-dark: #b0c4de;
+        }
+
+        /* ==================== LIGHT MODE ==================== */
+        body.light-mode {
+            background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 50%, #7dd3fc 100%);
+            color: #0f172a;
+        }
+        body.light-mode .auth-card,
+        body.light-mode .modal-box,
+        body.light-mode .stat-card-new,
+        body.light-mode .dropdown-navbar,
+        body.light-mode .header-bar,
+        body.light-mode .announcement-container,
+        body.light-mode .status-bar-container,
+        body.light-mode .table-container,
+        body.light-mode .key-box,
+        body.light-mode .guide-container,
+        body.light-mode .friends-container,
+        body.light-mode .chat-panel {
+            background: rgba(255, 255, 255, 0.92);
+            backdrop-filter: blur(2px);
+            border: 1px solid rgba(255,255,255,0.5);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.05);
+        }
+        body.light-mode .dropdown-content { background: #ffffff; border: 1px solid #cbd5e1; }
+        body.light-mode .dropdown-btn { background: #ffffff; border: 1px solid #cbd5e1; color: #1e293b; }
+        body.light-mode .dropdown-btn:hover { background: #0f172a; color: white; }
+        body.light-mode .navbar-user { background: #ffffff; }
+        body.light-mode input, body.light-mode select, body.light-mode textarea { background: #ffffff; border: 1px solid #cbd5e1; color: #1e293b; }
+        body.light-mode .table-container th { background: #e2e8f0; color: #0f172a; }
+        body.light-mode .table-container td { border-bottom-color: #e2e8f0; }
+        body.light-mode .role-badge { font-weight: bold; }
+        body.light-mode .announcement-item { background: #f8fafc; }
+
+        /* ==================== TAB ANIMATIONS ==================== */
+        .tab-content { display: none; }
+        .tab-content.active { display: block; animation: fadeSlideIn 0.35s cubic-bezier(0.2, 0.9, 0.4, 1.1); }
+
+        @keyframes fadeSlideIn {
+            from { opacity: 0; transform: translateY(12px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes fadeSlideOut {
+            from { opacity: 1; transform: translateY(0); }
+            to { opacity: 0; transform: translateY(-8px); visibility: hidden; }
+        }
+
+        /* ==================== DROPDOWN NAVBAR ==================== */
+        .dropdown-navbar {
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border);
+            padding: 0 20px;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .dropdown-menu-container { display: flex; gap: 8px; flex-wrap: wrap; padding: 10px 0; }
+        .dropdown { position: relative; }
+        .dropdown-btn {
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            padding: 10px 18px;
+            border-radius: 30px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--text-primary);
+            transition: all 0.2s;
+        }
+        .dropdown-btn:hover { background: var(--primary); color: white; border-color: var(--primary); }
+        .dropdown-content {
+            position: absolute;
+            top: 110%;
+            left: 0;
+            background: var(--bg-card);
+            min-width: 200px;
+            border-radius: 12px;
+            box-shadow: var(--shadow);
+            overflow: hidden;
+            z-index: 1001;
+            display: none;
+            border: 1px solid var(--border);
+        }
+        .dropdown-content.open { display: block; }
+        .dropdown-content button {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 18px;
+            width: 100%;
+            text-align: left;
+            background: none;
+            border: none;
+            color: var(--text-primary);
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .dropdown-content button:hover { background: var(--primary); color: white; }
+        .navbar-right { display: flex; align-items: center; gap: 15px; }
+        .navbar-user {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: var(--bg-input);
+            padding: 5px 15px;
+            border-radius: 30px;
+        }
+        .navbar-avatar { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; }
+        .navbar-logout {
+            background: #ef4444;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 30px;
+            color: white;
+            cursor: pointer;
+            font-weight: 500;
+        }
+        #themeToggleBtn {
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            cursor: pointer;
+            padding: 8px 12px;
+            border-radius: 30px;
+            font-size: 1.2rem;
+            min-width: 44px;
+            min-height: 44px;
+        }
+        .dropdown-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 999;
+            display: none;
+        }
+        .dropdown-overlay.active { display: block; }
+
+        /* ==================== TABLE STYLES ==================== */
+        .table-container { overflow-x: auto; margin-top: 15px; border-radius: 20px; }
+        .table-container table { width: 100%; border-collapse: collapse; }
+        .table-container th, .table-container td { padding: 12px; text-align: left; border-bottom: 1px solid var(--border); }
+        .table-container th { background: var(--bg-sidebar); font-weight: 600; }
+
+        /* ==================== CARD STYLES ==================== */
+        .stat-card-new {
+            background: var(--bg-card);
+            border-radius: 20px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            transition: transform 0.2s;
+        }
+        .stat-card-new:hover { transform: translateY(-3px); }
+
+        .key-box {
+            background: var(--bg-hover);
+            border-radius: 16px;
+            padding: 20px;
+            margin: 20px 0;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            align-items: flex-start;
+            justify-content: space-between;
+        }
+
+        /* ==================== SEARCH BOX ==================== */
+        .search-box input {
+            width: 100%;
+            max-width: 300px;
+            padding: 10px 16px;
+            border-radius: 30px;
+            border: 1px solid var(--border);
+            background: var(--bg-input);
+            color: var(--text-primary);
+        }
+
+        /* ==================== BUTTON ICON ==================== */
+        .btn-icon {
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            font-size: 1.2rem;
+            padding: 6px 10px;
+            border-radius: 8px;
+        }
+        .btn-icon:hover { background: var(--bg-hover); }
+
+        /* ==================== ROLE BADGES ==================== */
+        .role-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.7rem;
+            font-weight: 600;
+        }
+        .role-admin { background: #f44336; color: white; }
+        .role-guru { background: #ff9800; color: white; }
+        .role-siswa { background: #4caf50; color: white; }
+        .role-developer { background: #9c27b0; color: white; }
+
+        /* ==================== SCHOOL NAME ANIMATION ==================== */
+        @keyframes schoolNameColorShift {
+            0% { color: #ffd700; text-shadow: 0 0 5px rgba(255,215,0,0.5); }
+            15% { color: #ffaa00; text-shadow: 0 0 10px rgba(255,170,0,0.6); }
+            30% { color: #ff6600; text-shadow: 0 0 15px rgba(255,102,0,0.7); }
+            45% { color: #ff3366; text-shadow: 0 0 15px rgba(255,51,102,0.7); }
+            60% { color: #9c27b0; text-shadow: 0 0 15px rgba(156,39,176,0.7); }
+            75% { color: #00bcd4; text-shadow: 0 0 12px rgba(0,188,212,0.6); }
+            100% { color: #2196f3; text-shadow: 0 0 8px rgba(33,150,243,0.5); }
+        }
+        @keyframes schoolNameColorShiftLight {
+            0% { color: #d4a017; }
+            15% { color: #e6a800; }
+            30% { color: #cc6b00; }
+            45% { color: #c2185b; }
+            60% { color: #7b1fa2; }
+            75% { color: #0097a7; }
+            100% { color: #0288d1; }
+        }
+        @keyframes schoolNameBounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-4px); }
+        }
+        .school-name-animated {
+            display: inline-block;
+            font-weight: 800;
+            letter-spacing: 0.5px;
+            animation: schoolNameColorShift 4s ease-in-out infinite;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .school-name-animated:hover {
+            animation: schoolNameColorShift 4s ease-in-out infinite, schoolNameBounce 0.5s ease-in-out;
+        }
+        body.light-mode .school-name-animated {
+            animation: schoolNameColorShiftLight 4s ease-in-out infinite;
+        }
+        body.light-mode .school-name-animated:hover {
+            animation: schoolNameColorShiftLight 4s ease-in-out infinite, schoolNameBounce 0.5s ease-in-out;
+        }
+
+        /* ==================== NAVBAR LOGO ==================== */
+        .navbar-logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-right: 20px;
+            cursor: pointer;
+        }
+        .navbar-logo img { width: 32px; height: 32px; border-radius: 8px; object-fit: contain; }
+        .navbar-logo span {
+            font-weight: 700;
+            font-size: 1rem;
+            background: linear-gradient(135deg, #00bcd4, #2196f3);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+
+        /* ==================== FLOATING LOGO ==================== */
+        .floating-logo {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            z-index: 999;
+            cursor: pointer;
+        }
+        .floating-logo img {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.25);
+            border: 2px solid rgba(255,255,255,0.2);
+        }
+
+        /* ==================== AUTH LOGO ==================== */
+        .auth-logo { text-align: center; margin-bottom: 20px; }
+        .auth-logo img { width: 70px; height: 70px; border-radius: 16px; object-fit: contain; }
+        .auth-logo h2 {
+            margin-top: 12px;
+            font-size: 1.3rem;
+            background: linear-gradient(135deg, #00bcd4, #2196f3);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+
+        /* ==================== RESPONSIVE ==================== */
+        @media (max-width: 768px) {
+            .navbar-logo span { display: none; }
+            .navbar-logo img { width: 28px; height: 28px; }
+            .floating-logo { bottom: 80px; left: 15px; }
+            .floating-logo img { width: 40px; height: 40px; }
+            .dropdown-navbar { flex-direction: column; align-items: stretch; }
+            .dropdown-menu-container { justify-content: center; }
+            .navbar-right { justify-content: center; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- TOAST NOTIFICATION -->
+    <div id="toast" class="toast">Notifikasi</div>
+    <div id="dropdownOverlay" class="dropdown-overlay" onclick="closeAllDropdowns()"></div>
+
+    <!-- FLOATING LOGO -->
+    <div class="floating-logo" onclick="location.href='/'" title="HakaTech - Kembali ke Beranda">
+        <img src="logo/hakatech.png" alt="HakaTech">
+    </div>
+
+    <!-- ==================== AUTH SECTION ==================== -->
+    <div id="auth-section">
+        <div id="login-card" class="auth-card">
+            <div class="auth-logo">
+                <img src="logo/hakatech.png" alt="HakaTech">
+                <h2>Sistem Absensi</h2>
+            </div>
+            <p class="text-small">Gunakan akun Admin, Guru, atau Developer</p>
+            <form id="loginForm" onsubmit="handleLogin(event)">
+                <div class="form-group"><label>Email</label><input type="email" id="loginEmail" placeholder="contoh@sekolah.sch.id" required></div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <div class="password-container">
+                        <input type="password" id="loginPassword" placeholder="contoh123" required>
+                        <span class="eye-toggle" onclick="togglePassword('loginPassword', this)">
+                            <svg viewBox="0 0 24 24" width="20" height="20"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5-5-5 5 5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+                        </span>
+                    </div>
+                </div>
+                <button type="submit" id="btnLoginSubmit" class="btn-auth btn-primary neon-btn">MASUK</button>
+            </form>
+            <div class="auth-toggle"><span onclick="openForgotPasswordModal()">Lupa Password?</span></div>
+            <div class="auth-toggle">Belum punya akun? <span onclick="toggleAuth('register')">Daftar disini</span></div>
+        </div>
+
+        <div id="register-card" class="auth-card" style="display:none;">
+            <div class="auth-logo"><img src="logo/hakatech.png" alt="HakaTech"><h2>Pendaftaran</h2></div>
+            <p class="text-small">Siswa data diambil otomatis dari Database</p>
+            <div class="form-group">
+                <label>Daftar Sebagai:</label>
+                <div style="display:flex; gap:20px; margin-top:5px;">
+                    <label><input type="radio" name="regRoleType" value="siswa" checked onchange="toggleRegisterInput()"> Siswa</label>
+                    <label><input type="radio" name="regRoleType" value="guru" onchange="toggleRegisterInput()"> Guru</label>
+                </div>
+            </div>
+            <form id="registerForm" onsubmit="handleRegister(event)">
+                <div class="form-group" id="group-reg-id"><label>ID Generate</label><input type="text" id="regGeneratedId" placeholder="Masukkan ID Fingerprint"></div>
+                <div class="form-group" id="group-reg-nama" style="display:none;"><label>Nama Lengkap</label><input type="text" id="regNama" placeholder="Nama Guru"></div>
+                <div class="form-group" id="group-reg-subject" style="display:none;"><label>Mata Pelajaran</label><input type="text" id="regSubject" placeholder="Contoh: Matematika"></div>
+                <div class="form-group"><label>Email</label><input type="email" id="regEmail" placeholder="email@sekolah.sch.id" required></div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <div class="password-container">
+                        <input type="password" id="regPassword" placeholder="Minimal 6 karakter" required>
+                        <span class="eye-toggle" onclick="togglePassword('regPassword', this)">
+                            <svg viewBox="0 0 24 24" width="20" height="20"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5-5-5 5 5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+                        </span>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Kode Pendaftaran</label>
+                    <div style="display: flex; gap: 10px;">
+                        <input type="text" id="regCode" placeholder="Kode Unik dari Guru" required style="flex:1;">
+                        <button type="button" class="btn-action btn-secondary neon-btn" onclick="openQrScanner()" style="padding: 0 15px;">📷 Scan QR</button>
+                    </div>
+                </div>
+                <button type="submit" id="btnRegSubmit" class="btn-auth btn-primary neon-btn">DAFTAR</button>
+            </form>
+            <div class="auth-toggle">Sudah punya akun? <span onclick="toggleAuth('login')">Login disini</span></div>
+        </div>
+    </div>
+
+    <!-- ==================== DASHBOARD SECTION ==================== -->
+    <div id="dashboard-section" style="display:none;">
+        
+        <!-- DROPDOWN NAVBAR -->
+        <div class="dropdown-navbar">
+            <div class="dropdown-menu-container">
+                <div class="navbar-logo" onclick="location.href='/'">
+                    <img src="logo/hakatech.png" alt="HakaTech">
+                    <span>HakaTech Absensi</span>
+                </div>
+                
+                <!-- MENU UTAMA - Semua Role -->
+                <div class="dropdown" id="dropdownMain">
+                    <button class="dropdown-btn neon-btn" onclick="toggleDropdown('dropdownMain')">📊 Menu Utama ▼</button>
+                    <div class="dropdown-content" id="dropdownMainContent">
+                        <button onclick="switchTab('dashboard'); closeAllDropdowns()">📊 Dashboard</button>
+                        <button onclick="switchTab('attendance'); closeAllDropdowns()">📋 Absensi</button>
+                        <button onclick="switchTab('students'); closeAllDropdowns()">👨‍🎓 Data Siswa</button>
+                        <button onclick="switchTab('rekap'); closeAllDropdowns()">📊 Rekap Absensi</button>
+                        <button onclick="switchTab('guide'); closeAllDropdowns()">📘 Panduan</button>
+                    </div>
+                </div>
+                
+                <!-- SOSIAL - Semua Role (Chat, Teman, Status) -->
+                <div class="dropdown" id="dropdownSocial">
+                    <button class="dropdown-btn neon-btn" onclick="toggleDropdown('dropdownSocial')">👥 Sosial ▼</button>
+                    <div class="dropdown-content" id="dropdownSocialContent">
+                        <button onclick="switchTab('friends'); closeAllDropdowns()">👥 Teman</button>
+                        <button onclick="switchTab('chat'); closeAllDropdowns()">💬 Chat</button>
+                        <button onclick="openCreateStatusModal(); closeAllDropdowns()">📸 Buat Status</button>
+                    </div>
+                </div>
+                
+                <!-- PENGUMUMAN - Hanya Admin, Guru, Developer -->
+                <div class="dropdown" id="dropdownAnnouncement">
+                    <button class="dropdown-btn role-admin role-guru role-developer neon-btn" onclick="toggleDropdown('dropdownAnnouncement')">📢 Pengumuman ▼</button>
+                    <div class="dropdown-content" id="dropdownAnnouncementContent">
+                        <button class="role-admin role-guru role-developer" onclick="openAnnouncementModal(); closeAllDropdowns()">➕ Buat Pengumuman</button>
+                        <button class="role-admin role-guru role-developer" onclick="switchTab('announcement_list'); closeAllDropdowns()">📋 Daftar Pengumuman</button>
+                    </div>
+                </div>
+                
+                <!-- MANAJEMEN - Hanya Admin, Guru, Developer -->
+                <div class="dropdown" id="dropdownManage">
+                    <button class="dropdown-btn role-admin role-guru role-developer neon-btn" onclick="toggleDropdown('dropdownManage')">⚙️ Manajemen ▼</button>
+                    <div class="dropdown-content" id="dropdownManageContent">
+                        <button class="role-admin role-guru role-developer" onclick="switchTab('users'); closeAllDropdowns()">👥 Manajemen User</button>
+                        <button class="role-admin role-guru role-developer" onclick="switchTab('logs'); closeAllDropdowns()">📋 Log Aktivitas</button>
+                        <button class="role-admin role-guru role-developer" onclick="switchTab('config'); closeAllDropdowns()">⚙️ Pengaturan</button>
+                    </div>
+                </div>
+                
+                <!-- PROFIL - Semua Role -->
+                <div class="dropdown" id="dropdownProfile">
+                    <button class="dropdown-btn neon-btn" onclick="toggleDropdown('dropdownProfile')">👤 Profil ▼</button>
+                    <div class="dropdown-content" id="dropdownProfileContent">
+                        <button onclick="openProfileModal(); closeAllDropdowns()">👤 Profil Saya</button>
+                        <button onclick="openChangePasswordModal(); closeAllDropdowns()">🔑 Ganti Password</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="navbar-right">
+                <div class="navbar-user avatar-ring">
+                    <img id="navbarAvatar" class="navbar-avatar" src="" alt="Avatar">
+                    <span id="navbarUserName">User</span>
+                    <span id="navbarUserRole" style="font-size:0.7rem;">SISWA</span>
+                </div>
+                <button id="themeToggleBtn" class="btn-icon neon-btn" title="Ganti Tema">🌙</button>
+                <button class="navbar-logout neon-btn" onclick="handleLogout()">🚪 Keluar</button>
+            </div>
+        </div>
+
+        <!-- HEADER BAR -->
+        <div class="header-bar">
+            <div class="header-left">
+                <img id="headerSchoolLogo" class="school-logo" src="" alt="Logo" style="display: none;">
+                <div>
+                    <h2 id="schoolNameDisplay" style="margin:0;" class="school-name-animated">Sistem Absensi</h2>
+                    <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                        <span id="userProfileDisplay">User</span>
+                        <span id="userRoleDisplay" class="role-badge">SISWA</span>
+                        <span id="userClassDisplay" class="class-badge" style="display:none;"></span>
+                    </div>
+                </div>
+            </div>
+            <div style="display:flex; align-items:center; gap:20px;">
+                <div id="clock" class="clock-display glow-text">--:--:--</div>
+            </div>
+        </div>
+
+        <!-- ANNOUNCEMENT SECTION -->
+        <div id="announcementContainer" class="announcement-container" style="display:none;">
+            <div class="announcement-header-bar">
+                <h3>📢 Pengumuman</h3>
+                <button class="btn-announcement role-admin role-guru role-developer neon-btn" onclick="openAnnouncementModal()">➕ Buat Pengumuman</button>
+            </div>
+            <div id="announcementList"></div>
+        </div>
+
+        <!-- STATUS BAR -->
+        <div class="status-bar-container glass-card" id="statusBarContainer">
+            <div class="status-header">
+                <h4>📸 Status Update</h4>
+                <small class="text-small">Status akan hilang setelah 24 jam</small>
+                <button class="btn-action btn-primary neon-btn" onclick="openCreateStatusModal()" style="margin-left:auto; padding:6px 14px;">➕ Buat Status</button>
+            </div>
+            <div id="statusBar" class="status-bar-scroll"></div>
+        </div>
+
+        <!-- ==================== TAB DASHBOARD ==================== -->
+        <div id="tab-dashboard" class="tab-content active">
+            <div class="dashboard-modern-new">
+                <div id="dashboardRoleInfo" style="margin-bottom:15px;"></div>
+                <div class="stats-grid" id="dashboardStatsGrid">
+                    <div class="stat-card-new animated-border">
+                        <div class="stat-icon">👥</div>
+                        <div class="stat-title-new">Total Siswa</div>
+                        <div class="stat-number" id="statTotalSiswaNew">0</div>
+                        <div class="stat-percent positive" id="statTrendSiswa">+0% dari bulan lalu</div>
+                    </div>
+                    <div class="stat-card-new animated-border">
+                        <div class="stat-icon">✅</div>
+                        <div class="stat-title-new">Hadir Hari Ini</div>
+                        <div class="stat-number" id="statHadirHariIni">0</div>
+                        <div class="stat-percent positive" id="statPersenHadir">0% dari total siswa</div>
+                    </div>
+                    <div class="stat-card-new animated-border">
+                        <div class="stat-icon">❌</div>
+                        <div class="stat-title-new">Tidak Hadir</div>
+                        <div class="stat-number" id="statTidakHadir">0</div>
+                        <div class="stat-percent negative" id="statPersenTidakHadir">0% dari total siswa</div>
+                    </div>
+                    <div class="stat-card-new animated-border">
+                        <div class="stat-icon">⏰</div>
+                        <div class="stat-title-new">Terlambat</div>
+                        <div class="stat-number" id="statTerlambat">0</div>
+                        <div class="stat-percent neutral" id="statPersenTerlambat">0% dari total siswa</div>
+                    </div>
+                </div>
+                <div class="dashboard-two-col-new">
+                    <div class="chart-col glass-card"><div class="section-title">📊 Statistik Kehadiran (Mingguan)</div><div class="weekly-chart-container"><canvas id="weeklyBarChart" height="200"></canvas></div></div>
+                    <div class="class-col glass-card"><div class="section-title">🏫 Kehadiran per Kelas <small class="text-small">Tertinggi</small></div><div id="classAttendanceList"><div class="class-item"><div class="class-name"><span>Memuat...</span><span>0%</span></div><div class="progress-bar progress-glow"><div class="progress-glow-fill" style="width:0%"></div></div></div></div></div>
+                </div>
+                <div class="chart-col glass-card" style="width:100%"><div class="section-title">📋 Absensi Terbaru <button class="btn-link neon-btn" onclick="switchTab('attendance')">Lihat Semua →</button></div><div id="recentAttendanceList" class="recent-list"><div class="recent-item">Memuat data terbaru...</div></div></div>
+            </div>
+        </div>
+
+        <!-- ==================== TAB ATTENDANCE ==================== -->
+        <div id="tab-attendance" class="tab-content">
+            <div class="controls-bar glass-card">
+                <div class="filter-group"><label>Kelas:</label><select id="filterKelas" onchange="renderTable()"><option value="all">Semua</option></select></div>
+                <div class="filter-group"><label>Jurusan:</label><select id="filterJurusan" onchange="renderTable()"><option value="all">Semua</option></select></div>
+                <div class="filter-group"><label>Tanggal:</label><select id="filterDate" onchange="renderTable()"><option value="all">Semua</option><option value="today">Hari Ini</option></select></div>
+                <div style="margin-left:auto; display:flex; gap:10px; flex-wrap:wrap;">
+                    <button class="btn-action btn-primary neon-btn" onclick="simulateAttendance()">📷 Simulasi Scan Masuk</button>
+                    <button class="btn-action btn-secondary neon-btn" onclick="simulateAttendanceOut()">🏠 Simulasi Scan Pulang</button>
+                    <button class="btn-action btn-info neon-btn" onclick="openSimulateOutModal()">📋 Pilih Siswa Pulang</button>
+                    <button class="btn-action btn-success neon-btn" onclick="exportToExcel()">📥 Download Excel</button>
+                </div>
+            </div>
+            <div class="chart-container">
+                <div class="glass-card" style="background:var(--bg-card); border-radius:20px; padding:15px;">
+                    <h4>📊 Ringkasan Hari Ini</h4>
+                    <div style="max-width:250px; margin:0 auto;"><canvas id="attendanceDonutChart"></canvas></div>
+                    <div id="todayStatsText" class="text-small text-center"></div>
+                </div>
+            </div>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Foto</th><th>Waktu</th><th>ID FP</th><th>Nama</th><th>Kelas</th><th>Jurusan</th><th>Status</th><th>Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-attendance"><tr><td colspan="8" style="text-align:center; padding:20px;">Memuat data...<\/td><\/tr></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ==================== TAB STUDENTS ==================== -->
+        <div id="tab-students" class="tab-content">
+            <div class="controls-bar glass-card">
+                <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                    <input type="hidden" id="editMode" value="add">
+                    <div class="filter-group"><label>ID FP:</label><input type="number" id="newId" placeholder="ID" style="width:80px;"></div>
+                    <div class="filter-group"><label>Nama:</label><input type="text" id="newNama" placeholder="Nama Siswa" style="width:200px;"></div>
+                    <div class="filter-group"><label>Kelas:</label><select id="newKelas"></select></div>
+                    <div class="filter-group"><label>Jurusan:</label><select id="newJurusan"></select></div>
+                    <div class="filter-group"><label>Delay:</label><select id="delayUnit"><option value="minutes">Menit</option><option value="hours">Jam</option></select></div>
+                    <div class="filter-group" id="delayMinutesGroup"><input type="number" id="delayMinutesValue" value="60" style="width:70px;"><span>menit</span></div>
+                    <div class="filter-group" id="delayHoursGroup" style="display:none;"><select id="delayHoursValue"></select><span>jam</span></div>
+                    <input type="hidden" id="newDelay" value="60">
+                    <button class="btn-action role-guru role-admin role-developer neon-btn" id="btnSaveStudent" onclick="saveStudent()">➕ Simpan Siswa</button>
+                    <button class="btn-action btn-danger hidden neon-btn" id="btnCancelStudent" onclick="resetStudentForm()">Batal</button>
+                </div>
+            </div>
+            <div class="controls-bar glass-card">
+                <div class="filter-group"><label>Kelas:</label><select id="filterStudentKelas" onchange="renderStudentsTable()"><option value="all">Semua</option></select></div>
+                <div class="filter-group"><label>Jurusan:</label><select id="filterStudentJurusan" onchange="renderStudentsTable()"><option value="all">Semua</option></select></div>
+                <div class="search-box"><input type="text" id="searchStudentName" placeholder="🔍 Cari nama siswa..." oninput="renderStudentsTable()"></div>
+            </div>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Foto</th><th>ID FP</th><th>Nama</th><th>Kelas</th><th>Jurusan</th><th>Delay</th><th>Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-students"><tr><td colspan="7" style="text-align:center; padding:20px;">Memuat data...<\/td><\/tr></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ==================== TAB USERS (MANAJEMEN USER) ==================== -->
+        <div id="tab-users" class="tab-content role-admin role-guru role-developer">
+            <div class="controls-bar glass-card"><h4>🔑 Generate Kode Pendaftaran</h4></div>
+            <div class="key-box glass-card">
+                <div>
+                    <div><label style="margin-right:20px;"><input type="radio" name="genTarget" value="siswa" checked onchange="toggleGenerateInput()"> 👨‍🎓 Untuk Siswa</label><label><input type="radio" name="genTarget" value="guru" onchange="toggleGenerateInput()"> 👨‍🏫 Untuk Guru</label></div>
+                    <div id="group-select-siswa"><select id="selectStudentForCode" style="width:100%; max-width:300px;"><option value="">-- Pilih Siswa --</option></select></div>
+                    <small id="gen-desc">🔒 Kode akan dikunci ke ID Siswa terpilih.</small>
+                </div>
+                <button class="btn-action btn-secondary neon-btn" onclick="generateRegistrationCode()">✨ Generate Kode</button>
+            </div>
+            <div id="generatedKeyDisplay" style="display:none;"></div>
+            
+            <h4>📋 Daftar Kode Aktif</h4>
+            <div class="table-container">
+                <table><thead><tr><th>Kode</th><th>Status</th><th>Dibuat</th><th>Pengguna</th><th>Aksi</th></tr></thead>
+                <tbody id="tbody-codes"><tr><td colspan="5" style="text-align:center; padding:20px;">Memuat data kode...<\/td><\/tr></tbody>
+                </table>
+            </div>
+            
+            <div class="controls-bar glass-card" style="margin-top:20px;"><h4>👥 Daftar Pengguna</h4><div class="search-box"><input type="text" id="searchUser" placeholder="🔍 Cari user (nama/email)..." oninput="renderUsersTable()"></div></div>
+            <div class="table-container">
+                <table><thead><tr><th>Foto</th><th>Nama</th><th>Email</th><th>Role</th><th>Detail</th><th>Aksi</th></tr></thead>
+                <tbody id="tbody-users"><tr><td colspan="6" style="text-align:center; padding:20px;">Memuat data pengguna...<\/td><\/tr></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ==================== TAB REKAP ==================== -->
+        <div id="tab-rekap" class="tab-content">
+            <div class="controls-bar glass-card">
+                <div class="filter-group"><label>📅 Periode:</label><select id="rekapPeriod" onchange="loadRekap()"><option value="minggu">Minggu Ini</option><option value="bulan">Bulan Ini</option><option value="semester">Semester Ini</option><option value="custom">Custom Range</option></select></div>
+                <div id="customRangeGroup" style="display:none; gap:10px;"><input type="date" id="rekapStartDate"><span>s/d</span><input type="date" id="rekapEndDate"></div>
+                <div><button class="btn-action btn-success neon-btn" onclick="exportRekapToExcel()">📥 Excel</button><button class="btn-action btn-primary neon-btn" onclick="exportRekapToPDF()">📄 PDF</button></div>
+            </div>
+            <div class="chart-container">
+                <div style="display:flex; gap:20px; flex-wrap:wrap;">
+                    <div class="glass-card" style="flex:1; min-width:200px; padding:15px;"><canvas id="rekapPieChart" style="max-height:250px;"></canvas><p class="text-small text-center">Distribusi Status</p></div>
+                    <div class="glass-card" style="flex:2; min-width:300px; padding:15px;"><canvas id="rekapBarChart" style="max-height:250px;"></canvas><p class="text-small text-center">Absensi per Hari</p></div>
+                </div>
+            </div>
+            <div class="table-container">
+                <table>
+                    <thead><tr><th>No</th><th>ID FP</th><th>Nama</th><th>Kelas</th><th>Jurusan</th><th>Total Hari</th><th>Hadir</th><th>Sakit</th><th>Izin</th><th>Alpha</th><th>Persentase</th><th>Status</th></tr></thead>
+                    <tbody id="rekapTbody"><tr><td colspan="12" style="text-align:center; padding:20px;">Memuat data...<\/td><\/tr></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ==================== TAB FRIENDS ==================== -->
+        <div id="tab-friends" class="tab-content">
+            <div class="friends-container glass-card">
+                <div class="friends-search-section"><h4>🔍 Cari Teman</h4><div class="search-box"><input type="email" id="searchFriendEmail" placeholder="Cari berdasarkan email..."><button class="btn-action btn-primary neon-btn" onclick="searchUserByEmail()">Cari</button></div><div id="searchResult" style="margin-top:10px; display:none;"></div></div>
+                <hr>
+                <div class="friends-requests-section"><h4>📨 Permintaan Pertemanan <span id="friendRequestBadge" class="request-badge" style="display:none;">0</span></h4><div id="friendRequestsList" class="friends-list"><p class="text-small" style="color: var(--text-muted);">Tidak ada permintaan</p></div></div>
+                <hr>
+                <div class="friends-list-section"><h4>👥 Daftar Teman <span id="friendsCount" class="count-badge">0</span></h4><div id="friendsList" class="friends-list"><p class="text-small" style="color: var(--text-muted);">Belum ada teman</p></div></div>
+            </div>
+        </div>
+
+        <!-- ==================== TAB CHAT ==================== -->
+        <div id="tab-chat" class="tab-content">
+            <div class="chat-header-info"><h3>💬 Pesan dengan Teman</h3><p class="text-small">Hanya bisa chat dengan teman yang sudah terdaftar.</p></div>
+            <div id="chatPanel" class="chat-panel glass-card"><div class="chat-loading" style="text-align:center; padding:40px;">⏳ Memuat fitur chat...</div></div>
+        </div>
+
+        <!-- ==================== TAB LOGS ==================== -->
+        <div id="tab-logs" class="tab-content role-admin role-guru role-developer">
+            <div class="controls-bar glass-card">
+                <select id="logActionFilter" onchange="renderLogsTable()"><option value="all">Semua Aksi</option></select>
+                <input type="date" id="logStartDate" onchange="renderLogsTable()">
+                <input type="date" id="logEndDate" onchange="renderLogsTable()">
+                <button class="btn-action btn-secondary neon-btn" onclick="renderLogsTable()">🔄 Refresh</button>
+            </div>
+            <div class="table-container">
+                <table id="logsTable"><thead><tr><th>🕒 Waktu</th><th>👤 Pengguna</th><th>🎭 Role</th><th>📌 Aksi</th><th>📝 Detail</th><th>🌐 IP</th></tr></thead>
+                <tbody id="logsTbody"><tr><td colspan="6" style="text-align:center; padding:20px;">Memuat log...<\/td><\/tr></tbody>
+                </table>
+                <div id="logsPagination" class="pagination-container" style="margin-top:15px; text-align:center;"></div>
+            </div>
+        </div>
+
+        <!-- ==================== TAB CONFIG ==================== -->
+        <div id="tab-config" class="tab-content role-admin role-guru role-developer">
+            <div class="guide-container glass-card">
+                <h3>⚙️ Pengaturan Sistem</h3>
+                <div class="form-group"><label>🏫 Logo Sekolah</label><div><div class="logo-preview-wrapper" onclick="document.getElementById('logoFileInput').click()"><img id="schoolLogoPreview" class="school-logo-preview" src=""><div>Klik untuk ganti</div></div><input type="file" id="logoFileInput" hidden accept="image/*" onchange="uploadSchoolLogo(this)"><button class="btn-action btn-danger neon-btn" onclick="removeSchoolLogo()" id="btnRemoveLogo">🗑️ Hapus</button></div></div>
+                <hr>
+                <div class="form-group"><label>🏫 Nama Sekolah</label><div><input type="text" id="inputSchoolName" placeholder="Nama Sekolah"><button class="btn-action btn-primary neon-btn" onclick="saveSchoolName()">Simpan</button></div></div>
+                <div class="form-group"><label>📋 Tipe Sekolah</label><div><select id="schoolTypeSelect"><option value="smp">SMP</option><option value="smk">SMK</option><option value="both">SMP & SMK</option></select><button class="btn-action btn-primary neon-btn" onclick="saveSchoolType()">Simpan</button></div></div>
+                <hr>
+                <div id="classesManager"><h4>📚 Daftar Kelas</h4><div id="classesList"></div><div><input type="text" id="newClassInput" placeholder="Contoh: VII A, X RPL"><button class="btn-action btn-success neon-btn" onclick="addClass()">➕ Tambah</button><button class="btn-action btn-primary neon-btn" onclick="saveClasses()">💾 Simpan</button></div></div>
+                <div id="majorsManager" style="display:none;"><h4>🎓 Daftar Jurusan (SMK)</h4><div id="majorsList"></div><div><input type="text" id="newMajorInput" placeholder="Contoh: RPL, TKJ"><button class="btn-action btn-success neon-btn" onclick="addMajor()">➕ Tambah</button><button class="btn-action btn-primary neon-btn" onclick="saveMajors()">💾 Simpan</button></div></div>
+                <hr>
+                <div class="form-group"><label>⏰ Delay Pulang Global</label><div><select id="globalDelayUnit"><option value="minutes">Menit</option><option value="hours">Jam</option></select><div id="globalDelayMinutesGroup"><input type="number" id="globalDelayMinutesValue" value="60"> menit</div><div id="globalDelayHoursGroup" style="display:none;"><select id="globalDelayHoursValue"></select> jam</div><button class="btn-action btn-primary neon-btn" onclick="saveGlobalDelay()">Simpan</button></div><div><small>Delay saat ini: <strong id="globalDelayDisplay">60 menit</strong></small></div></div>
+                <hr>
+                <h4>⏰ Pengaturan Jam Efektif & Hari Libur</h4>
+                <div class="form-group"><label>🕒 Batas Waktu Terlambat</label><div><input type="time" id="lateThresholdInput" value="07:30"><span>Siswa scan setelah jam ini => TERLAMBAT</span></div></div>
+                <div class="form-group"><label>🏠 Minimal Jam Pulang</label><div><input type="time" id="minOutTimeInput" value="14:00"><span>Scan pulang sebelum jam ini => peringatan</span></div></div>
+                <div class="form-group"><label>📅 Hari Libur Mingguan</label><div><label><input type="checkbox" value="0"> Minggu</label><label><input type="checkbox" value="6"> Sabtu</label><label><input type="checkbox" value="1"> Senin</label><label><input type="checkbox" value="2"> Selasa</label><label><input type="checkbox" value="3"> Rabu</label><label><input type="checkbox" value="4"> Kamis</label><label><input type="checkbox" value="5"> Jumat</label></div></div>
+                <div class="form-group"><label>📆 Tanggal Libur Khusus</label><div><input type="date" id="holidayDateInput"><button class="btn-action btn-secondary neon-btn" onclick="addHolidayDate()">➕ Tambah</button></div><div id="holidayDatesList"></div></div>
+                <button class="btn-action btn-primary neon-btn" onclick="saveAttendanceSettings()">💾 Simpan Pengaturan</button>
+                <div id="sensorStatusPanel" class="sensor-status-container glass-card" style="display:none;"><div class="sensor-header"><h4>🔍 STATUS 16 SENSOR FINGERPRINT</h4></div><div id="sensorGrid" class="sensor-grid"></div></div>
+                <div class="key-box glass-card"><div><strong>⚠️ Reset Data</strong><br><small>Hapus semua data</small></div><button class="btn-action btn-danger neon-btn" onclick="resetSystemData()">Reset Semua</button></div>
+            </div>
+        </div>
+
+        <!-- ==================== TAB GUIDE ==================== -->
+        <div id="tab-guide" class="tab-content">
+            <div class="guide-container glass-card">
+                <h3>📘 Panduan Sistem Absensi Fingerprint</h3>
+                <p>Sistem Absensi berbasis sidik jari dengan ESP32 dan real-time monitoring</p>
+                <details open><summary>1. 📝 Pendaftaran Akun</summary><div class="guide-box"><h4>Cara Mendaftar sebagai Siswa:</h4><ol><li>Pastikan ID Fingerprint sudah ada</li><li>Klik "Daftar disini" → pilih Siswa</li><li>Masukkan ID Generate, Email, Password, Kode Registrasi</li><li>Klik DAFTAR</li></ol><h4>Cara Mendaftar sebagai Guru:</h4><ol><li>Klik "Daftar disini" → pilih Guru</li><li>Isi Nama, Mapel, Email, Password, Kode Guru</li><li>Klik DAFTAR</li></ol></div></details>
+                <details><summary>2. 🔐 Login & Keamanan</summary><div class="guide-box"><h4>Login</h4><ol><li>Masukkan email & password → MASUK</li></ol><h4>Lupa Password?</h4><ol><li>Klik "Lupa Password?" → masukkan email → Kirim Link</li></ol></div></details>
+                <details><summary>3. 🤖 AI Assistant</summary><div class="guide-box"><h4>Perintah yang Didukung:</h4><ul><li><strong>📊 Data Siswa:</strong> "data siswa miftah", "id 1 siapa", "siswa kelas X"</li><li><strong>📈 Rekap & Statistik:</strong> "rekap miftah", "statistik"</li><li><strong>✏️ Manajemen Data (Admin/Guru):</strong> "tambah siswa ...", "update siswa id 8 delay 90", "hapus siswa id 8"</li></ul><p>Klik tombol 🤖 di pojok kanan bawah untuk membuka AI Assistant!</p></div></details>
+                <div class="guide-footer"><hr><div class="text-small"><p>📱 Sistem Absensi IoT - Fingerprint & Real-time</p><p>Dikembangkan oleh CV Haka Jaya | Versi 5.20 | © 2026</p></div></div>
+            </div>
+        </div>
+
+        <!-- ==================== TAB ANNOUNCEMENT LIST ==================== -->
+        <div id="tab-announcement_list" class="tab-content role-admin role-guru role-developer">
+            <div class="guide-container glass-card">
+                <h3>📋 Daftar Semua Pengumuman</h3>
+                <div><button class="btn-action btn-primary role-admin role-guru role-developer neon-btn" onclick="openAnnouncementModal()">➕ Buat Pengumuman Baru</button></div>
+                <div id="fullAnnouncementList"><div style="text-align:center; padding:20px;">⏳ Memuat daftar pengumuman...</div></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== MODALS ==================== -->
+    <div id="modal-profile" class="modal-overlay"><div class="modal-box glass-card"><div class="modal-title"><span>📸 Profil Saya</span><span onclick="closeModal('modal-profile')">✖</span></div><div class="profile-upload-wrapper avatar-ring" onclick="document.getElementById('profileFileInput').click()"><img id="profileImg" class="avatar-lg"><input type="file" id="profileFileInput" hidden accept="image/*" onchange="uploadProfilePhoto(this)"></div><div class="form-group"><input type="text" id="profileNameInput" placeholder="Nama Lengkap"></div><p id="profileEmail"></p><div class="form-group" id="group-subject"><input type="text" id="profileSubject" placeholder="Mata Pelajaran"></div><div class="form-group"><input type="text" id="profileKelas" placeholder="Kelas"></div><div class="form-group"><input type="text" id="profileJurusan" placeholder="Jurusan"></div><div class="modal-actions"><button class="btn-save neon-btn" onclick="handleUpdateProfileInfo()">💾 Simpan</button><button class="btn-cancel neon-btn" onclick="closeModal('modal-profile')">Tutup</button></div><hr><div style="text-align:center;"><button class="btn-action neon-btn" onclick="openChangePasswordModal()">🔑 Ganti Password</button></div></div></div>
+    <div id="modal-change-pass" class="modal-overlay"><div class="modal-box glass-card"><div class="modal-title"><span>🔑 Ganti Password</span><span onclick="closeModal('modal-change-pass')">✖</span></div><form onsubmit="handleChangePassword(event)"><div class="form-group"><input type="password" id="cpOld" placeholder="Password Lama" required></div><div class="form-group"><input type="password" id="cpNew" placeholder="Password Baru (min. 6)" required></div><div class="form-group"><input type="password" id="cpConfirm" placeholder="Konfirmasi" required></div><div class="modal-actions"><button type="button" class="btn-cancel neon-btn" onclick="closeModal('modal-change-pass')">Batal</button><button type="submit" class="btn-save neon-btn">Simpan</button></div></form></div></div>
+    <div id="modal-forgot" class="modal-overlay"><div class="modal-box glass-card"><div class="modal-title"><span>🔐 Reset Password</span><span onclick="closeModal('modal-forgot')">✖</span></div><p>Masukkan email Anda</p><div class="form-group"><input type="email" id="forgotEmail" placeholder="Email"></div><div class="modal-actions"><button class="btn-cancel neon-btn" onclick="closeModal('modal-forgot')">Batal</button><button class="btn-save neon-btn" onclick="processForgot()">Kirim Link</button></div></div></div>
+    <div id="modal-announcement" class="modal-overlay"><div class="modal-box glass-card"><div class="modal-title"><span>📢 Pengumuman</span><span onclick="closeModal('modal-announcement')">✖</span></div><input type="hidden" id="announcementId"><div class="form-group"><label>📝 Judul</label><input type="text" id="annTitle" class="form-control"></div><div class="form-group"><label>📄 Isi</label><textarea id="annMessage" rows="4" class="form-control"></textarea></div><div class="form-group"><label>🎨 Prioritas</label><select id="annPriority" class="form-control"><option value="low">🔵 Rendah</option><option value="normal" selected>🟢 Normal</option><option value="high">🔴 Penting</option></select></div><div class="form-group"><label>🖼️ Gambar</label><input type="file" id="annImageInput" accept="image/*" onchange="previewAnnouncementImage(this)"><div id="annImagePreviewContainer" style="display:none;"><img id="annImagePreview"><button type="button" class="btn-icon" onclick="removeAnnouncementImage()">🗑️</button></div><small>Max 2MB</small></div><div class="form-group"><label>⏰ Waktu Berakhir</label><select id="annExpiryType" onchange="toggleExpiryInput()"><option value="none">Tanpa Batas</option><option value="time">Jam</option><option value="date">Tanggal</option><option value="both">Tanggal & Jam</option></select></div><div id="annExpiryDateGroup" style="display:none;"><input type="date" id="annExpiryDate"></div><div id="annExpiryTimeGroup" style="display:none;"><input type="time" id="annExpiryTime"></div><div class="modal-actions"><button class="btn-cancel neon-btn" onclick="closeModal('modal-announcement')">Batal</button><button class="btn-save neon-btn" onclick="saveAnnouncement()">Simpan</button></div></div></div>
+    <div id="modal-ai-summary" class="modal-overlay"><div class="modal-box glass-card"><div class="modal-title"><span>🤖 AI Summary Absensi</span><span onclick="closeModal('modal-ai-summary')">✖</span></div><div id="aiSummaryContent"><div style="text-align:center; padding:40px;"><div class="loading-spinner"></div><h3>Memuat analisis...</h3></div></div><div class="modal-actions"><button class="btn-action btn-success neon-btn" onclick="exportAISummaryToPDF()" id="aiExportPdfBtn" style="display:none;">📄 PDF</button><button class="btn-action btn-secondary neon-btn" onclick="copyAISummaryToClipboard()" id="aiCopyBtn" style="display:none;">📋 Copy</button><button class="btn-cancel neon-btn" onclick="closeModal('modal-ai-summary')">Tutup</button></div></div></div>
+    <div id="modal-ai-assistant" class="modal-overlay"><div class="modal-box glass-card" style="max-width:600px; height:80vh; display:flex; flex-direction:column; padding:0;"><div class="modal-title"><span>🤖 AI Assistant</span><span onclick="closeAIAssistantModal()">✖</span></div><div id="aiChatMessages" style="flex:1; overflow-y:auto; padding:15px;"><div class="ai-message ai-bot"><div class="ai-avatar">🤖</div><div class="ai-bubble">Halo! Saya asisten AI.<br>Ketik "bantuan" untuk perintah.</div></div></div><div style="padding:15px; display:flex; gap:10px;"><textarea id="aiChatInput" placeholder="Tanyakan sesuatu... (Shift+Enter untuk kirim)" rows="1" style="flex:1; resize:none; padding:10px; border-radius:20px; border:1px solid var(--border); background:var(--bg-input); color:var(--text-primary);"></textarea><button id="aiSendBtn" class="neon-btn" style="padding:10px 20px; border-radius:20px; background:linear-gradient(135deg,#00bcd4,#2196f3); border:none; color:white; cursor:pointer;">📤 Kirim</button></div></div></div>
+    <div id="modal-friends" class="modal-overlay"><div class="modal-box glass-card"><div class="modal-title"><span>👥 Teman</span><span onclick="closeModal('modal-friends')">✖</span></div><div id="friendsPanel"></div></div></div>
+    <div id="modal-chat" class="modal-overlay"><div class="modal-box glass-card" style="max-width:800px; height:80vh;"><div class="modal-title"><span>💬 Pesan</span><span onclick="closeModal('modal-chat')">✖</span></div><div id="chatModalPanel" style="height:calc(100% - 60px);"><div class="chat-loading">⏳ Memuat chat...</div></div></div></div>
+    <div id="modal-create-status" class="modal-overlay"><div class="modal-box glass-card"><div class="modal-title"><span>📸 Buat Status</span><span onclick="closeModal('modal-create-status')">✖</span></div><div class="form-group"><label>Teks</label><textarea id="statusText" rows="3"></textarea></div><div class="form-group"><label>Gambar</label><input type="file" id="statusImageInput" accept="image/*" onchange="previewStatusImage(this)"><div id="statusImagePreviewContainer" style="display:none;"><img id="statusImagePreview"></div></div><div class="modal-actions"><button class="btn-cancel neon-btn" onclick="closeModal('modal-create-status')">Batal</button><button class="btn-save neon-btn" onclick="createStatus()">Upload</button></div></div></div>
+    <div id="modal-status-viewer" class="modal-overlay"><div class="modal-box" style="background:#000;"><div id="statusViewerContent"></div></div></div>
+    <div id="modal-absence" class="modal-overlay"><div class="modal-box glass-card"><div class="modal-title"><span>📋 Atur Ketidakhadiran</span><span onclick="closeModal('modal-absence')">✖</span></div><div class="modal-body"><div><input type="date" id="absenceDate"><select id="absenceKelas"><option value="all">Semua Kelas</option></select><select id="absenceJurusan"><option value="all">Semua Jurusan</option></select><button class="btn-action neon-btn" onclick="loadAbsenceList()">Tampilkan</button></div><div id="absenceListContainer"></div></div><div class="modal-actions"><button class="btn-cancel neon-btn" onclick="closeModal('modal-absence')">Tutup</button><button class="btn-save neon-btn" onclick="saveAllAbsenceStatus()">Simpan</button></div></div></div>
+    <div id="modal-qr-scanner" class="modal-overlay"><div class="modal-box glass-card"><div class="modal-title"><span>📷 Scan QR Code</span><span onclick="closeModal('modal-qr-scanner')">✖</span></div><div id="qr-reader" style="width:100%;"></div><div id="qr-reader-results"></div><div class="modal-actions"><button class="btn-cancel neon-btn" onclick="closeModal('modal-qr-scanner')">Tutup</button></div></div></div>
+
+    <!-- ==================== SCRIPTS ==================== -->
+    <script src="js/config.js"></script>
+    <script src="js/supabase-config.js"></script>
+    <script src="js/db.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/logger.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/dashboard.js"></script>
+    <script src="js/chat.js"></script>
+    <script src="js/friends.js"></script>
+    <script src="js/status.js"></script>
+    <script src="js/init.js"></script>
+    <script src="js/attendance.js"></script>
+    <script src="js/students.js"></script>
+    <script src="js/users.js"></script>
+    <script src="js/setting.js"></script>
+    <script src="js/announcement.js"></script>
+    <script src="js/logs.js"></script>
+    <script src="js/main.js"></script>
+    <script src="js/rekap.js"></script>
+    <script src="js/rekap-per-siswa.js"></script>
+    <script src="js/ai-summary.js"></script>
+    <script src="js/ai-assistant.js"></script>
+    <script src="js/wow-effects.js"></script>
+
+    <script>
+        // Inisialisasi nama sekolah animated
+        document.addEventListener('DOMContentLoaded', function() {
+            var schoolNameElement = document.getElementById('schoolNameDisplay');
+            if (schoolNameElement && !schoolNameElement.classList.contains('school-name-animated')) {
+                schoolNameElement.classList.add('school-name-animated');
+            }
+            // Inisialisasi WOW Effects
+            if (typeof initWowEffects === 'function') {
+                initWowEffects();
+            }
+        });
+
+        // Theme Functions
+        function initTheme() {
+            var savedTheme = localStorage.getItem('theme') || 'dark';
+            applyTheme(savedTheme);
+            var themeToggleBtn = document.getElementById('themeToggleBtn');
+            if (themeToggleBtn) {
+                var newBtn = themeToggleBtn.cloneNode(true);
+                themeToggleBtn.parentNode.replaceChild(newBtn, themeToggleBtn);
+                newBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    var current = document.body.classList.contains('light-mode') ? 'light' : 'dark';
+                    var newTheme = current === 'light' ? 'dark' : 'light';
+                    applyTheme(newTheme);
+                });
+            }
+        }
+        
+        function applyTheme(theme) {
+            var isLight = theme === 'light';
+            var toggleBtn = document.getElementById('themeToggleBtn');
+            if (isLight) {
+                document.body.classList.add('light-mode');
+                if (toggleBtn) toggleBtn.innerHTML = '☀️';
+                localStorage.setItem('theme', 'light');
+            } else {
+                document.body.classList.remove('light-mode');
+                if (toggleBtn) toggleBtn.innerHTML = '🌙';
+                localStorage.setItem('theme', 'dark');
+            }
+            setTimeout(function() {
+                if (typeof window.updateDashboardChart === 'function') window.updateDashboardChart();
+                if (typeof window.updateAttendanceDonutChart === 'function') window.updateAttendanceDonutChart();
+                if (typeof window.loadRekap === 'function' && document.getElementById('tab-rekap') && document.getElementById('tab-rekap').classList.contains('active')) window.loadRekap();
+            }, 100);
+        }
+
+        // Dropdown Functions
+        function toggleDropdown(id) { 
+            var d = document.getElementById(id); 
+            var c = d.querySelector('.dropdown-content'); 
+            closeAllDropdowns(); 
+            if(!c.classList.contains('open')){ 
+                c.classList.add('open'); 
+                document.getElementById('dropdownOverlay').classList.add('active'); 
+            } 
+        }
+        
+        function closeAllDropdowns() { 
+            document.querySelectorAll('.dropdown-content').forEach(function(c) { c.classList.remove('open'); }); 
+            document.getElementById('dropdownOverlay').classList.remove('active'); 
+        }
+        
+        document.addEventListener('keydown', function(e) { if(e.key === 'Escape') closeAllDropdowns(); });
+
+        // Escape HTML
+        function escapeHtml(s) { if(!s) return ''; return s.replace(/[&<>]/g, function(m) { return m === '&' ? '&amp;' : m === '<' ? '&lt;' : '&gt;'; }); }
+
+        // Switch Tab Override with animation
+        var originalSwitchTab = window.switchTab; 
+        if(originalSwitchTab){ 
+            window.switchTab = function(tabId){ 
+                var currentActive = document.querySelector('.tab-content.active');
+                if (currentActive && currentActive.id !== 'tab-' + tabId) {
+                    currentActive.style.animation = 'fadeSlideOut 0.15s ease forwards';
+                    setTimeout(function() {
+                        originalSwitchTab(tabId);
+                        if(tabId === 'announcement_list') { setTimeout(function() { if(typeof renderFullAnnouncementList === 'function') renderFullAnnouncementList(); }, 100); }
+                        if(tabId === 'chat') { setTimeout(function() { if(typeof forceRenderChat === 'function') forceRenderChat(); }, 100); }
+                        if(tabId === 'friends') { setTimeout(function() { if(typeof loadFriendRequests === 'function') loadFriendRequests(); if(typeof loadFriendsList === 'function') loadFriendsList(); }, 100); }
+                        if(tabId === 'logs') { setTimeout(function() { if(typeof initLogsSystem === 'function') initLogsSystem(); if(typeof renderLogsTable === 'function') renderLogsTable(); }, 100); }
+                        if(tabId === 'config') { setTimeout(function() { if(typeof initAllSettings === 'function') initAllSettings(); }, 100); }
+                        if(tabId === 'rekap') { setTimeout(function() { if(typeof loadRekap === 'function') loadRekap(); }, 100); }
+                    }, 50);
+                } else {
+                    originalSwitchTab(tabId);
+                }
+            }; 
+        }
+
+        // Utility Functions
+        function closeAIAssistantModal(){ var m = document.getElementById('modal-ai-assistant'); if(m) m.classList.remove('open'); }
+        function showToast(msg, type){ var t = document.getElementById('toast'); if(t){ t.textContent = msg; t.style.borderLeftColor = type === 'error' ? '#f44336' : '#00bcd4'; t.className = 'toast show'; setTimeout(function(){ t.className = t.className.replace('show',''); }, 3000); } }
+        function closeModal(id){ var m = document.getElementById(id); if(m) m.classList.remove('open'); }
+        function toggleFriendsModal(){ var m = document.getElementById('modal-friends'); if(m){ m.classList.add('open'); if(typeof renderFriendsPanel === 'function') renderFriendsPanel(); } }
+        function openChatModal(){ var m = document.getElementById('modal-chat'); if(m){ m.classList.add('open'); if(typeof renderChatInterface === 'function') renderChatInterface('chatModalPanel'); } }
+        function openAISummaryModal(){ if(typeof window.openAISummaryModal === 'function') window.openAISummaryModal(); }
+        function openAIAssistantModal(){ if(typeof window.openAIAssistantModal === 'function') window.openAIAssistantModal(); }
+
+        // DOM Ready Initialization
+        document.addEventListener('DOMContentLoaded', function(){
+            // Setup delay hours select options
+            var dh = document.getElementById('delayHoursValue'); if(dh && dh.children.length === 0) { for(var i = 1; i <= 24; i++) dh.innerHTML += '<option value="' + i + '">' + i + ' Jam</option>'; }
+            var gh = document.getElementById('globalDelayHoursValue'); if(gh && gh.children.length === 0) { for(var j = 1; j <= 24; j++) gh.innerHTML += '<option value="' + j + '">' + j + '</option>'; }
+            
+            // Setup delay input listeners
+            var dm = document.getElementById('delayMinutesValue'); if(dm && !dm._listenerAdded){ dm.addEventListener('input', function(){ var h = document.getElementById('newDelay'); if(h) h.value = this.value; }); dm._listenerAdded = true; }
+            var dh2 = document.getElementById('delayHoursValue'); if(dh2 && !dh2._listenerAdded){ dh2.addEventListener('change', function(){ var h = document.getElementById('newDelay'); if(h) h.value = this.value * 60; }); dh2._listenerAdded = true; }
+            var du = document.getElementById('delayUnit'); if(du && !du._listenerAdded){ du.addEventListener('change', function(){ if(typeof toggleDelayInput === 'function') toggleDelayInput(); }); du._listenerAdded = true; }
+            var gdm = document.getElementById('globalDelayMinutesValue'); if(gdm && !gdm._listenerAdded){ gdm.addEventListener('input', function(){ var h = document.getElementById('globalDelayHidden'); if(h) h.value = this.value; }); gdm._listenerAdded = true; }
+            var gdh2 = document.getElementById('globalDelayHoursValue'); if(gdh2 && !gdh2._listenerAdded){ gdh2.addEventListener('change', function(){ var h = document.getElementById('globalDelayHidden'); if(h) h.value = this.value * 60; }); gdh2._listenerAdded = true; }
+            var gdu = document.getElementById('globalDelayUnit'); if(gdu && !gdu._listenerAdded){ gdu.addEventListener('change', function(){ if(typeof toggleGlobalDelayInput === 'function') toggleGlobalDelayInput(); }); gdu._listenerAdded = true; }
+            setTimeout(function(){ if(typeof toggleDelayInput === 'function') toggleDelayInput(); if(typeof toggleGlobalDelayInput === 'function') toggleGlobalDelayInput(); }, 100);
+            
+            // Setup rekap custom range
+            var periodSelect = document.getElementById('rekapPeriod'); var customRangeGroup = document.getElementById('customRangeGroup'); 
+            if(periodSelect && customRangeGroup){ var today = new Date(); var startDate = new Date(); startDate.setDate(today.getDate() - 30); var startInput = document.getElementById('rekapStartDate'); var endInput = document.getElementById('rekapEndDate'); 
+            if(startInput && !startInput.value) startInput.value = startDate.toISOString().split('T')[0]; if(endInput && !endInput.value) endInput.value = today.toISOString().split('T')[0]; 
+            function toggleCustomRange(){ customRangeGroup.style.display = periodSelect.value === 'custom' ? 'flex' : 'none'; } periodSelect.addEventListener('change', toggleCustomRange); toggleCustomRange(); }
+            
+            // Init theme
+            setTimeout(initTheme, 50);
+            
+            // Init modules
+            setTimeout(function(){ 
+                if(typeof initRekapPerSiswa === 'function') initRekapPerSiswa(); 
+                if(typeof initAISummary === 'function') initAISummary(); 
+                if(typeof initAIAssistant === 'function') initAIAssistant(); 
+                if(typeof initChatSystem === 'function' && !window._chatInitialized){ window._chatInitialized = true; initChatSystem(); } 
+                if(typeof initFriendsSystem === 'function' && !window._friendsInitialized){ window._friendsInitialized = true; initFriendsSystem(); } 
+                if(typeof initStatusSystem === 'function' && !window._statusInitialized){ window._statusInitialized = true; initStatusSystem(); }
+                if(typeof initLogsSystem === 'function' && !window._logsInitialized){ window._logsInitialized = true; initLogsSystem(); }
+            }, 1500);
+        });
+
+        // Expose global functions
+        window.showToast = showToast;
+        window.closeModal = closeModal;
+        window.toggleDropdown = toggleDropdown;
+        window.closeAllDropdowns = closeAllDropdowns;
+        window.toggleFriendsModal = toggleFriendsModal;
+        window.openChatModal = openChatModal;
+        window.openAISummaryModal = openAISummaryModal;
+        window.openAIAssistantModal = openAIAssistantModal;
+        window.closeAIAssistantModal = closeAIAssistantModal;
+        window.initTheme = initTheme;
+        window.applyTheme = applyTheme;
+        window.escapeHtml = escapeHtml;
+    </script>
+
+    <!-- BRANDING FOOTER -->
+    <div class="branding-footer">
+        <img src="logo/hakatech.png" alt="HakaTech" class="branding-logo">
+        <span class="branding-text">Dikembangkan oleh CV Haka Jaya</span>
+    </div>
+</body>
+</html>
