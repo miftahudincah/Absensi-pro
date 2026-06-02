@@ -1,1 +1,0 @@
-isi semua file js
