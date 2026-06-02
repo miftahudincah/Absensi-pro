@@ -1,15 +1,13 @@
-// users.js - VERSION 5.0 (QR CODE FIXED - BISA TERBACA)
+// users.js - VERSION 4.2 (DENGAN LOG AKTIVITAS)
 // ============================================================================
 // Manajemen User: Generate kode registrasi (dengan QR), daftar kode,
 // daftar pengguna, ubah role, hapus user, reset password, reset sistem.
 // Role developer (zaki5go@gmail.com) memiliki akses penuh seperti admin
 // namun akun developer TIDAK bisa diubah role, dihapus, atau direset.
 //
-// PERUBAHAN V5.0:
-// - MEMPERBAIKI QR CODE: menggunakan format plain text (bukan JSON panjang)
-// - QR Code sekarang bisa terbaca oleh scanner
-// - Menambahkan fungsi download QR Code
-// - Menambahkan fallback jika QR Code gagal generate
+// PERUBAHAN V4.2:
+// - Menambahkan logActivity untuk generate kode, delete kode, update role,
+//   delete user, reset system, dan reset password
 // ============================================================================
 
 let usersDataReadyListenerAdded = false;
@@ -104,33 +102,7 @@ function populateStudentSelectForCode() {
     }
 }
 
-// ======================= FUNGSI DOWNLOAD QR CODE ========================
-function downloadQRCode(qrContainerId, filename) {
-    const qrContainer = document.getElementById(qrContainerId);
-    if (!qrContainer) {
-        showToast("❌ QR Code tidak ditemukan", "error");
-        return;
-    }
-    
-    // Cari canvas di dalam container
-    const qrCanvas = qrContainer.querySelector('canvas');
-    if (qrCanvas) {
-        try {
-            const link = document.createElement('a');
-            link.download = `QR_${filename.replace(/[^a-zA-Z0-9]/g, '_')}.png`;
-            link.href = qrCanvas.toDataURL('image/png');
-            link.click();
-            showToast("📥 QR Code berhasil diunduh", "success");
-        } catch (err) {
-            console.error("Download QR error:", err);
-            showToast("❌ Gagal mengunduh QR Code", "error");
-        }
-    } else {
-        showToast("❌ Canvas QR Code tidak ditemukan", "error");
-    }
-}
-
-// ======================= GENERATE KODE REGISTRASI + QR CODE (VERSI FIXED) ========================
+// ======================= GENERATE KODE REGISTRASI + QR CODE (DENGAN LOG) ========================
 function generateRegistrationCode() {
     if (!currentUser) {
         showToast("Anda harus login!", "error");
@@ -195,72 +167,36 @@ function generateRegistrationCode() {
         db.ref('codes/' + code).set(codeData).then(() => {
             const display = document.getElementById('generatedKeyDisplay');
             display.style.display = 'block';
-            
-            // ========== PERBAIKAN UTAMA: QR DATA dalam format PLAIN TEXT ==========
-            // Format: "REG-XXX|123" - lebih sederhana dan pasti terbaca
-            const qrData = `${code}|${selectedId}`;
+            const qrData = JSON.stringify({ code: code, studentId: selectedId });
             const qrContainerId = `qrcode-${code.replace(/[^a-zA-Z0-9]/g, '')}`;
 
             display.innerHTML = `
-                <div style="background: linear-gradient(135deg, #1a1a2e, #16213e); border-radius: 16px; padding: 20px; margin: 15px 0; border-left: 5px solid #4a90e2; box-shadow: 0 4px 15px rgba(0,0,0,0.3);">
-                    <div style="font-size: 12px; color: #888; letter-spacing: 1px;">✨ KODE REGISTRASI SISWA ✨</div>
-                    <div style="font-size: 28px; font-family: monospace; font-weight: bold; color: #4a90e2; margin: 12px 0; letter-spacing: 1px;">${code}</div>
-                    <div style="display: grid; grid-template-columns: auto 1fr; gap: 8px; font-size: 13px; margin: 10px 0;">
-                        <span style="color: #888;">📌 Tipe:</span><span><strong>SISWA</strong></span>
-                        <span style="color: #888;">🆔 ID Fingerprint:</span><span><strong>${selectedId}</strong> - ${escapeHtmlString(studentName)}</span>
-                        <span style="color: #888;">👤 Dibuat oleh:</span><span><strong>${escapeHtmlString(currentUser.nama || currentUser.email)}</strong></span>
-                    </div>
-                    <div style="margin-top: 10px; padding: 8px; background: rgba(74, 144, 226, 0.1); border-radius: 8px;">
-                        <small>⏰ Kode akan expired dalam <strong>5 jam</strong></small>
-                    </div>
-                    
-                    <!-- QR CODE CONTAINER -->
-                    <div style="display: flex; justify-content: center; margin: 20px 0;">
-                        <div id="${qrContainerId}" style="background: white; padding: 12px; border-radius: 16px; display: inline-block; box-shadow: 0 2px 10px rgba(0,0,0,0.2);"></div>
-                    </div>
-                    
-                    <div style="display: flex; gap: 12px; justify-content: center; margin-top: 10px;">
-                        <button class="btn-action btn-success" onclick="copyToClipboard('${code}')" style="padding: 8px 20px;">📋 Copy Kode</button>
-                        <button class="btn-action btn-primary" onclick="downloadQRCode('${qrContainerId}', '${code}')" style="padding: 8px 20px;">📥 Download QR</button>
-                    </div>
-                    
-                    <div style="margin-top: 15px; padding: 8px; background: rgba(76, 175, 80, 0.1); border-radius: 8px; text-align: center;">
-                        <small style="color: #4caf50;">✅ QR Code ini berisi: <strong>${qrData}</strong><br>Scan QR untuk mengisi otomatis formulir pendaftaran!</small>
-                    </div>
+                <div style="background: #1a1a2e; border-radius: 8px; padding: 15px; margin: 10px 0; border-left: 4px solid #4a90e2;">
+                    <div style="font-size: 12px; color: #888;">✨ KODE REGISTRASI BERHASIL DIGENERATE ✨</div>
+                    <div style="font-size: 20px; font-family: monospace; font-weight: bold; color: #4a90e2; margin: 10px 0;">${code}</div>
+                    <div>Tipe: <strong>${targetType.toUpperCase()}</strong></div>
+                    <div>Terkunci ID: <strong>${selectedId}</strong> - ${studentName}</div>
+                    <div>Dibuat oleh: <strong>${currentUser.nama || currentUser.email}</strong></div>
+                    <div style="margin-top: 10px;"><small>⏰ Kode akan expired dalam 5 jam</small></div>
+                    <div id="${qrContainerId}" style="margin: 15px auto; display: flex; justify-content: center;"></div>
+                    <button class="btn-action btn-success" onclick="copyToClipboard('${code}')" style="margin-top: 10px;">📋 Copy Kode</button>
                 </div>
             `;
 
-            // Generate QR Code dengan format PLAIN TEXT
             try {
-                const qrElement = document.getElementById(qrContainerId);
-                if (qrElement) {
-                    qrElement.innerHTML = ''; // Bersihkan dulu
-                    
-                    // Gunakan QRCode library dengan format plain text
-                    new QRCode(qrElement, {
-                        text: qrData,
-                        width: 180,
-                        height: 180,
-                        colorDark: "#000000",
-                        colorLight: "#ffffff",
-                        correctLevel: QRCode.CorrectLevel.H
-                    });
-                    
-                    console.log("✅ QR Code generated successfully with data:", qrData);
-                    showToast(`✅ Kode untuk ${studentName} berhasil dibuat! QR siap discan.`, "success");
-                } else {
-                    throw new Error("QR Container element not found");
-                }
+                new QRCode(document.getElementById(qrContainerId), {
+                    text: qrData,
+                    width: 150,
+                    height: 150,
+                    colorDark: "#000000",
+                    colorLight: "#ffffff",
+                    correctLevel: QRCode.CorrectLevel.H
+                });
             } catch (err) {
                 console.error("QR Code generation error:", err);
-                document.getElementById(qrContainerId).innerHTML = `
-                    <div style="padding: 20px; text-align: center; background: #ffebee; border-radius: 12px;">
-                        <span style="color: #f44336; font-size: 14px;">⚠️ Gagal generate QR</span><br>
-                        <small>Tapi kode tetap bisa digunakan: <strong>${code}</strong></small>
-                    </div>
-                `;
-                showToast(`✅ Kode untuk ${studentName} berhasil dibuat! (QR gagal, gunakan copy kode)`, "success");
+                document.getElementById(qrContainerId).innerHTML = '<span style="color:red;">Gagal generate QR</span>';
             }
+            showToast(`✅ Kode untuk ${studentName} berhasil dibuat!`, "success");
             
             // LOG: Generate kode siswa
             if (typeof logActivity === 'function') {
@@ -280,69 +216,35 @@ function generateRegistrationCode() {
         db.ref('codes/' + code).set(codeData).then(() => {
             const display = document.getElementById('generatedKeyDisplay');
             display.style.display = 'block';
-            
-            // Format QR untuk guru: cukup kode saja
-            const qrData = code;
+            const qrData = JSON.stringify({ code: code });
             const qrContainerId = `qrcode-${code.replace(/[^a-zA-Z0-9]/g, '')}`;
 
             display.innerHTML = `
-                <div style="background: linear-gradient(135deg, #1a1a2e, #16213e); border-radius: 16px; padding: 20px; margin: 15px 0; border-left: 5px solid #ff9800; box-shadow: 0 4px 15px rgba(0,0,0,0.3);">
-                    <div style="font-size: 12px; color: #888; letter-spacing: 1px;">✨ KODE REGISTRASI GURU ✨</div>
-                    <div style="font-size: 28px; font-family: monospace; font-weight: bold; color: #ff9800; margin: 12px 0; letter-spacing: 1px;">${code}</div>
-                    <div style="display: grid; grid-template-columns: auto 1fr; gap: 8px; font-size: 13px; margin: 10px 0;">
-                        <span style="color: #888;">📌 Tipe:</span><span><strong>GURU</strong></span>
-                        <span style="color: #888;">👤 Dibuat oleh:</span><span><strong>${escapeHtmlString(currentUser.nama || currentUser.email)}</strong></span>
-                    </div>
-                    <div style="margin-top: 10px; padding: 8px; background: rgba(255, 152, 0, 0.1); border-radius: 8px;">
-                        <small>⏰ Kode akan expired dalam <strong>5 jam</strong></small>
-                    </div>
-                    
-                    <!-- QR CODE CONTAINER -->
-                    <div style="display: flex; justify-content: center; margin: 20px 0;">
-                        <div id="${qrContainerId}" style="background: white; padding: 12px; border-radius: 16px; display: inline-block; box-shadow: 0 2px 10px rgba(0,0,0,0.2);"></div>
-                    </div>
-                    
-                    <div style="display: flex; gap: 12px; justify-content: center; margin-top: 10px;">
-                        <button class="btn-action btn-success" onclick="copyToClipboard('${code}')" style="padding: 8px 20px;">📋 Copy Kode</button>
-                        <button class="btn-action btn-primary" onclick="downloadQRCode('${qrContainerId}', '${code}')" style="padding: 8px 20px;">📥 Download QR</button>
-                    </div>
-                    
-                    <div style="margin-top: 15px; padding: 8px; background: rgba(76, 175, 80, 0.1); border-radius: 8px; text-align: center;">
-                        <small style="color: #4caf50;">✅ QR Code ini berisi kode registrasi guru: <strong>${code}</strong><br>Scan QR untuk mengisi otomatis formulir pendaftaran!</small>
-                    </div>
+                <div style="background: #1a1a2e; border-radius: 8px; padding: 15px; margin: 10px 0; border-left: 4px solid #ff9800;">
+                    <div style="font-size: 12px; color: #888;">✨ KODE REGISTRASI GURU ✨</div>
+                    <div style="font-size: 20px; font-family: monospace; font-weight: bold; color: #ff9800; margin: 10px 0;">${code}</div>
+                    <div>Tipe: <strong>${targetType.toUpperCase()}</strong></div>
+                    <div>Dibuat oleh: <strong>${currentUser.nama || currentUser.email}</strong></div>
+                    <div style="margin-top: 10px;"><small>⏰ Kode akan expired dalam 5 jam</small></div>
+                    <div id="${qrContainerId}" style="margin: 15px auto; display: flex; justify-content: center;"></div>
+                    <button class="btn-action btn-success" onclick="copyToClipboard('${code}')" style="margin-top: 10px;">📋 Copy Kode</button>
                 </div>
             `;
 
-            // Generate QR Code dengan format PLAIN TEXT
             try {
-                const qrElement = document.getElementById(qrContainerId);
-                if (qrElement) {
-                    qrElement.innerHTML = '';
-                    
-                    new QRCode(qrElement, {
-                        text: qrData,
-                        width: 180,
-                        height: 180,
-                        colorDark: "#000000",
-                        colorLight: "#ffffff",
-                        correctLevel: QRCode.CorrectLevel.H
-                    });
-                    
-                    console.log("✅ QR Code generated successfully with data:", qrData);
-                    showToast("✅ Kode registrasi Guru berhasil dibuat! QR siap discan.", "success");
-                } else {
-                    throw new Error("QR Container element not found");
-                }
+                new QRCode(document.getElementById(qrContainerId), {
+                    text: qrData,
+                    width: 150,
+                    height: 150,
+                    colorDark: "#000000",
+                    colorLight: "#ffffff",
+                    correctLevel: QRCode.CorrectLevel.H
+                });
             } catch (err) {
                 console.error("QR Code generation error:", err);
-                document.getElementById(qrContainerId).innerHTML = `
-                    <div style="padding: 20px; text-align: center; background: #ffebee; border-radius: 12px;">
-                        <span style="color: #f44336; font-size: 14px;">⚠️ Gagal generate QR</span><br>
-                        <small>Tapi kode tetap bisa digunakan: <strong>${code}</strong></small>
-                    </div>
-                `;
-                showToast("✅ Kode registrasi Guru berhasil dibuat! (QR gagal, gunakan copy kode)", "success");
+                document.getElementById(qrContainerId).innerHTML = '<span style="color:red;">Gagal generate QR</span>';
             }
+            showToast(`✅ Kode registrasi Guru berhasil dibuat!`, "success");
             
             // LOG: Generate kode guru
             if (typeof logActivity === 'function') {
@@ -395,7 +297,7 @@ function renderCodesTable() {
     if (!tbody) return;
     tbody.innerHTML = '';
     if (typeof dbData === 'undefined' || !dbData.codes || dbData.codes.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding: 30px; color:#888;">🔑 Belum ada kode registrasi. Generate kode di atas.</option></table></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding: 30px; color:#888;">🔑 Belum ada kode registrasi. Generate kode di atas.</option></td></tr>`;
         updateCodesStatistics();
         return;
     }
@@ -507,7 +409,7 @@ function renderUsersTable() {
     }
     tbody.innerHTML = '';
     if (typeof dbData === 'undefined' || !dbData.users_auth || dbData.users_auth.length === 0) {
-        tbody.innerHTML = `<table><td colspan="6" style="text-align:center; padding: 30px; color:#888;">👥 Belum ada pengguna terdaftar.</option><tr></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 30px; color:#888;">👥 Belum ada pengguna terdaftar.</option></td></tr>`;
         return;
     }
 
@@ -516,7 +418,7 @@ function renderUsersTable() {
     data.sort((a, b) => (roleOrder[a.role] || 4) - (roleOrder[b.role] || 4));
 
     if (data.length === 0) {
-        tbody.innerHTML = `<table><td colspan="6" style="text-align:center; padding: 30px; color:#888;">🔍 Tidak ada pengguna yang cocok dengan pencarian.</option></td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 30px; color:#888;">🔍 Tidak ada pengguna yang cocok dengan pencarian.</option></td></tr>`;
         return;
     }
 
@@ -583,11 +485,11 @@ function renderUsersTable() {
         tbody.innerHTML += `
             <tr class="${isMe ? 'current-user-row' : ''}">
                 <td style="text-align:center;"><img src="${avatar}" style="width:40px; height:40px; border-radius:50%; object-fit:cover;"></td>
-                <td><strong>${escapeHtmlString(u.nama)}</strong>${isMe ? '<br><small style="color:#4a90e2;">Akun Anda</small>' : ''}</div>
-                <td style="color:#aaa; font-size:0.85rem;">${u.email || '-'}</div>
-                <td>${roleHtml}</div>
-                <td style="color:#888; font-size:0.8rem;">${detailIcon} ${escapeHtmlString(detailText)}<br><small>📅 ${registeredDate}</small></div>
-                <td style="text-align:center;">${actionsHtml}</div>
+                <td><strong>${escapeHtmlString(u.nama)}</strong>${isMe ? '<br><small style="color:#4a90e2;">Akun Anda</small>' : ''}</td>
+                <td style="color:#aaa; font-size:0.85rem;">${u.email || '-'}</td>
+                <td>${roleHtml}</td>
+                <td style="color:#888; font-size:0.8rem;">${detailIcon} ${escapeHtmlString(detailText)}<br><small>📅 ${registeredDate}</small></td>
+                <td style="text-align:center;">${actionsHtml}</td>
             </tr>
         `;
     });
@@ -737,6 +639,5 @@ window.resetSystemData = resetSystemData;
 window.copyToClipboard = copyToClipboard;
 window.resetUserPassword = resetUserPassword;
 window.cleanupUsersSystem = cleanupUsersSystem;
-window.downloadQRCode = downloadQRCode;
 
-console.log("✅ users.js V5.0 loaded - QR Code FIXED! Format PLAIN TEXT, bisa terbaca scanner.");
+console.log("✅ users.js V4.2 loaded - Dengan log aktivitas untuk manajemen user & kode");

@@ -1,10 +1,9 @@
-// ui.js - VERSION 5.19 (ADDED TAB TRANSITION ANIMATIONS)
+// ui.js - VERSION 5.18 (FIX: USER NAME & ROLE SYNC ISSUE)
 // Berisi fungsi-fungsi antarmuka pengguna, modal, profil, dan inisialisasi dashboard
-// PERUBAHAN V5.19: 
-//   - Menambahkan animasi fade slide untuk perpindahan tab
-//   - Menambahkan efek ripple pada tombol
-//   - Menambahkan animasi hover pada cards dan tabel
-//   - Menambahkan inisialisasi animasi global
+// PERUBAHAN V5.18: 
+//   - Memperbaiki updateUserInterface() untuk update navbar user (nama & role)
+//   - Menambahkan force update setelah login untuk memastikan data sinkron
+//   - Menambahkan validasi dan perbaikan data user saat login
 // ============================================================================
 
 // ======================== GLOBAL UI STATE ========================
@@ -17,100 +16,6 @@ const MAX_POPULATE_RETRY = 20;
 let chatRenderRetryCount = 0;
 const MAX_CHAT_RENDER_RETRY = 10;
 let photoRefreshListenerAttached = false;
-
-// ======================== ANIMATION FUNCTIONS ========================
-
-/**
- * Inisialisasi semua animasi tambahan
- */
-function initAnimations() {
-    console.log("✨ Initializing animations...");
-    
-    // Hilangkan class page-loading setelah DOM siap
-    document.body.classList.remove('page-loading');
-    
-    // Tambahkan delay index untuk friend items
-    const friendItems = document.querySelectorAll('.friend-item, .friend-request-item');
-    friendItems.forEach((item, index) => {
-        item.style.setProperty('--item-index', index);
-    });
-    
-    // Tambahkan efek ripple ke semua tombol yang memiliki class btn-action
-    const rippleButtons = document.querySelectorAll('.btn-action, .btn-primary, .btn-save, .btn-cancel, .navbar-logout, .dropdown-btn');
-    rippleButtons.forEach(btn => {
-        btn.classList.add('ripple-effect');
-    });
-    
-    // Observer untuk animasi elemen yang baru ditambahkan
-    const observer = new MutationObserver((mutations) => {
-        mutations.forEach((mutation) => {
-            if (mutation.type === 'childList') {
-                mutation.addedNodes.forEach((node) => {
-                    if (node.nodeType === 1) {
-                        // Beri animasi pada elemen baru
-                        if (node.classList && node.classList.contains('friend-item')) {
-                            node.style.animation = 'slideInLeft 0.25s ease';
-                        }
-                        if (node.classList && node.classList.contains('friend-request-item')) {
-                            node.style.animation = 'slideInLeft 0.25s ease';
-                        }
-                        if (node.classList && node.classList.contains('announcement-item')) {
-                            node.style.animation = 'announcementFadeIn 0.3s ease';
-                        }
-                        if (node.classList && node.classList.contains('chat-message')) {
-                            node.style.animation = 'messagePopIn 0.25s ease';
-                        }
-                        // Tambahkan efek fade untuk baris tabel baru
-                        if (node.nodeName === 'TR' && node.parentElement?.id === 'tbody-attendance') {
-                            node.style.animation = 'highlightNew 0.5s ease';
-                        }
-                    }
-                });
-            }
-        });
-    });
-    
-    observer.observe(document.body, { childList: true, subtree: true });
-    
-    console.log("✅ Animations initialized");
-}
-
-/**
- * Efek ripple untuk tombol
- */
-function createRippleEffect(event) {
-    const button = event.currentTarget;
-    const ripple = document.createElement('span');
-    const rect = button.getBoundingClientRect();
-    const size = Math.max(rect.width, rect.height);
-    const x = event.clientX - rect.left - size / 2;
-    const y = event.clientY - rect.top - size / 2;
-    
-    ripple.style.width = ripple.style.height = `${size}px`;
-    ripple.style.left = `${x}px`;
-    ripple.style.top = `${y}px`;
-    ripple.className = 'ripple';
-    
-    const existingRipple = button.querySelector('.ripple');
-    if (existingRipple) existingRipple.remove();
-    
-    button.appendChild(ripple);
-    
-    setTimeout(() => {
-        ripple.remove();
-    }, 600);
-}
-
-/**
- * Setup ripple effect listeners
- */
-function setupRippleEffects() {
-    const buttons = document.querySelectorAll('.btn-action, .btn-primary, .btn-save, .btn-cancel, .navbar-logout, .dropdown-btn');
-    buttons.forEach(btn => {
-        btn.removeEventListener('click', createRippleEffect);
-        btn.addEventListener('click', createRippleEffect);
-    });
-}
 
 // ======================== HELPER FUNCTIONS ========================
 
@@ -578,10 +483,6 @@ function initApp() {
     // Setup realtime listener untuk foto profil
     setupPhotoRealtimeListener();
     
-    // ========== INISIALISASI ANIMASI ==========
-    initAnimations();
-    setupRippleEffects();
-    
     // ========== FORCE UPDATE SETELAH DELAY ==========
     setTimeout(() => {
         console.log("🔄 Force re-update UI after 1 second...");
@@ -590,7 +491,6 @@ function initApp() {
             updateSidebarUserInfo();
         }
         applyRolePermissions();
-        setupRippleEffects();
     }, 1000);
     
     // ========== FORCE UPDATE SETELAH 3 DETIK (UNTUK JAGA-JAGA) ==========
@@ -600,7 +500,6 @@ function initApp() {
         if (typeof updateSidebarUserInfo === 'function') {
             updateSidebarUserInfo();
         }
-        setupRippleEffects();
     }, 3000);
     
     console.log("🔧 Starting to populate all filters (with improved retry)...");
@@ -1340,45 +1239,19 @@ function updateClock() {
     }
 }
 
-// ======================== SWITCH TAB (DENGAN ANIMASI) ========================
+// ======================== SWITCH TAB (DIPERBAIKI UNTUK CHAT) ========================
 function switchTab(tabId) {
     console.log("📑 Switching to tab:", tabId);
-    
-    // Dapatkan tab yang aktif saat ini
-    const currentActive = document.querySelector('.tab-content.active');
-    const newTab = document.getElementById(`tab-${tabId}`);
-    
-    if (currentActive && currentActive.id === newTab?.id) return;
-    
-    // Animasi fade out untuk tab aktif
-    if (currentActive) {
-        currentActive.style.animation = 'none';
-        currentActive.offsetHeight; // Force reflow
-        currentActive.style.animation = 'fadeSlideOut 0.15s ease forwards';
-    }
-    
-    // Update class active
     document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
     document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
-    
-    if (newTab) newTab.classList.add('active');
+    const targetTab = document.getElementById(`tab-${tabId}`);
+    if (targetTab) targetTab.classList.add('active');
     else console.warn(`Tab content #tab-${tabId} not found`);
-    
     const activeBtn = Array.from(document.querySelectorAll('.tab-btn')).find(b => b.getAttribute('onclick')?.includes(tabId));
     if (activeBtn) activeBtn.classList.add('active');
     
     updateSidebarActiveState();
     updateMobileNavTitle(tabId);
-    
-    // Animasi fade in untuk tab baru
-    if (newTab) {
-        newTab.style.animation = 'none';
-        newTab.offsetHeight; // Force reflow
-        newTab.style.animation = 'fadeSlideIn 0.35s cubic-bezier(0.2, 0.9, 0.4, 1.1)';
-    }
-    
-    // Dispatch event untuk tab switch
-    window.dispatchEvent(new CustomEvent('tabSwitched', { detail: { tabId: tabId } }));
     
     setTimeout(() => {
         if (tabId === 'dashboard') {
@@ -1404,11 +1277,14 @@ function switchTab(tabId) {
             if (typeof loadFriendRequests === 'function') loadFriendRequests();
             if (typeof loadFriendsList === 'function') loadFriendsList();
         } else if (tabId === 'chat') {
+            // ========== PERBAIKAN UNTUK CHAT ==========
             console.log("💬 Switching to chat tab, calling forceRenderChat...");
+            // Bersihkan container terlebih dahulu
             const chatPanel = document.getElementById('chatPanel');
             if (chatPanel) {
                 chatPanel.innerHTML = '<div class="chat-loading" style="text-align: center; padding: 40px; color: var(--text-muted);">⏳ Memuat fitur chat...</div>';
             }
+            // Panggil forceRenderChat untuk memastikan chat tampil
             forceRenderChat();
         } else if (tabId === 'logs') {
             if (typeof initLogsSystem === 'function') {
@@ -2082,12 +1958,12 @@ function renderUsersTable() {
     const search = searchInput ? searchInput.value.toLowerCase() : '';
     tbody.innerHTML = '';
     if (!dbData.users_auth || dbData.users_auth.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:20px; color:#888;">📭 Tidak ada pengguna ditemukan.${search ? '<br><small>Coba kata kunci lain</small>' : ''}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:20px; color:#888;">📭 Tidak ada pengguna ditemukan.${search ? '<br><small>Coba kata kunci lain</small>' : ''}NonNull</div></div>`;
         return;
     }
     let data = dbData.users_auth.filter(u => u.nama && u.nama.toLowerCase().includes(search));
     if (data.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:20px; color:#888;">🔍 Tidak ada pengguna yang cocok dengan pencarian.${search ? '<br><small>Coba kata kunci lain</small>' : ''}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:20px; color:#888;">🔍 Tidak ada pengguna yang cocok dengan pencarian.${search ? '<br><small>Coba kata kunci lain</small>' : ''}</div></div>`;
         return;
     }
     data.forEach(u => {
@@ -2117,13 +1993,13 @@ function renderUsersTable() {
         else if (u.role === 'developer') detailText = 'Developer (Paten)';
         else detailText = '-';
         tbody.innerHTML += `<tr>
-            <td style="text-align:center;"><img src="${avatar}" style="width:32px; height:32px; border-radius:50%; object-fit:cover;"></td>
-            <td><strong>${escapeHtmlString(u.nama)}</strong>${isMe ? '<br><small style="color:#4a90e2;">Akun Anda</small>' : ''}</td>
-            <td style="color:#aaa; font-size:0.9rem;">${u.email || '-'}</td>
-            <td>${roleHtml}</td>
-            <td style="color:#888; font-size:0.85rem;">${escapeHtmlString(detailText)}</td>
-            <td style="text-align:center;">${actionsHtml}</td>
-        </tr>`;
+            <td style="text-align:center;"><img src="${avatar}" style="width:32px; height:32px; border-radius:50%; object-fit:cover;"></div>
+            <td><strong>${escapeHtmlString(u.nama)}</strong>${isMe ? '<br><small style="color:#4a90e2;">Akun Anda</small>' : ''}</div>
+            <td style="color:#aaa; font-size:0.9rem;">${u.email || '-'}</div>
+            <td>${roleHtml}</div>
+            <td style="color:#888; font-size:0.85rem;">${escapeHtmlString(detailText)}</div></div>
+            <td style="text-align:center;">${actionsHtml}</div></div>
+        `;
     });
     console.log(`📊 renderUsersTable: ${data.length} users displayed`);
 }
@@ -2206,8 +2082,6 @@ window.ensureChatRendered = ensureChatRendered;
 window.refreshAllAvatars = refreshAllAvatars;
 window.setupPhotoRealtimeListener = setupPhotoRealtimeListener;
 window.validateAndFixCurrentUser = validateAndFixCurrentUser;
-window.initAnimations = initAnimations;
-window.setupRippleEffects = setupRippleEffects;
 
 // ======================== SIDEBAR EXPORTS ========================
 window.toggleSidebar = toggleSidebar;
@@ -2220,4 +2094,4 @@ window.applySidebarRolePermissions = applySidebarRolePermissions;
 // Debug function
 window.debugAttendanceData = debugAttendanceData;
 
-console.log("✅ ui.js V5.19 loaded - Added tab transition animations and ripple effects!");
+console.log("✅ ui.js V5.18 loaded - User name & role sync fixed!");
