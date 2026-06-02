@@ -1,4 +1,4 @@
-// ai-assistant.js - VERSION 3.0 (ULTRA PROFESSIONAL AI ASSISTANT)
+// ai-assistant.js - VERSION 3.1 (IMPROVED UI & ENTER BEHAVIOR)
 // Asisten AI SUPER PROFESIONAL dengan Groq API (Llama 3.3 70B)
 // Fitur LENGKAP:
 // - CRUD siswa lengkap (tambah, edit, hapus via chat)
@@ -8,6 +8,8 @@
 // - Multi-intent parsing canggih
 // - Rekomendasi profesional berbasis data
 // - Fallback cerdas dengan pengetahuan umum
+// - Tampilan chat modern dengan bubble indikator typing
+// - Enter untuk baris baru, Shift+Enter untuk kirim pesan
 // ============================================================================
 
 // ======================= KONFIGURASI API =======================
@@ -71,7 +73,7 @@ function formatMarkdown(text) {
     if (!text) return '';
     text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
     text = text.replace(/\*(.*?)\*/g, '<em>$1</em>');
-    text = text.replace(/`(.*?)`/g, '<code style="background:rgba(0,0,0,0.2);padding:2px 6px;border-radius:4px;">$1</code>');
+    text = text.replace(/`(.*?)`/g, '<code style="background:rgba(0,0,0,0.2);padding:2px 6px;border-radius:4px;font-family:monospace;">$1</code>');
     text = text.replace(/\n/g, '<br>');
     text = text.replace(/^[•\-]\s+(.*?)$/gm, '<li>$1</li>');
     if (text.includes('<li>') && !text.includes('<ul>')) {
@@ -1222,7 +1224,114 @@ async function processAIMessage(message) {
     return await callGroqAPI(message, currentAIContext);
 }
 
-// ======================= UI KOMPONEN =======================
+// ======================= TYPING ANIMATION CSS =======================
+function addTypingAnimationStyle() {
+    if (document.getElementById('ai-typing-style')) return;
+    
+    const style = document.createElement('style');
+    style.id = 'ai-typing-style';
+    style.textContent = `
+        .typing-dot {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #00bcd4;
+            margin: 0 2px;
+            animation: typingBounce 1.4s infinite ease-in-out both;
+        }
+        .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+        .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+        .typing-dot:nth-child(3) { animation-delay: 0s; }
+        
+        @keyframes typingBounce {
+            0%, 80%, 100% { transform: scale(0.6); opacity: 0.5; }
+            40% { transform: scale(1.2); opacity: 1; }
+        }
+        
+        /* Scrollbar styling */
+        .ai-chat-messages::-webkit-scrollbar {
+            width: 6px;
+        }
+        .ai-chat-messages::-webkit-scrollbar-track {
+            background: rgba(0,0,0,0.08);
+            border-radius: 10px;
+        }
+        .ai-chat-messages::-webkit-scrollbar-thumb {
+            background: linear-gradient(135deg, #00bcd4, #2196f3);
+            border-radius: 10px;
+        }
+        .ai-chat-messages::-webkit-scrollbar-thumb:hover {
+            background: #00bcd4;
+        }
+        
+        /* Chat bubble hover effects */
+        .ai-message-bubble {
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .ai-message-bubble:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        
+        /* Input field styling */
+        #aiChatInput {
+            transition: all 0.2s;
+            font-family: 'Inter', sans-serif;
+        }
+        #aiChatInput:focus {
+            outline: none;
+            border-color: #00bcd4 !important;
+            box-shadow: 0 0 0 3px rgba(0,188,212,0.2) !important;
+        }
+        
+        /* Fade In Animation */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(12px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .ai-message {
+            animation: fadeInUp 0.3s ease;
+        }
+        
+        /* Pulse animation for avatar */
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.08); }
+            100% { transform: scale(1); }
+        }
+        
+        .ai-avatar:hover {
+            animation: pulse 0.3s ease;
+        }
+        
+        /* Modal slide in */
+        .modal-overlay.open .modal-box {
+            animation: modalSlideIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        
+        @keyframes modalSlideIn {
+            from {
+                opacity: 0;
+                transform: scale(0.95) translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1) translateY(0);
+            }
+        }
+    `;
+    document.head.appendChild(style);
+}
+
+// ======================= UI KOMPONEN MODERN =======================
 
 function addAIAssistantButton() {
     if (document.getElementById('aiAssistantBtn')) return;
@@ -1230,7 +1339,7 @@ function addAIAssistantButton() {
     const floatingBtn = document.createElement('button');
     floatingBtn.id = 'aiAssistantBtn';
     floatingBtn.innerHTML = '🤖';
-    floatingBtn.title = 'AI Assistant Professional';
+    floatingBtn.title = 'AI Assistant Professional - Klik untuk chat';
     floatingBtn.onclick = () => openAIAssistantModal();
     floatingBtn.style.cssText = `
         position: fixed;
@@ -1267,27 +1376,82 @@ function addAIAssistantButton() {
 function openAIAssistantModal() {
     if (aiAssistantModalOpen) return;
     
+    addTypingAnimationStyle();
+    
     let modal = document.getElementById('modal-ai-assistant');
     if (!modal) {
         document.body.insertAdjacentHTML('beforeend', `
             <div id="modal-ai-assistant" class="modal-overlay">
-                <div class="modal-box" style="max-width: 650px; width: 90%; height: 85vh; display: flex; flex-direction: column; padding: 0;">
-                    <div class="modal-title" style="padding: 15px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
-                        <span>🤖 <strong>AI Assistant Professional</strong> <small style="font-size: 11px; color: #00bcd4;">Groq Llama 3.3 70B</small></span>
-                        <span onclick="closeAIAssistantModal()" style="cursor: pointer; font-size: 24px;">✖</span>
+                <div class="modal-box" style="max-width: 650px; width: 90%; height: 85vh; display: flex; flex-direction: column; padding: 0; border-radius: 28px; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);">
+                    
+                    <!-- HEADER GRADIENT MODERN -->
+                    <div class="modal-title" style="padding: 18px 24px; border-bottom: none; display: flex; justify-content: space-between; align-items: center; background: linear-gradient(135deg, #00bcd4, #2196f3, #1a237e); color: white;">
+                        <div style="display: flex; align-items: center; gap: 14px;">
+                            <div style="width: 44px; height: 44px; background: rgba(255,255,255,0.2); border-radius: 50%; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(4px);">
+                                <span style="font-size: 28px;">🤖</span>
+                            </div>
+                            <div>
+                                <strong style="font-size: 1.2rem; letter-spacing: -0.3px;">AI Assistant Professional</strong>
+                                <small style="display: block; font-size: 10px; opacity: 0.85;">Powered by Groq Llama 3.3 70B</small>
+                            </div>
+                        </div>
+                        <span onclick="closeAIAssistantModal()" style="cursor: pointer; font-size: 26px; line-height: 1; padding: 0 8px; transition: all 0.2s; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: rgba(255,255,255,0.1);" onmouseover="this.style.background='rgba(255,255,255,0.2)'" onmouseout="this.style.background='rgba(255,255,255,0.1)'">✖</span>
                     </div>
-                    <div id="aiChatMessages" style="flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 12px;">
-                        <div class="ai-message ai-bot">
-                            <div class="ai-avatar" style="width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(135deg, #00bcd4, #2196f3); display: flex; align-items: center; justify-content: center; font-size: 20px;">🤖</div>
-                            <div class="ai-bubble" style="background: var(--bg-hover); padding: 10px 15px; border-radius: 18px; max-width: 80%; line-height: 1.5;">
+                    
+                    <!-- CHAT MESSAGES AREA -->
+                    <div id="aiChatMessages" class="ai-chat-messages" style="flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 16px; background: var(--bg-card);">
+                        <div class="ai-message ai-bot" style="display: flex; gap: 12px; animation: fadeInUp 0.3s ease;">
+                            <div class="ai-avatar" style="width: 42px; height: 42px; border-radius: 50%; background: linear-gradient(135deg, #00bcd4, #2196f3); display: flex; align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0; box-shadow: 0 4px 12px rgba(0,188,212,0.3);">🤖</div>
+                            <div class="ai-message-bubble" style="background: var(--bg-hover); padding: 14px 20px; border-radius: 22px; border-top-left-radius: 6px; max-width: 80%; line-height: 1.6; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
                                 ${formatMarkdown(getProfessionalGreeting())}
                             </div>
                         </div>
                     </div>
-                    <div style="padding: 15px; border-top: 1px solid var(--border); display: flex; gap: 10px;">
-                        <input type="text" id="aiChatInput" placeholder="Tanyakan sesuatu... misal: 'data siswa kelas X' atau 'tambah siswa...'" 
-                               style="flex: 1; padding: 12px; border-radius: 30px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary);">
-                        <button id="aiSendBtn" style="padding: 12px 20px; border-radius: 30px; background: linear-gradient(135deg, #00bcd4, #2196f3); border: none; color: white; cursor: pointer;">📤 Kirim</button>
+                    
+                    <!-- INPUT AREA MODERN -->
+                    <div style="padding: 16px 20px 20px 20px; border-top: 1px solid var(--border); background: var(--bg-sidebar);">
+                        <div style="display: flex; gap: 12px; align-items: flex-end;">
+                            <!-- TEXTAREA DENGAN DESAIN MODERN -->
+                            <div style="flex: 1; position: relative;">
+                                <textarea id="aiChatInput" 
+                                    placeholder="Tanyakan sesuatu... ✨"
+                                    rows="1"
+                                    style="width: 100%; padding: 14px 18px; border-radius: 28px; border: 1.5px solid var(--border); background: var(--bg-card); color: var(--text-primary); font-family: 'Inter', sans-serif; font-size: 14px; resize: none; min-height: 52px; max-height: 140px; transition: all 0.2s; line-height: 1.5; outline: none; box-shadow: 0 1px 3px rgba(0,0,0,0.05);"></textarea>
+                                <!-- DECORATIVE ELEMENTS - Keyboard hint -->
+                                <div style="position: absolute; bottom: 12px; right: 16px; font-size: 11px; color: var(--text-muted); background: var(--bg-card); padding: 2px 8px; border-radius: 20px; pointer-events: none; opacity: 0.6;">
+                                    ⏎ Enter baris baru | ⇧⏎ Kirim
+                                </div>
+                            </div>
+                            
+                            <!-- TOMBOL KIRIM MODERN -->
+                            <button id="aiSendBtn" 
+                                style="padding: 0 24px; height: 52px; border-radius: 52px; background: linear-gradient(135deg, #00bcd4, #2196f3); border: none; color: white; cursor: pointer; font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 10px; transition: all 0.25s ease; box-shadow: 0 4px 12px rgba(0,188,212,0.3);"
+                                onmouseover="this.style.transform='scale(1.02)'; this.style.boxShadow='0 6px 16px rgba(0,188,212,0.4)'"
+                                onmouseout="this.style.transform='scale(1)'; this.style.boxShadow='0 4px 12px rgba(0,188,212,0.3)'">
+                                <span style="font-size: 18px;">📤</span>
+                                <span>Kirim</span>
+                            </button>
+                        </div>
+                        
+                        <!-- TIPS BAR -->
+                        <div style="display: flex; gap: 16px; margin-top: 12px; padding: 0 8px; flex-wrap: wrap;">
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                <span style="font-size: 12px;">💡</span>
+                                <span style="font-size: 11px; color: var(--text-muted);">Contoh: "data siswa Budi"</span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                <span style="font-size: 12px;">📊</span>
+                                <span style="font-size: 11px; color: var(--text-muted);">"rekap Ani"</span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                <span style="font-size: 12px;">➕</span>
+                                <span style="font-size: 11px; color: var(--text-muted);">"tambah siswa..."</span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                <span style="font-size: 12px;">❓</span>
+                                <span style="font-size: 11px; color: var(--text-muted);">"bantuan"</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1302,31 +1466,61 @@ function openAIAssistantModal() {
     const sendBtn = document.getElementById('aiSendBtn');
     const messagesContainer = document.getElementById('aiChatMessages');
     
+    // FOCUS EFFECT - Highlight border saat focus
+    if (input) {
+        input.addEventListener('focus', function() {
+            this.style.borderColor = '#00bcd4';
+            this.style.boxShadow = '0 0 0 3px rgba(0,188,212,0.2)';
+        });
+        input.addEventListener('blur', function() {
+            this.style.borderColor = 'var(--border)';
+            this.style.boxShadow = 'none';
+        });
+        
+        // AUTO-RESIZE textarea
+        input.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = Math.min(140, this.scrollHeight) + 'px';
+        });
+    }
+    
     const sendMessage = async () => {
         const message = input.value.trim();
         if (!message) return;
         
+        // Simpan pesan user dengan bubble modern
         const userMsgDiv = document.createElement('div');
         userMsgDiv.className = 'ai-message ai-user';
-        userMsgDiv.style.cssText = 'display: flex; gap: 10px; flex-direction: row-reverse; margin-bottom: 12px;';
+        userMsgDiv.style.cssText = 'display: flex; gap: 12px; flex-direction: row-reverse; animation: fadeInUp 0.3s ease; margin-bottom: 16px;';
         userMsgDiv.innerHTML = `
-            <div class="ai-avatar" style="width: 36px; height: 36px; border-radius: 50%; background: var(--primary); display: flex; align-items: center; justify-content: center; font-size: 20px;">👤</div>
-            <div class="ai-bubble" style="background: var(--primary); padding: 10px 15px; border-radius: 18px; max-width: 80%; line-height: 1.5; white-space: pre-wrap;">${escapeHtml(message)}</div>
+            <div class="ai-avatar" style="width: 42px; height: 42px; border-radius: 50%; background: linear-gradient(135deg, #667eea, #764ba2); display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">👤</div>
+            <div class="ai-message-bubble" style="background: linear-gradient(135deg, #667eea, #764ba2); padding: 14px 20px; border-radius: 22px; border-top-right-radius: 6px; max-width: 80%; line-height: 1.6; color: white; white-space: pre-wrap; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                ${escapeHtml(message)}
+            </div>
         `;
         messagesContainer.appendChild(userMsgDiv);
         
         input.value = '';
+        input.style.height = 'auto';
         input.disabled = true;
         sendBtn.disabled = true;
+        sendBtn.style.opacity = '0.6';
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
         
+        // Loading indicator dengan animasi lebih halus
         const loadingDiv = document.createElement('div');
         loadingDiv.id = 'aiTypingIndicator';
         loadingDiv.className = 'ai-message ai-bot';
+        loadingDiv.style.cssText = 'display: flex; gap: 12px; animation: fadeInUp 0.3s ease; margin-bottom: 16px;';
         loadingDiv.innerHTML = `
-            <div class="ai-avatar" style="width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(135deg, #00bcd4, #2196f3); display: flex; align-items: center; justify-content: center; font-size: 20px;">🤖</div>
-            <div class="ai-bubble" style="background: var(--bg-hover); padding: 12px 18px; border-radius: 18px;">
-                <span class="typing-dot">●</span><span class="typing-dot">●</span><span class="typing-dot">●</span>
+            <div class="ai-avatar" style="width: 42px; height: 42px; border-radius: 50%; background: linear-gradient(135deg, #00bcd4, #2196f3); display: flex; align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0; box-shadow: 0 4px 12px rgba(0,188,212,0.3);">🤖</div>
+            <div class="ai-message-bubble" style="background: var(--bg-hover); padding: 16px 22px; border-radius: 22px; border-top-left-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+                <div style="display: flex; gap: 6px; align-items: center;">
+                    <span class="typing-dot"></span>
+                    <span class="typing-dot"></span>
+                    <span class="typing-dot"></span>
+                    <span style="margin-left: 10px; font-size: 13px; color: var(--text-muted);">AI sedang mengetik...</span>
+                </div>
             </div>
         `;
         messagesContainer.appendChild(loadingDiv);
@@ -1338,19 +1532,22 @@ function openAIAssistantModal() {
             
             const botMsgDiv = document.createElement('div');
             botMsgDiv.className = 'ai-message ai-bot';
-            botMsgDiv.style.cssText = 'display: flex; gap: 10px; margin-bottom: 12px;';
+            botMsgDiv.style.cssText = 'display: flex; gap: 12px; animation: fadeInUp 0.3s ease; margin-bottom: 16px;';
             botMsgDiv.innerHTML = `
-                <div class="ai-avatar" style="width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(135deg, #00bcd4, #2196f3); display: flex; align-items: center; justify-content: center; font-size: 20px;">🤖</div>
-                <div class="ai-bubble" style="background: var(--bg-hover); padding: 10px 15px; border-radius: 18px; max-width: 80%; line-height: 1.5; white-space: pre-wrap;">${formatMarkdown(response)}</div>
+                <div class="ai-avatar" style="width: 42px; height: 42px; border-radius: 50%; background: linear-gradient(135deg, #00bcd4, #2196f3); display: flex; align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0; box-shadow: 0 4px 12px rgba(0,188,212,0.3);">🤖</div>
+                <div class="ai-message-bubble" style="background: var(--bg-hover); padding: 14px 20px; border-radius: 22px; border-top-left-radius: 6px; max-width: 80%; line-height: 1.6; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+                    ${formatMarkdown(response)}
+                </div>
             `;
             messagesContainer.appendChild(botMsgDiv);
         } catch (error) {
             document.getElementById('aiTypingIndicator')?.remove();
             const errorDiv = document.createElement('div');
             errorDiv.className = 'ai-message ai-bot';
+            errorDiv.style.cssText = 'display: flex; gap: 12px; animation: fadeInUp 0.3s ease; margin-bottom: 16px;';
             errorDiv.innerHTML = `
-                <div class="ai-avatar" style="width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(135deg, #00bcd4, #2196f3); display: flex; align-items: center; justify-content: center; font-size: 20px;">🤖</div>
-                <div class="ai-bubble" style="background: rgba(244, 67, 54, 0.2); padding: 10px 15px; border-radius: 18px; max-width: 80%; line-height: 1.5; color: #f44336;">
+                <div class="ai-avatar" style="width: 42px; height: 42px; border-radius: 50%; background: linear-gradient(135deg, #f44336, #d32f2f); display: flex; align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0;">⚠️</div>
+                <div class="ai-message-bubble" style="background: rgba(244, 67, 54, 0.15); padding: 14px 20px; border-radius: 22px; border-left: 3px solid #f44336; max-width: 80%; line-height: 1.6; color: #f44336;">
                     ❌ Maaf, terjadi kesalahan. Silakan coba lagi nanti.
                 </div>
             `;
@@ -1358,14 +1555,25 @@ function openAIAssistantModal() {
         } finally {
             input.disabled = false;
             sendBtn.disabled = false;
+            sendBtn.style.opacity = '1';
             input.focus();
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
         }
     };
     
+    // ========== PERUBAHAN UTAMA: Enter untuk baris baru, Shift+Enter untuk kirim ==========
     sendBtn.onclick = sendMessage;
-    input.onkeypress = (e) => {
-        if (e.key === 'Enter') sendMessage();
+    
+    input.onkeydown = (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            // Enter tanpa Shift = buat baris baru (default behavior)
+            // Tidak melakukan apa-apa, biarkan textarea menambah baris baru
+            return;
+        } else if (e.key === 'Enter' && e.shiftKey) {
+            // Shift+Enter = kirim pesan
+            e.preventDefault();
+            sendMessage();
+        }
     };
     
     input.focus();
@@ -1390,7 +1598,7 @@ function initAIAssistant() {
     }
     
     aiAssistantInitialized = true;
-    console.log("🤖 AI Assistant v3.0 initialized - Ultra Professional");
+    console.log("🤖 AI Assistant v3.1 initialized - Improved UI & Enter behavior");
     
     addAIAssistantButton();
     setInterval(() => updateSystemDataCache(), 30000);
@@ -1419,4 +1627,4 @@ window.openAIAssistantModal = openAIAssistantModal;
 window.closeAIAssistantModal = closeAIAssistantModal;
 window.hasAIAssistantAccess = hasAIAssistantAccess;
 
-console.log("✅ ai-assistant.js V3.0 loaded - ULTRA PROFESSIONAL AI with CRUD operations!");
+console.log("✅ ai-assistant.js V3.1 loaded - ULTRA PROFESSIONAL AI with improved UI and Enter behavior!");
