@@ -1,0 +1,635 @@
+/* ==================== RESET & GLOBAL ==================== */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* Base transition untuk semua elemen */
+*,
+*::before,
+*::after {
+    transition: background-color 0.2s ease, 
+                color 0.2s ease, 
+                border-color 0.2s ease, 
+                box-shadow 0.2s ease, 
+                background 0.2s ease,
+                opacity 0.2s ease;
+}
+
+/* DARK MODE (default) */
+:root {
+    --primary: #00bcd4;
+    --primary-dark: #0097a7;
+    --primary-hover: #008ba3;
+    --secondary: #ff9800;
+    --secondary-dark: #f57c00;
+    --success: #4caf50;
+    --danger: #f44336;
+    --warning: #ffc107;
+    --info: #2196f3;
+    
+    --bg-body: #0a0a0f;
+    --bg-dark: #0a0a0f;
+    --bg-card: #12121a;
+    --bg-sidebar: #16161f;
+    --bg-hover: #1e1e2a;
+    --bg-input: #1a1a26;
+    --border: #2a2a35;
+    --border-light: #3a3a48;
+    
+    --text-primary: #ffffff;
+    --text-secondary: #a0a0b0;
+    --text-muted: #6a6a7a;
+    --text-placeholder: #6a6a7a;
+    
+    --shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.35);
+    
+    --transition: all 0.3s ease;
+    
+    /* Scrollbar dark */
+    --scrollbar-track: #1a1a2a;
+    --scrollbar-thumb: var(--primary);
+}
+
+/* LIGHT MODE - override variables */
+body.light-mode {
+    --primary: #0097a7;
+    --primary-dark: #00838f;
+    --primary-hover: #006064;
+    --secondary: #f57c00;
+    --secondary-dark: #ef6c00;
+    --success: #388e3c;
+    --danger: #d32f2f;
+    --warning: #ffa000;
+    --info: #1976d2;
+    
+    --bg-body: #f0f2f5;
+    --bg-dark: #f0f2f5;
+    --bg-card: #ffffff;
+    --bg-sidebar: #fafafa;
+    --bg-hover: #f5f5f5;
+    --bg-input: #f0f0f0;
+    --border: #e0e0e0;
+    --border-light: #eeeeee;
+    
+    --text-primary: #212121;
+    --text-secondary: #424242;
+    --text-muted: #757575;
+    --text-placeholder: #9e9e9e;
+    
+    --shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+    --shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+    
+    /* Scrollbar light */
+    --scrollbar-track: #e0e0e0;
+    --scrollbar-thumb: var(--primary);
+}
+
+body {
+    font-family: 'Inter', 'Segoe UI', 'Poppins', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--bg-body);
+    color: var(--text-primary);
+    min-height: 100vh;
+    line-height: 1.5;
+    padding-bottom: 70px;
+}
+
+/* ==================== BACKGROUND GRADIENTS ==================== */
+body {
+    background: linear-gradient(135deg, var(--bg-body) 0%, var(--bg-dark) 100%);
+}
+
+body.light-mode {
+    background: linear-gradient(135deg, #e8eaef 0%, var(--bg-body) 100%);
+}
+
+/* ==================== CARDS & CONTAINERS ==================== */
+.bg-gradient {
+    background: var(--bg-card);
+}
+
+/* Header Bar */
+.header-bar {
+    background: var(--bg-card);
+    border-color: var(--border);
+}
+
+/* Modal Title */
+.modal-title {
+    background: var(--bg-sidebar);
+    border-bottom-color: var(--border);
+    color: var(--text-primary);
+}
+
+.modal-title span:first-child {
+    color: var(--primary);
+}
+
+/* Sensor Card */
+.sensor-card {
+    background: var(--bg-sidebar);
+    border-color: var(--border);
+}
+
+/* Announcement Items */
+.announcement-container,
+.announcement-item {
+    background: var(--bg-card);
+    border-color: var(--border);
+}
+
+.announcement-item {
+    background: var(--bg-hover);
+}
+
+/* Friend Items */
+.friend-item,
+.friend-request-item,
+.search-result-item {
+    background: var(--bg-card);
+    border-color: var(--border);
+}
+
+.friend-item:hover,
+.friend-request-item:hover,
+.search-result-item:hover {
+    background: var(--bg-hover);
+}
+
+/* Chat Components */
+.chat-sidebar,
+.chat-header,
+.chat-input-area {
+    background: var(--bg-sidebar);
+    border-color: var(--border);
+}
+
+/* Key Box */
+.key-box {
+    background: var(--bg-card);
+    border-color: var(--border);
+}
+
+/* Guide Container Details */
+.guide-container details {
+    background: var(--bg-hover);
+    border-color: var(--border);
+}
+
+.guide-box {
+    background: rgba(0, 188, 212, 0.08);
+}
+
+/* Stat Cards */
+.stat-card-new,
+.chart-col,
+.class-col {
+    background: var(--bg-card);
+    border-color: var(--border);
+}
+
+/* Controls Bar */
+.controls-bar {
+    background: var(--bg-card);
+    border-color: var(--border);
+}
+
+/* Table */
+.table-container {
+    background: var(--bg-card);
+    border-color: var(--border);
+}
+
+th {
+    background: var(--bg-sidebar);
+    color: var(--primary);
+}
+
+tr:hover {
+    background: rgba(0, 188, 212, 0.05);
+}
+
+body.light-mode tr:hover {
+    background: rgba(0, 0, 0, 0.02);
+}
+
+/* ==================== FORM ELEMENTS ==================== */
+.filter-group select,
+.filter-group input,
+.search-box input,
+.form-group input,
+.form-group select,
+.form-group textarea,
+#tab-users #selectStudentForCode {
+    background: var(--bg-input);
+    border-color: var(--border);
+    color: var(--text-primary);
+}
+
+.filter-group select:focus,
+.filter-group input:focus,
+.search-box input:focus,
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px rgba(0, 188, 212, 0.2);
+}
+
+.filter-group select option {
+    background: var(--bg-card);
+    color: var(--text-primary);
+}
+
+/* Placeholder styling */
+::placeholder {
+    color: var(--text-placeholder);
+    opacity: 0.7;
+}
+
+/* ==================== BUTTONS ==================== */
+.btn-icon {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.btn-icon:hover {
+    background: var(--primary);
+    color: white;
+}
+
+.btn-cancel {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.btn-cancel:hover {
+    background: var(--border-light);
+}
+
+/* ==================== CHAT MESSAGES ==================== */
+.chat-message.friend .chat-message-bubble {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.chat-message.me .chat-message-bubble {
+    background: var(--primary);
+    color: white;
+}
+
+/* ==================== TOAST ==================== */
+.toast {
+    background: var(--bg-card);
+    color: var(--text-primary);
+    border-left-color: var(--primary);
+    box-shadow: var(--shadow);
+}
+
+body.light-mode .toast {
+    background: var(--bg-card);
+    color: var(--text-primary);
+    border-left-color: var(--primary);
+}
+
+/* ==================== MODAL ==================== */
+.modal-overlay {
+    background: rgba(0, 0, 0, 0.85);
+}
+
+body.light-mode .modal-overlay {
+    background: rgba(0, 0, 0, 0.5);
+}
+
+.modal-box {
+    background: var(--bg-card);
+    border-color: var(--border);
+}
+
+/* ==================== BRANDING FOOTER ==================== */
+.branding-footer {
+    background: rgba(18, 18, 26, 0.75);
+    backdrop-filter: blur(8px);
+    border-color: rgba(0, 188, 212, 0.3);
+}
+
+body.light-mode .branding-footer {
+    background: rgba(255, 255, 255, 0.85);
+    border-color: rgba(0, 188, 212, 0.3);
+}
+
+body.light-mode .branding-text {
+    color: #212121;
+}
+
+/* ==================== STATUS SYSTEM ==================== */
+.status-bar-container {
+    background: var(--bg-card);
+    border-color: var(--border);
+}
+
+/* ==================== SENSOR STATUS ==================== */
+.sensor-status-container {
+    background: var(--bg-card);
+    border-color: var(--border);
+}
+
+.sensor-card {
+    background: var(--bg-sidebar);
+    border-color: var(--border);
+}
+
+.sensor-card.online {
+    border-left-color: var(--success);
+    background: rgba(76, 175, 80, 0.05);
+}
+
+.sensor-card.offline {
+    border-left-color: var(--danger);
+    background: rgba(244, 67, 54, 0.05);
+}
+
+/* Badge colors */
+.badge-success {
+    background: var(--success);
+    color: white;
+}
+
+.badge-warning {
+    background: var(--warning);
+    color: #212121;
+}
+
+.badge-danger {
+    background: var(--danger);
+    color: white;
+}
+
+.badge-info {
+    background: var(--info);
+    color: white;
+}
+
+/* ==================== ATTENDANCE SPECIFIC ==================== */
+.attendance-student-avatar {
+    border-color: var(--primary);
+}
+
+.attendance-id-badge {
+    background: var(--bg-hover);
+    color: var(--primary);
+}
+
+body.light-mode .attendance-id-badge {
+    background: #e0e0e0;
+    color: #0097a7;
+}
+
+/* Status badges */
+.attendance-status.hadir {
+    background: rgba(76, 175, 80, 0.15);
+    color: var(--success);
+}
+
+.attendance-status.pulang {
+    background: rgba(244, 67, 54, 0.15);
+    color: var(--danger);
+}
+
+.attendance-status.terlambat,
+.attendance-status.sakit {
+    background: rgba(255, 152, 0, 0.15);
+    color: var(--secondary);
+}
+
+.attendance-status.izin {
+    background: rgba(33, 150, 243, 0.15);
+    color: var(--info);
+}
+
+.attendance-status.alpha {
+    background: rgba(244, 67, 54, 0.15);
+    color: var(--danger);
+}
+
+/* ==================== STATUS SELECT DROPDOWN ==================== */
+.status-select {
+    background: var(--bg-card);
+    border-color: var(--border);
+    color: var(--text-primary);
+}
+
+.status-select.hadir {
+    border-color: var(--success);
+    color: var(--success);
+}
+
+.status-select.sakit {
+    border-color: var(--secondary);
+    color: var(--secondary);
+}
+
+.status-select.izin {
+    border-color: var(--info);
+    color: var(--info);
+}
+
+.status-select.alpha {
+    border-color: var(--danger);
+    color: var(--danger);
+}
+
+/* ==================== REKAP BADGES ==================== */
+.rekap-status-sangat-baik {
+    background: var(--success);
+    color: white;
+}
+
+.rekap-status-baik {
+    background: #8bc34a;
+    color: #333;
+}
+
+.rekap-status-cukup {
+    background: var(--warning);
+    color: #333;
+}
+
+.rekap-status-kurang {
+    background: var(--secondary);
+    color: white;
+}
+
+.rekap-status-buruk {
+    background: var(--danger);
+    color: white;
+}
+
+/* ==================== FRIENDS BADGES ==================== */
+.request-badge {
+    background: var(--danger);
+}
+
+.count-badge {
+    background: var(--primary);
+}
+
+/* ==================== TYPOGRAPHY ==================== */
+.text-small {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.text-center {
+    text-align: center;
+}
+
+/* ==================== UTILITY CLASSES ==================== */
+.hidden {
+    display: none !important;
+}
+
+.mt-2 { margin-top: 8px; }
+.mt-3 { margin-top: 12px; }
+.mt-4 { margin-top: 16px; }
+.mb-2 { margin-bottom: 8px; }
+.mb-3 { margin-bottom: 12px; }
+.mb-4 { margin-bottom: 16px; }
+
+hr {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 16px 0;
+}
+
+/* ==================== SCROLLBAR ==================== */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--scrollbar-track);
+    border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--primary-dark);
+}
+
+/* ==================== ANIMATIONS ==================== */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-40px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes toastFade {
+    0% {
+        opacity: 0;
+        bottom: 0;
+    }
+    10% {
+        opacity: 1;
+        bottom: 30px;
+    }
+    90% {
+        opacity: 1;
+        bottom: 30px;
+    }
+    100% {
+        opacity: 0;
+        bottom: 0;
+        visibility: hidden;
+    }
+}
+
+@keyframes highlightNew {
+    0% {
+        background-color: rgba(0, 188, 212, 0.3);
+    }
+    100% {
+        background-color: transparent;
+    }
+}
+
+@keyframes pulse {
+    0% { transform: scale(1); opacity: 1; }
+    100% { transform: scale(1.2); opacity: 0; }
+}
+
+/* ==================== ADDITIONAL LIGHT MODE FIXES ==================== */
+body.light-mode .key-box label,
+body.light-mode .key-box .text-small,
+body.light-mode .key-box small {
+    color: var(--text-secondary);
+}
+
+body.light-mode .key-box label {
+    color: var(--text-primary);
+}
+
+body.light-mode .announcement-high {
+    background: rgba(244, 67, 54, 0.08);
+}
+
+body.light-mode .absence-student-row {
+    background: #fafafa;
+}
+
+body.light-mode .chat-search input {
+    background: var(--bg-card);
+    border-color: var(--border);
+}
+
+body.light-mode .chat-item.active {
+    background: rgba(0, 188, 212, 0.1);
+}
+
+body.light-mode .sensor-card.online {
+    background: rgba(76, 175, 80, 0.08);
+}
+
+body.light-mode .sensor-card.offline {
+    background: rgba(244, 67, 54, 0.08);
+}
+
+/* ==================== RESPONSIVE ADJUSTMENTS ==================== */
+@media (max-width: 768px) {
+    body {
+        padding-bottom: 80px;
+    }
+}
+
+@media (max-width: 480px) {
+    .modal-box {
+        background: var(--bg-card);
+    }
+}
