@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
     <meta name="referrer" content="no-referrer">
     <title>Sistem Absensi IoT - Fingerprint & Real-time</title>
-    <!-- FAVICON - Logo di tab browser -->
     <link rel="icon" type="image/png" href="logo/hakatech.png">
     <link rel="shortcut icon" type="image/png" href="logo/hakatech.png">
 
@@ -23,22 +22,20 @@
     <!-- Chart.js CDN -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 
-    <!-- Supabase SDK (HARUS sebelum Firebase) -->
+    <!-- Supabase SDK -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-    <!-- Firebase SDK (APP + AUTH + DATABASE + FUNCTIONS) -->
+    <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-functions-compat.js"></script>
 
-    <!-- QR Code Generator -->
+    <!-- QR Code -->
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
-    <!-- HTML5 QR Code Scanner -->
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     
     <style>
-        /* ==================== GLOBAL VARIABLES & BACKGROUND ==================== */
         :root {
             --bg-gradient-start-dark: #0a0f1f;
             --bg-gradient-end-dark: #141b2b;
@@ -64,64 +61,25 @@
         body.light-mode .key-box,
         body.light-mode .guide-container,
         body.light-mode .friends-container,
-        body.light-mode .chat-panel,
-        body.light-mode .sensor-status-container {
+        body.light-mode .chat-panel {
             background: rgba(255, 255, 255, 0.92);
             backdrop-filter: blur(2px);
             border: 1px solid rgba(255,255,255,0.5);
             box-shadow: 0 8px 20px rgba(0,0,0,0.05);
         }
-        body.light-mode .dropdown-content {
-            background: #ffffff;
-            border: 1px solid #cbd5e1;
-        }
-        body.light-mode .dropdown-btn {
-            background: #ffffff;
-            border: 1px solid #cbd5e1;
-            color: #1e293b;
-        }
-        body.light-mode .dropdown-btn:hover {
-            background: #0f172a;
-            color: white;
-        }
-        body.light-mode .navbar-user {
-            background: #ffffff;
-        }
-        body.light-mode input, 
-        body.light-mode select, 
-        body.light-mode textarea {
-            background: #ffffff;
-            border: 1px solid #cbd5e1;
-            color: #1e293b;
-        }
-        body.light-mode .table-container th {
-            background: #e2e8f0;
-            color: #0f172a;
-        }
-        body.light-mode .table-container td {
-            border-bottom-color: #e2e8f0;
-        }
-        body.light-mode .role-badge {
-            font-weight: bold;
-        }
-        body.light-mode .announcement-item {
-            background: #f8fafc;
-        }
-        body.light-mode .chat-message.friend .chat-message-bubble {
-            background: #e2e8f0;
-            color: #0f172a;
-        }
+        body.light-mode .dropdown-content { background: #ffffff; border: 1px solid #cbd5e1; }
+        body.light-mode .dropdown-btn { background: #ffffff; border: 1px solid #cbd5e1; color: #1e293b; }
+        body.light-mode .dropdown-btn:hover { background: #0f172a; color: white; }
+        body.light-mode .navbar-user { background: #ffffff; }
+        body.light-mode input, body.light-mode select, body.light-mode textarea { background: #ffffff; border: 1px solid #cbd5e1; color: #1e293b; }
+        body.light-mode .table-container th { background: #e2e8f0; color: #0f172a; }
+        body.light-mode .table-container td { border-bottom-color: #e2e8f0; }
+        body.light-mode .role-badge { font-weight: bold; }
+        body.light-mode .announcement-item { background: #f8fafc; }
 
-        /* Tab Content - Pastikan tidak tumpang tindih */
-        .tab-content {
-            display: none;
-            animation: fadeSlideIn 0.35s cubic-bezier(0.2, 0.9, 0.4, 1.1);
-        }
-        .tab-content.active {
-            display: block;
-        }
+        .tab-content { display: none; animation: fadeSlideIn 0.35s ease; }
+        .tab-content.active { display: block; }
 
-        /* ==================== NAVBAR & DROPDOWN ==================== */
         .dropdown-navbar {
             background: var(--bg-card);
             border-bottom: 1px solid var(--border);
@@ -135,15 +93,8 @@
             flex-wrap: wrap;
             gap: 10px;
         }
-        .dropdown-menu-container {
-            display: flex;
-            gap: 8px;
-            flex-wrap: wrap;
-            padding: 10px 0;
-        }
-        .dropdown {
-            position: relative;
-        }
+        .dropdown-menu-container { display: flex; gap: 8px; flex-wrap: wrap; padding: 10px 0; }
+        .dropdown { position: relative; }
         .dropdown-btn {
             background: var(--bg-input);
             border: 1px solid var(--border);
@@ -158,11 +109,7 @@
             color: var(--text-primary);
             transition: all 0.2s;
         }
-        .dropdown-btn:hover {
-            background: var(--primary);
-            color: white;
-            border-color: var(--primary);
-        }
+        .dropdown-btn:hover { background: var(--primary); color: white; border-color: var(--primary); }
         .dropdown-content {
             position: absolute;
             top: 110%;
@@ -176,9 +123,7 @@
             display: none;
             border: 1px solid var(--border);
         }
-        .dropdown-content.open {
-            display: block;
-        }
+        .dropdown-content.open { display: block; }
         .dropdown-content button {
             display: flex;
             align-items: center;
@@ -193,15 +138,8 @@
             cursor: pointer;
             transition: 0.2s;
         }
-        .dropdown-content button:hover {
-            background: var(--primary);
-            color: white;
-        }
-        .navbar-right {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-        }
+        .dropdown-content button:hover { background: var(--primary); color: white; }
+        .navbar-right { display: flex; align-items: center; gap: 15px; }
         .navbar-user {
             display: flex;
             align-items: center;
@@ -210,12 +148,7 @@
             padding: 5px 15px;
             border-radius: 30px;
         }
-        .navbar-avatar {
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            object-fit: cover;
-        }
+        .navbar-avatar { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; }
         .navbar-logout {
             background: #ef4444;
             border: none;
@@ -232,12 +165,8 @@
             padding: 8px 12px;
             border-radius: 30px;
             font-size: 1.2rem;
-            transition: all 0.2s;
             min-width: 44px;
             min-height: 44px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
         }
         .dropdown-overlay {
             position: fixed;
@@ -248,28 +177,12 @@
             z-index: 999;
             display: none;
         }
-        .dropdown-overlay.active {
-            display: block;
-        }
+        .dropdown-overlay.active { display: block; }
 
-        /* ==================== TABEL & CARD ==================== */
-        .table-container {
-            overflow-x: auto;
-            margin-top: 15px;
-        }
-        .table-container table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        .table-container th, .table-container td {
-            padding: 12px;
-            text-align: left;
-            border-bottom: 1px solid var(--border);
-        }
-        .table-container th {
-            background: var(--bg-sidebar);
-            font-weight: 600;
-        }
+        .table-container { overflow-x: auto; margin-top: 15px; }
+        .table-container table { width: 100%; border-collapse: collapse; }
+        .table-container th, .table-container td { padding: 12px; text-align: left; border-bottom: 1px solid var(--border); }
+        .table-container th { background: var(--bg-sidebar); font-weight: 600; }
         .stat-card-new {
             background: var(--bg-card);
             border-radius: 20px;
@@ -304,11 +217,8 @@
             font-size: 1.2rem;
             padding: 6px 10px;
             border-radius: 8px;
-            transition: background 0.2s;
         }
-        .btn-icon:hover {
-            background: var(--bg-hover);
-        }
+        .btn-icon:hover { background: var(--bg-hover); }
         .role-badge {
             display: inline-block;
             padding: 4px 12px;
@@ -321,35 +231,18 @@
         .role-siswa { background: #4caf50; color: white; }
         .role-developer { background: #9c27b0; color: white; }
 
-        /* ==================== ANIMASI ==================== */
         @keyframes fadeSlideIn {
-            from {
-                opacity: 0;
-                transform: translateY(8px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-        @keyframes fadeSlideOut {
-            from {
-                opacity: 1;
-                transform: translateY(0);
-            }
-            to {
-                opacity: 0;
-                transform: translateY(-8px);
-            }
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
         }
         @keyframes schoolNameColorShift {
-            0% { color: #ffd700; text-shadow: 0 0 5px rgba(255,215,0,0.5); }
-            15% { color: #ffaa00; text-shadow: 0 0 10px rgba(255,170,0,0.6); }
-            30% { color: #ff6600; text-shadow: 0 0 15px rgba(255,102,0,0.7); }
-            45% { color: #ff3366; text-shadow: 0 0 15px rgba(255,51,102,0.7); }
-            60% { color: #9c27b0; text-shadow: 0 0 15px rgba(156,39,176,0.7); }
-            75% { color: #00bcd4; text-shadow: 0 0 12px rgba(0,188,212,0.6); }
-            100% { color: #2196f3; text-shadow: 0 0 8px rgba(33,150,243,0.5); }
+            0% { color: #ffd700; }
+            15% { color: #ffaa00; }
+            30% { color: #ff6600; }
+            45% { color: #ff3366; }
+            60% { color: #9c27b0; }
+            75% { color: #00bcd4; }
+            100% { color: #2196f3; }
         }
         @keyframes schoolNameColorShiftLight {
             0% { color: #d4a017; }
@@ -363,60 +256,21 @@
         .school-name-animated {
             display: inline-block;
             font-weight: 800;
-            transition: all 0.3s ease;
             letter-spacing: 0.5px;
             animation: schoolNameColorShift 4s ease-in-out infinite;
-        }
-        .school-name-animated:hover {
-            animation: schoolNameColorShift 4s ease-in-out infinite, schoolNameBounce 0.5s ease-in-out, schoolNameGlow 1s ease-in-out;
-            cursor: pointer;
         }
         body.light-mode .school-name-animated {
             animation: schoolNameColorShiftLight 4s ease-in-out infinite;
         }
-        @keyframes schoolNameBounce {
-            0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(-4px); }
-        }
-        @keyframes schoolNameGlow {
-            0% { text-shadow: 0 0 5px rgba(255,215,0,0.3); }
-            50% { text-shadow: 0 0 20px rgba(0,188,212,0.5), 0 0 8px rgba(255,215,0,0.3); }
-            100% { text-shadow: 0 0 5px rgba(33,150,243,0.3); }
-        }
 
-        /* ==================== LOG ACTIVITY TABLE STYLES ==================== */
-        #logsTbody tr:hover {
-            background: var(--bg-hover);
-            transition: background 0.2s;
-        }
-        #logsPagination {
-            margin-top: 15px;
-            display: flex;
-            justify-content: center;
-        }
-        .btn-action:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        /* Logo styles */
         .navbar-logo {
             display: flex;
             align-items: center;
             gap: 12px;
             margin-right: 20px;
             cursor: pointer;
-            transition: opacity 0.2s;
         }
-        .navbar-logo:hover {
-            opacity: 0.85;
-        }
-        .navbar-logo img {
-            width: 32px;
-            height: 32px;
-            border-radius: 8px;
-            object-fit: contain;
-        }
+        .navbar-logo img { width: 32px; height: 32px; border-radius: 8px; object-fit: contain; }
         .navbar-logo span {
             font-weight: 700;
             font-size: 1rem;
@@ -430,33 +284,17 @@
             bottom: 20px;
             left: 20px;
             z-index: 999;
-            transition: transform 0.3s ease, box-shadow 0.3s ease;
             cursor: pointer;
         }
         .floating-logo img {
             width: 48px;
             height: 48px;
             border-radius: 50%;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.25);
-            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.25);
             border: 2px solid rgba(255,255,255,0.2);
         }
-        .floating-logo img:hover {
-            transform: scale(1.1);
-            box-shadow: 0 6px 20px rgba(0, 188, 212, 0.4);
-            border-color: #00bcd4;
-        }
-        .auth-logo {
-            text-align: center;
-            margin-bottom: 20px;
-        }
-        .auth-logo img {
-            width: 70px;
-            height: 70px;
-            border-radius: 16px;
-            object-fit: contain;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        }
+        .auth-logo { text-align: center; margin-bottom: 20px; }
+        .auth-logo img { width: 70px; height: 70px; border-radius: 16px; object-fit: contain; }
         .auth-logo h2 {
             margin-top: 12px;
             font-size: 1.3rem;
@@ -465,6 +303,7 @@
             background-clip: text;
             color: transparent;
         }
+
         @media (max-width: 768px) {
             .navbar-logo span { display: none; }
             .navbar-logo img { width: 28px; height: 28px; }
@@ -478,22 +317,17 @@
 </head>
 <body>
 
-    <!-- TOAST NOTIFICATION -->
     <div id="toast" class="toast">Notifikasi</div>
     <div id="dropdownOverlay" class="dropdown-overlay" onclick="closeAllDropdowns()"></div>
 
-    <!-- FLOATING LOGO -->
-    <div class="floating-logo" onclick="location.href='/'" title="HakaTech - Kembali ke Beranda">
-        <img src="logo/hakatech.png" alt="HakaTech Logo">
+    <div class="floating-logo" onclick="location.href='/'" title="HakaTech">
+        <img src="logo/hakatech.png" alt="HakaTech">
     </div>
 
     <!-- AUTH SECTION -->
     <div id="auth-section">
         <div id="login-card" class="auth-card">
-            <div class="auth-logo">
-                <img src="logo/hakatech.png" alt="HakaTech">
-                <h2>Sistem Absensi</h2>
-            </div>
+            <div class="auth-logo"><img src="logo/hakatech.png" alt="HakaTech"><h2>Sistem Absensi</h2></div>
             <p class="text-small">Gunakan akun Admin, Guru, atau Developer</p>
             <form id="loginForm" onsubmit="handleLogin(event)">
                 <div class="form-group"><label>Email</label><input type="email" id="loginEmail" placeholder="contoh@sekolah.sch.id" required></div>
@@ -512,10 +346,7 @@
             <div class="auth-toggle">Belum punya akun? <span onclick="toggleAuth('register')">Daftar disini</span></div>
         </div>
         <div id="register-card" class="auth-card" style="display:none;">
-            <div class="auth-logo">
-                <img src="logo/hakatech.png" alt="HakaTech">
-                <h2>Pendaftaran</h2>
-            </div>
+            <div class="auth-logo"><img src="logo/hakatech.png" alt="HakaTech"><h2>Pendaftaran</h2></div>
             <p class="text-small">Siswa data diambil otomatis dari Database</p>
             <div class="form-group">
                 <label>Daftar Sebagai:</label>
@@ -525,7 +356,7 @@
                 </div>
             </div>
             <form id="registerForm" onsubmit="handleRegister(event)">
-                <div class="form-group" id="group-reg-id"><label>ID Generate (Dari Guru)</label><input type="text" id="regGeneratedId" placeholder="Masukkan ID Fingerprint Anda"></div>
+                <div class="form-group" id="group-reg-id"><label>ID Generate</label><input type="text" id="regGeneratedId" placeholder="Masukkan ID Fingerprint"></div>
                 <div class="form-group" id="group-reg-nama" style="display:none;"><label>Nama Lengkap</label><input type="text" id="regNama" placeholder="Nama Guru"></div>
                 <div class="form-group" id="group-reg-subject" style="display:none;"><label>Mata Pelajaran</label><input type="text" id="regSubject" placeholder="Contoh: Matematika"></div>
                 <div class="form-group"><label>Email</label><input type="email" id="regEmail" placeholder="email@sekolah.sch.id" required></div>
@@ -542,7 +373,7 @@
                     <label>Kode Pendaftaran</label>
                     <div style="display: flex; gap: 10px;">
                         <input type="text" id="regCode" placeholder="Kode Unik dari Guru" required style="flex:1;">
-                        <button type="button" class="btn-action btn-secondary" onclick="openQrScanner()" style="padding: 0 15px; white-space: nowrap;">📷 Scan QR</button>
+                        <button type="button" class="btn-action btn-secondary" onclick="openQrScanner()" style="padding: 0 15px;">📷 Scan QR</button>
                     </div>
                 </div>
                 <button type="submit" id="btnRegSubmit" class="btn-auth btn-primary">DAFTAR</button>
@@ -617,7 +448,7 @@
             <div class="header-left">
                 <img id="headerSchoolLogo" class="school-logo" src="" alt="Logo" style="display: none;">
                 <div>
-                    <h2 id="schoolNameDisplay" style="margin:0; display:inline-block;" class="school-name-animated">Sistem Absensi</h2>
+                    <h2 id="schoolNameDisplay" style="margin:0;" class="school-name-animated">Sistem Absensi</h2>
                     <div style="display:flex; align-items:center; gap:8px;">
                         <span id="userProfileDisplay">User</span>
                         <span id="userRoleDisplay" class="role-badge">SISWA</span>
@@ -625,9 +456,7 @@
                     </div>
                 </div>
             </div>
-            <div>
-                <div id="clock" class="clock-display">--:--:--</div>
-            </div>
+            <div><div id="clock" class="clock-display">--:--:--</div></div>
         </div>
 
         <!-- ANNOUNCEMENT SECTION -->
@@ -649,7 +478,7 @@
             <div id="statusBar" class="status-bar-scroll"></div>
         </div>
 
-        <!-- TAB DASHBOARD -->
+        <!-- ==================== TAB DASHBOARD ==================== -->
         <div id="tab-dashboard" class="tab-content active">
             <div class="dashboard-modern-new">
                 <div id="dashboardRoleInfo"></div>
@@ -667,7 +496,7 @@
             </div>
         </div>
 
-        <!-- TAB ATTENDANCE -->
+        <!-- ==================== TAB ATTENDANCE ==================== -->
         <div id="tab-attendance" class="tab-content">
             <div class="controls-bar">
                 <div class="filter-group"><label>Kelas:</label><select id="filterKelas" onchange="renderTable()"><option value="all">Semua</option></select></div>
@@ -689,17 +518,13 @@
             </div>
             <div class="table-container">
                 <table>
-                    <thead>
-                        <tr><th>Foto</th><th>Waktu</th><th>ID FP</th><th>Nama</th><th>Kelas</th><th>Jurusan</th><th>Status</th><th>Aksi</th></tr>
-                    </thead>
-                    <tbody id="tbody-attendance">
-                        <tr><td colspan="8">Memuat data...<\/td><\/tr>
-                    </tbody>
+                    <thead><tr><th>Foto</th><th>Waktu</th><th>ID FP</th><th>Nama</th><th>Kelas</th><th>Jurusan</th><th>Status</th><th>Aksi</th></tr></thead>
+                    <tbody id="tbody-attendance"><tr><td colspan="8">Memuat data...<\/td><\/tr></tbody>
                 </table>
             </div>
         </div>
 
-        <!-- TAB STUDENTS -->
+        <!-- ==================== TAB STUDENTS ==================== -->
         <div id="tab-students" class="tab-content">
             <div class="controls-bar">
                 <div style="display:flex; gap:10px; flex-wrap:wrap;">
@@ -723,32 +548,22 @@
             </div>
             <div class="table-container">
                 <table>
-                    <thead>
-                        <tr><th>Foto</th><th>ID FP</th><th>Nama</th><th>Kelas</th><th>Jurusan</th><th>Delay</th><th>Aksi</th></tr>
-                    </thead>
-                    <tbody id="tbody-students">
-                        <tr><td colspan="7">Memuat data...<\/td><\/tr>
-                    </tbody>
+                    <thead><tr><th>Foto</th><th>ID FP</th><th>Nama</th><th>Kelas</th><th>Jurusan</th><th>Delay</th><th>Aksi</th></tr></thead>
+                    <tbody id="tbody-students"><tr><td colspan="7">Memuat data...<\/td><\/tr></tbody>
                 </table>
             </div>
         </div>
 
-        <!-- TAB USERS (MANAJEMEN USER) - DIPERBAIKI -->
+        <!-- ==================== TAB USERS (MANAJEMEN USER) ==================== -->
         <div id="tab-users" class="tab-content role-admin role-guru">
-            <div class="controls-bar">
-                <h4>🔑 Generate Kode Pendaftaran</h4>
-            </div>
+            <div class="controls-bar"><h4>🔑 Generate Kode Pendaftaran</h4></div>
             <div class="key-box">
                 <div>
                     <div>
                         <label style="margin-right:20px;"><input type="radio" name="genTarget" value="siswa" checked onchange="toggleGenerateInput()"> 👨‍🎓 Untuk Siswa</label>
                         <label><input type="radio" name="genTarget" value="guru" onchange="toggleGenerateInput()"> 👨‍🏫 Untuk Guru</label>
                     </div>
-                    <div id="group-select-siswa">
-                        <select id="selectStudentForCode" style="width:100%; max-width:300px;">
-                            <option value="">-- Pilih Siswa --</option>
-                        </select>
-                    </div>
+                    <div id="group-select-siswa"><select id="selectStudentForCode" style="width:100%; max-width:300px;"><option value="">-- Pilih Siswa --</option></select></div>
                     <small id="gen-desc">🔒 Kode akan dikunci ke ID Siswa terpilih.</small>
                 </div>
                 <button class="btn-action btn-secondary" onclick="generateRegistrationCode()">✨ Generate Kode</button>
@@ -757,152 +572,90 @@
             
             <h4>📋 Daftar Kode Aktif</h4>
             <div class="table-container">
-                <table>
-                    <thead>
-                        <tr><th>Kode</th><th>Status</th><th>Dibuat</th><th>Pengguna</th><th>Aksi</th></tr>
-                    </thead>
-                    <tbody id="tbody-codes">
-                        <tr><td colspan="5">Memuat data kode...<\/td><\/tr>
-                    </tbody>
-                </table>
+                <table><thead><tr><th>Kode</th><th>Status</th><th>Dibuat</th><th>Pengguna</th><th>Aksi</th></tr></thead>
+                <tbody id="tbody-codes"><td><td colspan="5">Memuat data kode...<\/td><\/tr></tbody>
+            </table>
             </div>
             
-            <div class="controls-bar" style="margin-top: 20px;">
-                <h4>👥 Daftar Pengguna</h4>
-                <div class="search-box">
-                    <input type="text" id="searchUser" placeholder="🔍 Cari user (nama/email)..." oninput="renderUsersTable()">
-                </div>
-            </div>
+            <div class="controls-bar" style="margin-top:20px;"><h4>👥 Daftar Pengguna</h4><div class="search-box"><input type="text" id="searchUser" placeholder="🔍 Cari user (nama/email)..." oninput="renderUsersTable()"></div></div>
             <div class="table-container">
-                <table>
-                    <thead>
-                        <tr><th>Foto</th><th>Nama</th><th>Email</th><th>Role</th><th>Detail</th><th>Aksi</th></tr>
-                    </thead>
-                    <tbody id="tbody-users">
-                        <tr><td colspan="6">Memuat data pengguna...<\/td><\/tr>
-                    </tbody>
-                </table>
+                <table><thead><tr><th>Foto</th><th>Nama</th><th>Email</th><th>Role</th><th>Detail</th><th>Aksi</th></tr></thead>
+                <tbody id="tbody-users"><tr><td colspan="6">Memuat data pengguna...<\/td><\/tr></tbody>
+            </table>
             </div>
         </div>
 
-        <!-- TAB REKAP - DIPISAHKAN DARI USERS -->
+        <!-- ==================== TAB REKAP ==================== -->
         <div id="tab-rekap" class="tab-content">
             <div class="controls-bar">
-                <div class="filter-group">
-                    <label>📅 Periode:</label>
-                    <select id="rekapPeriod" onchange="loadRekap()">
-                        <option value="minggu">Minggu Ini</option>
-                        <option value="bulan">Bulan Ini</option>
-                        <option value="semester">Semester Ini</option>
-                        <option value="custom">Custom Range</option>
-                    </select>
-                </div>
-                <div id="customRangeGroup" style="display:none; gap:10px;">
-                    <input type="date" id="rekapStartDate">
-                    <span>s/d</span>
-                    <input type="date" id="rekapEndDate">
-                </div>
-                <div>
-                    <button class="btn-action btn-success" onclick="exportRekapToExcel()">📥 Excel</button>
-                    <button class="btn-action btn-primary" onclick="exportRekapToPDF()">📄 PDF</button>
-                </div>
+                <div class="filter-group"><label>📅 Periode:</label><select id="rekapPeriod" onchange="loadRekap()"><option value="minggu">Minggu Ini</option><option value="bulan">Bulan Ini</option><option value="semester">Semester Ini</option><option value="custom">Custom Range</option></select></div>
+                <div id="customRangeGroup" style="display:none; gap:10px;"><input type="date" id="rekapStartDate"><span>s/d</span><input type="date" id="rekapEndDate"></div>
+                <div><button class="btn-action btn-success" onclick="exportRekapToExcel()">📥 Excel</button><button class="btn-action btn-primary" onclick="exportRekapToPDF()">📄 PDF</button></div>
             </div>
             <div class="chart-container">
                 <div style="display:flex; gap:20px; flex-wrap:wrap;">
-                    <div style="flex:1; min-width:200px;">
-                        <canvas id="rekapPieChart" style="max-height:250px;"></canvas>
-                        <p class="text-small text-center">Distribusi Status</p>
-                    </div>
-                    <div style="flex:2; min-width:300px;">
-                        <canvas id="rekapBarChart" style="max-height:250px;"></canvas>
-                        <p class="text-small text-center">Absensi per Hari</p>
-                    </div>
+                    <div style="flex:1; min-width:200px;"><canvas id="rekapPieChart" style="max-height:250px;"></canvas><p class="text-small text-center">Distribusi Status</p></div>
+                    <div style="flex:2; min-width:300px;"><canvas id="rekapBarChart" style="max-height:250px;"></canvas><p class="text-small text-center">Absensi per Hari</p></div>
                 </div>
             </div>
             <div class="table-container">
                 <table>
-                    <thead>
-                        <tr>
-                            <th>No</th><th>ID FP</th><th>Nama</th><th>Kelas</th><th>Jurusan</th>
-                            <th>Total Hari</th><th>Hadir</th><th>Sakit</th><th>Izin</th><th>Alpha</th>
-                            <th>Persentase</th><th>Status</th>
-                        </tr>
-                    </thead>
-                    <tbody id="rekapTbody">
-                        <tr><td colspan="12">Memuat data...<\/td><\/tr>
-                    </tbody>
+                    <thead><tr><th>No</th><th>ID FP</th><th>Nama</th><th>Kelas</th><th>Jurusan</th><th>Total Hari</th><th>Hadir</th><th>Sakit</th><th>Izin</th><th>Alpha</th><th>Persentase</th><th>Status</th></tr></thead>
+                    <tbody id="rekapTbody"><tr><td colspan="12">Memuat data...<\/td><\/tr></tbody>
                 </table>
             </div>
         </div>
 
-        <!-- TAB FRIENDS -->
+        <!-- ==================== TAB FRIENDS ==================== -->
         <div id="tab-friends" class="tab-content">
             <div class="friends-container">
                 <div class="friends-search-section">
                     <h4>🔍 Cari Teman</h4>
-                    <div class="search-box">
-                        <input type="email" id="searchFriendEmail" placeholder="Cari berdasarkan email...">
-                        <button class="btn-action btn-primary" onclick="searchUserByEmail()">Cari</button>
-                    </div>
+                    <div class="search-box"><input type="email" id="searchFriendEmail" placeholder="Cari berdasarkan email..."><button class="btn-action btn-primary" onclick="searchUserByEmail()">Cari</button></div>
                     <div id="searchResult" style="margin-top:10px; display:none;"></div>
                 </div>
                 <hr>
-                <div class="friends-requests-section">
-                    <h4>📨 Permintaan Pertemanan <span id="friendRequestBadge" class="request-badge" style="display:none;">0</span></h4>
-                    <div id="friendRequestsList" class="friends-list"><p>Tidak ada permintaan</p></div>
-                </div>
+                <div class="friends-requests-section"><h4>📨 Permintaan Pertemanan <span id="friendRequestBadge" class="request-badge" style="display:none;">0</span></h4><div id="friendRequestsList" class="friends-list"><p>Tidak ada permintaan</p></div></div>
                 <hr>
-                <div class="friends-list-section">
-                    <h4>👥 Daftar Teman <span id="friendsCount" class="count-badge">0</span></h4>
-                    <div id="friendsList" class="friends-list"><p>Belum ada teman</p></div>
-                </div>
+                <div class="friends-list-section"><h4>👥 Daftar Teman <span id="friendsCount" class="count-badge">0</span></h4><div id="friendsList" class="friends-list"><p>Belum ada teman</p></div></div>
             </div>
         </div>
 
-        <!-- TAB CHAT -->
+        <!-- ==================== TAB CHAT ==================== -->
         <div id="tab-chat" class="tab-content">
-            <div class="chat-header-info">
-                <h3>💬 Pesan dengan Teman</h3>
-                <p>Hanya bisa chat dengan teman yang sudah terdaftar.</p>
-            </div>
-            <div id="chatPanel" class="chat-panel">
-                <div class="chat-loading">⏳ Memuat fitur chat...</div>
-            </div>
+            <div class="chat-header-info"><h3>💬 Pesan dengan Teman</h3><p>Hanya bisa chat dengan teman yang sudah terdaftar.</p></div>
+            <div id="chatPanel" class="chat-panel"><div class="chat-loading">⏳ Memuat fitur chat...</div></div>
         </div>
 
-        <!-- TAB LOGS -->
+        <!-- ==================== TAB LOGS ==================== -->
         <div id="tab-logs" class="tab-content role-admin role-guru role-developer">
             <div class="controls-bar">
-                <select id="logActionFilter" onchange="renderLogsTable()">
-                    <option value="all">Semua Aksi</option>
-                </select>
+                <select id="logActionFilter" onchange="renderLogsTable()"><option value="all">Semua Aksi</option></select>
                 <input type="date" id="logStartDate" onchange="renderLogsTable()">
                 <input type="date" id="logEndDate" onchange="renderLogsTable()">
                 <button class="btn-action btn-secondary" onclick="refreshLogs()">🔄 Refresh</button>
             </div>
             <div class="table-container">
-                <table id="logsTable">
-                    <thead>
-                        <tr><th>🕒 Waktu</th><th>👤 Pengguna</th><th>🎭 Role</th><th>📌 Aksi</th><th>📝 Detail</th><th>🌐 IP</th></tr>
-                    </thead>
-                    <tbody id="logsTbody">
-                        <tr><td colspan="6">Memuat log...<\/td><\/tr>
-                    </tbody>
-                </table>
+                <table id="logsTable"><thead><tr><th>🕒 Waktu</th><th>👤 Pengguna</th><th>🎭 Role</th><th>📌 Aksi</th><th>📝 Detail</th><th>🌐 IP</th></tr></thead>
+                <tbody id="logsTbody"><tr><td colspan="6">Memuat log...<\/td><\/tr></tbody></table>
                 <div id="logsPagination"></div>
             </div>
         </div>
 
-        <!-- TAB CONFIG -->
+        <!-- ==================== TAB CONFIG ==================== -->
         <div id="tab-config" class="tab-content role-admin role-guru role-developer">
             <div class="guide-container">
                 <h3>⚙️ Pengaturan Sistem</h3>
-                <div class="form-group"><label>🏫 Logo Sekolah</label><div><div class="logo-preview-wrapper" onclick="document.getElementById('logoFileInput').click()"><img id="schoolLogoPreview" class="school-logo-preview" src=""><div>Klik untuk ganti</div></div><input type="file" id="logoFileInput" hidden accept="image/*" onchange="uploadSchoolLogo(this)"><button class="btn-action btn-danger" onclick="removeSchoolLogo()" id="btnRemoveLogo">🗑️ Hapus</button></div></div><hr>
+                <div class="form-group"><label>🏫 Logo Sekolah</label><div><div class="logo-preview-wrapper" onclick="document.getElementById('logoFileInput').click()"><img id="schoolLogoPreview" class="school-logo-preview" src=""><div>Klik untuk ganti</div></div><input type="file" id="logoFileInput" hidden accept="image/*" onchange="uploadSchoolLogo(this)"><button class="btn-action btn-danger" onclick="removeSchoolLogo()" id="btnRemoveLogo">🗑️ Hapus</button></div></div>
+                <hr>
                 <div class="form-group"><label>🏫 Nama Sekolah</label><div><input type="text" id="inputSchoolName" placeholder="Nama Sekolah"><button class="btn-action btn-primary" onclick="saveSchoolName()">Simpan</button></div></div>
-                <div class="form-group"><label>📋 Tipe Sekolah</label><div><select id="schoolTypeSelect"><option value="smp">SMP</option><option value="smk">SMK</option><option value="both">SMP & SMK</option></select><button class="btn-action btn-primary" onclick="saveSchoolType()">Simpan</button></div></div><hr>
+                <div class="form-group"><label>📋 Tipe Sekolah</label><div><select id="schoolTypeSelect"><option value="smp">SMP</option><option value="smk">SMK</option><option value="both">SMP & SMK</option></select><button class="btn-action btn-primary" onclick="saveSchoolType()">Simpan</button></div></div>
+                <hr>
                 <div id="classesManager"><h4>📚 Daftar Kelas</h4><div id="classesList"></div><div><input type="text" id="newClassInput" placeholder="Contoh: VII A, X RPL"><button class="btn-action btn-success" onclick="addClass()">➕ Tambah</button><button class="btn-action btn-primary" onclick="saveClasses()">💾 Simpan</button></div></div>
-                <div id="majorsManager" style="display:none;"><h4>🎓 Daftar Jurusan (SMK)</h4><div id="majorsList"></div><div><input type="text" id="newMajorInput" placeholder="Contoh: RPL, TKJ"><button class="btn-action btn-success" onclick="addMajor()">➕ Tambah</button><button class="btn-action btn-primary" onclick="saveMajors()">💾 Simpan</button></div></div><hr>
-                <div class="form-group"><label>⏰ Delay Pulang Global</label><div><select id="globalDelayUnit"><option value="minutes">Menit</option><option value="hours">Jam</option></select><div id="globalDelayMinutesGroup"><input type="number" id="globalDelayMinutesValue" value="60"> menit</div><div id="globalDelayHoursGroup" style="display:none;"><select id="globalDelayHoursValue"></select> jam</div><button class="btn-action btn-primary" onclick="saveGlobalDelay()">Simpan</button></div><div><small>Delay saat ini: <strong id="globalDelayDisplay">60 menit</strong></small></div></div><hr>
+                <div id="majorsManager" style="display:none;"><h4>🎓 Daftar Jurusan (SMK)</h4><div id="majorsList"></div><div><input type="text" id="newMajorInput" placeholder="Contoh: RPL, TKJ"><button class="btn-action btn-success" onclick="addMajor()">➕ Tambah</button><button class="btn-action btn-primary" onclick="saveMajors()">💾 Simpan</button></div></div>
+                <hr>
+                <div class="form-group"><label>⏰ Delay Pulang Global</label><div><select id="globalDelayUnit"><option value="minutes">Menit</option><option value="hours">Jam</option></select><div id="globalDelayMinutesGroup"><input type="number" id="globalDelayMinutesValue" value="60"> menit</div><div id="globalDelayHoursGroup" style="display:none;"><select id="globalDelayHoursValue"></select> jam</div><button class="btn-action btn-primary" onclick="saveGlobalDelay()">Simpan</button></div><div><small>Delay saat ini: <strong id="globalDelayDisplay">60 menit</strong></small></div></div>
+                <hr>
                 <h4>⏰ Pengaturan Jam Efektif & Hari Libur</h4>
                 <div class="form-group"><label>🕒 Batas Waktu Terlambat</label><div><input type="time" id="lateThresholdInput" value="07:30"><span>Siswa scan setelah jam ini => TERLAMBAT</span></div></div>
                 <div class="form-group"><label>🏠 Minimal Jam Pulang</label><div><input type="time" id="minOutTimeInput" value="14:00"><span>Scan pulang sebelum jam ini => peringatan</span></div></div>
@@ -914,19 +667,19 @@
             </div>
         </div>
 
-        <!-- TAB GUIDE -->
+        <!-- ==================== TAB GUIDE ==================== -->
         <div id="tab-guide" class="tab-content">
             <div class="guide-container">
                 <h3>📘 Panduan Sistem Absensi Fingerprint</h3>
                 <p>Sistem Absensi berbasis sidik jari dengan ESP32 dan real-time monitoring</p>
                 <details open><summary>1. 📝 Pendaftaran Akun</summary><div class="guide-box"><h4>Cara Mendaftar sebagai Siswa:</h4><ol><li>Pastikan ID Fingerprint sudah ada</li><li>Klik "Daftar disini" → pilih Siswa</li><li>Masukkan ID Generate, Email, Password, Kode Registrasi</li><li>Klik DAFTAR</li></ol><h4>Cara Mendaftar sebagai Guru:</h4><ol><li>Klik "Daftar disini" → pilih Guru</li><li>Isi Nama, Mapel, Email, Password, Kode Guru</li><li>Klik DAFTAR</li></ol></div></details>
                 <details><summary>2. 🔐 Login & Keamanan</summary><div class="guide-box"><h4>Login</h4><ol><li>Masukkan email & password → MASUK</li></ol><h4>Lupa Password?</h4><ol><li>Klik "Lupa Password?" → masukkan email → Kirim Link</li></ol></div></details>
-                <details><summary>3. 🤖 AI Assistant</summary><div class="guide-box"><h4>Perintah yang Didukung:</h4><ul><li><strong>📊 Data Siswa:</strong> "data siswa miftah", "id 1 siapa", "siswa kelas X"</li><li><strong>📈 Rekap & Statistik:</strong> "rekap miftah", "statistik"</li><li><strong>✏️ Manajemen Data (Admin/Guru):</strong> "tambah siswa ...", "update siswa id 8 delay 90", "hapus siswa id 8"</li></ul><p>Klik tombol 💬 di pojok kanan bawah untuk membuka AI Assistant!</p></div></details>
+                <details><summary>3. 🤖 AI Assistant</summary><div class="guide-box"><h4>Perintah yang Didukung:</h4><ul><li><strong>📊 Data Siswa:</strong> "data siswa miftah", "id 1 siapa"</li><li><strong>📈 Rekap & Statistik:</strong> "rekap miftah", "statistik"</li><li><strong>✏️ Manajemen Data:</strong> "tambah siswa ...", "hapus siswa id 8"</li></ul><p>Klik tombol 🤖 di pojok kanan bawah untuk membuka AI Assistant!</p></div></details>
                 <div class="guide-footer"><hr><div class="text-small"><p>📱 Sistem Absensi IoT - Fingerprint & Real-time</p><p>Dikembangkan oleh CV Haka Jaya | Versi 5.20 | © 2026</p></div></div>
             </div>
         </div>
 
-        <!-- TAB ANNOUNCEMENT LIST -->
+        <!-- ==================== TAB ANNOUNCEMENT LIST ==================== -->
         <div id="tab-announcement_list" class="tab-content role-admin role-guru role-developer">
             <div class="guide-container">
                 <h3>📋 Daftar Semua Pengumuman</h3>
@@ -975,19 +728,13 @@
     <script src="js/ai-assistant.js"></script>
 
     <script>
-        // School name animation
         document.addEventListener('DOMContentLoaded', function() {
-            const schoolNameElement = document.getElementById('schoolNameDisplay');
-            if (schoolNameElement) {
-                if (!schoolNameElement.classList.contains('school-name-animated')) {
-                    schoolNameElement.classList.add('school-name-animated');
-                }
-                schoolNameElement.setAttribute('title', '✨ Sistem Absensi IoT - HakaTech ✨');
-                console.log('✨ School name color animation active');
+            var schoolNameElement = document.getElementById('schoolNameDisplay');
+            if (schoolNameElement && !schoolNameElement.classList.contains('school-name-animated')) {
+                schoolNameElement.classList.add('school-name-animated');
             }
         });
 
-        // Theme functions
         function initTheme() {
             var savedTheme = localStorage.getItem('theme') || 'dark';
             applyTheme(savedTheme);
@@ -1019,11 +766,10 @@
             setTimeout(function() {
                 if (typeof window.updateDashboardChart === 'function') window.updateDashboardChart();
                 if (typeof window.updateAttendanceDonutChart === 'function') window.updateAttendanceDonutChart();
-                if (typeof window.loadRekap === 'function' && document.getElementById('tab-rekap')?.classList.contains('active')) window.loadRekap();
+                if (typeof window.loadRekap === 'function' && document.getElementById('tab-rekap') && document.getElementById('tab-rekap').classList.contains('active')) window.loadRekap();
             }, 100);
         }
 
-        // Dropdown functions
         function toggleDropdown(id) { 
             var d = document.getElementById(id); 
             var c = d.querySelector('.dropdown-content'); 
@@ -1035,190 +781,49 @@
         }
         
         function closeAllDropdowns() { 
-            document.querySelectorAll('.dropdown-content').forEach(c => c.classList.remove('open')); 
+            document.querySelectorAll('.dropdown-content').forEach(function(c) { c.classList.remove('open'); }); 
             document.getElementById('dropdownOverlay').classList.remove('active'); 
         }
         
-        document.addEventListener('keydown', function(e) {
-            if(e.key === 'Escape') closeAllDropdowns();
-        });
+        document.addEventListener('keydown', function(e) { if(e.key === 'Escape') closeAllDropdowns(); });
 
-        // Escape HTML
-        function escapeHtml(s) {
-            if(!s) return '';
-            return s.replace(/[&<>]/g, function(m) {
-                return m === '&' ? '&amp;' : m === '<' ? '&lt;' : '&gt';
-            });
-        }
+        function escapeHtml(s) { if(!s) return ''; return s.replace(/[&<>]/g, function(m) { return m === '&' ? '&amp;' : m === '<' ? '&lt;' : '&gt;'; }); }
 
-        // Switch tab override
         var originalSwitchTab = window.switchTab; 
         if(originalSwitchTab){ 
             window.switchTab = function(tabId){ 
                 originalSwitchTab(tabId); 
-                if(tabId === 'announcement_list') {
-                    setTimeout(function() {
-                        if(typeof renderFullAnnouncementList === 'function') renderFullAnnouncementList();
-                    }, 100);
-                }
-                if(tabId === 'chat') {
-                    setTimeout(function() {
-                        if(typeof forceRenderChat === 'function') forceRenderChat();
-                    }, 100);
-                }
-                if(tabId === 'friends') {
-                    setTimeout(function() {
-                        if(typeof loadFriendRequests === 'function') loadFriendRequests();
-                        if(typeof loadFriendsList === 'function') loadFriendsList();
-                    }, 100);
-                }
-                if(tabId === 'logs') {
-                    setTimeout(function() {
-                        if(typeof initLogsSystem === 'function') initLogsSystem();
-                        if(typeof renderLogsTable === 'function') renderLogsTable();
-                    }, 100);
-                }
+                if(tabId === 'announcement_list') { setTimeout(function() { if(typeof renderFullAnnouncementList === 'function') renderFullAnnouncementList(); }, 100); }
+                if(tabId === 'chat') { setTimeout(function() { if(typeof forceRenderChat === 'function') forceRenderChat(); }, 100); }
+                if(tabId === 'friends') { setTimeout(function() { if(typeof loadFriendRequests === 'function') loadFriendRequests(); if(typeof loadFriendsList === 'function') loadFriendsList(); }, 100); }
+                if(tabId === 'logs') { setTimeout(function() { if(typeof initLogsSystem === 'function') initLogsSystem(); if(typeof renderLogsTable === 'function') renderLogsTable(); }, 100); }
             }; 
         }
 
-        // Modal functions
-        function closeAIAssistantModal(){ 
-            var m = document.getElementById('modal-ai-assistant'); 
-            if(m) m.classList.remove('open'); 
-            if(typeof window.closeAIAssistantModal === 'function') window.closeAIAssistantModal(); 
-        }
-        
-        function showToast(msg, type){ 
-            var t = document.getElementById('toast'); 
-            if(t){ 
-                t.textContent = msg; 
-                t.style.borderLeftColor = type === 'error' ? '#f44336' : '#00bcd4'; 
-                t.className = 'toast show'; 
-                setTimeout(function(){ 
-                    t.className = t.className.replace('show',''); 
-                }, 3000); 
-            } 
-        }
-        
-        function closeModal(id){ 
-            var m = document.getElementById(id); 
-            if(m) m.classList.remove('open'); 
-        }
-        
-        function toggleFriendsModal(){ 
-            var m = document.getElementById('modal-friends'); 
-            if(m){ 
-                m.classList.add('open'); 
-                if(typeof renderFriendsPanel === 'function') renderFriendsPanel(); 
-            } 
-        }
-        
-        function openChatModal(){ 
-            var m = document.getElementById('modal-chat'); 
-            if(m){ 
-                m.classList.add('open'); 
-                if(typeof renderChatInterface === 'function') renderChatInterface('chatModalPanel'); 
-            } 
-        }
-        
-        function openAISummaryModal(){ 
-            if(typeof window.openAISummaryModal === 'function') window.openAISummaryModal(); 
-            else console.log("openAISummaryModal not ready"); 
-        }
-        
-        function openAIAssistantModal(){ 
-            if(typeof window.openAIAssistantModal === 'function') window.openAIAssistantModal(); 
-            else console.log("openAIAssistantModal not ready"); 
-        }
+        function closeAIAssistantModal(){ var m = document.getElementById('modal-ai-assistant'); if(m) m.classList.remove('open'); }
+        function showToast(msg, type){ var t = document.getElementById('toast'); if(t){ t.textContent = msg; t.style.borderLeftColor = type === 'error' ? '#f44336' : '#00bcd4'; t.className = 'toast show'; setTimeout(function(){ t.className = t.className.replace('show',''); }, 3000); } }
+        function closeModal(id){ var m = document.getElementById(id); if(m) m.classList.remove('open'); }
+        function toggleFriendsModal(){ var m = document.getElementById('modal-friends'); if(m){ m.classList.add('open'); if(typeof renderFriendsPanel === 'function') renderFriendsPanel(); } }
+        function openChatModal(){ var m = document.getElementById('modal-chat'); if(m){ m.classList.add('open'); if(typeof renderChatInterface === 'function') renderChatInterface('chatModalPanel'); } }
+        function openAISummaryModal(){ if(typeof window.openAISummaryModal === 'function') window.openAISummaryModal(); }
+        function openAIAssistantModal(){ if(typeof window.openAIAssistantModal === 'function') window.openAIAssistantModal(); }
 
-        // DOM Content Loaded
         document.addEventListener('DOMContentLoaded', function(){
-            // Populate delay hours dropdowns
-            var dh = document.getElementById('delayHoursValue'); 
-            if(dh && dh.children.length === 0) {
-                for(var i = 1; i <= 24; i++) dh.innerHTML += '<option value="' + i + '">' + i + ' Jam</option>';
-            }
+            var dh = document.getElementById('delayHoursValue'); if(dh && dh.children.length === 0) { for(var i = 1; i <= 24; i++) dh.innerHTML += '<option value="' + i + '">' + i + ' Jam</option>'; }
+            var gh = document.getElementById('globalDelayHoursValue'); if(gh && gh.children.length === 0) { for(var j = 1; j <= 24; j++) gh.innerHTML += '<option value="' + j + '">' + j + '</option>'; }
             
-            var gh = document.getElementById('globalDelayHoursValue'); 
-            if(gh && gh.children.length === 0) {
-                for(var j = 1; j <= 24; j++) gh.innerHTML += '<option value="' + j + '">' + j + '</option>';
-            }
+            var dm = document.getElementById('delayMinutesValue'); if(dm && !dm._listenerAdded){ dm.addEventListener('input', function(){ var h = document.getElementById('newDelay'); if(h) h.value = this.value; }); dm._listenerAdded = true; }
+            var dh2 = document.getElementById('delayHoursValue'); if(dh2 && !dh2._listenerAdded){ dh2.addEventListener('change', function(){ var h = document.getElementById('newDelay'); if(h) h.value = this.value * 60; }); dh2._listenerAdded = true; }
+            var du = document.getElementById('delayUnit'); if(du && !du._listenerAdded){ du.addEventListener('change', function(){ if(typeof toggleDelayInput === 'function') toggleDelayInput(); }); du._listenerAdded = true; }
+            var gdm = document.getElementById('globalDelayMinutesValue'); if(gdm && !gdm._listenerAdded){ gdm.addEventListener('input', function(){ var h = document.getElementById('globalDelayHidden'); if(h) h.value = this.value; }); gdm._listenerAdded = true; }
+            var gdh2 = document.getElementById('globalDelayHoursValue'); if(gdh2 && !gdh2._listenerAdded){ gdh2.addEventListener('change', function(){ var h = document.getElementById('globalDelayHidden'); if(h) h.value = this.value * 60; }); gdh2._listenerAdded = true; }
+            var gdu = document.getElementById('globalDelayUnit'); if(gdu && !gdu._listenerAdded){ gdu.addEventListener('change', function(){ if(typeof toggleGlobalDelayInput === 'function') toggleGlobalDelayInput(); }); gdu._listenerAdded = true; }
+            setTimeout(function(){ if(typeof toggleDelayInput === 'function') toggleDelayInput(); if(typeof toggleGlobalDelayInput === 'function') toggleGlobalDelayInput(); }, 100);
             
-            // Delay input event listeners
-            var dm = document.getElementById('delayMinutesValue'); 
-            if(dm && !dm._listenerAdded){ 
-                dm.addEventListener('input', function(){
-                    var h = document.getElementById('newDelay');
-                    if(h) h.value = this.value;
-                }); 
-                dm._listenerAdded = true; 
-            }
-            
-            var dh2 = document.getElementById('delayHoursValue'); 
-            if(dh2 && !dh2._listenerAdded){ 
-                dh2.addEventListener('change', function(){
-                    var h = document.getElementById('newDelay');
-                    if(h) h.value = this.value * 60;
-                }); 
-                dh2._listenerAdded = true; 
-            }
-            
-            var du = document.getElementById('delayUnit'); 
-            if(du && !du._listenerAdded){ 
-                du.addEventListener('change', function(){
-                    if(typeof toggleDelayInput === 'function') toggleDelayInput();
-                }); 
-                du._listenerAdded = true; 
-            }
-            
-            var gdm = document.getElementById('globalDelayMinutesValue'); 
-            if(gdm && !gdm._listenerAdded){ 
-                gdm.addEventListener('input', function(){
-                    var h = document.getElementById('globalDelayHidden');
-                    if(h) h.value = this.value;
-                }); 
-                gdm._listenerAdded = true; 
-            }
-            
-            var gdh2 = document.getElementById('globalDelayHoursValue'); 
-            if(gdh2 && !gdh2._listenerAdded){ 
-                gdh2.addEventListener('change', function(){
-                    var h = document.getElementById('globalDelayHidden');
-                    if(h) h.value = this.value * 60;
-                }); 
-                gdh2._listenerAdded = true; 
-            }
-            
-            var gdu = document.getElementById('globalDelayUnit'); 
-            if(gdu && !gdu._listenerAdded){ 
-                gdu.addEventListener('change', function(){
-                    if(typeof toggleGlobalDelayInput === 'function') toggleGlobalDelayInput();
-                }); 
-                gdu._listenerAdded = true; 
-            }
-            
-            setTimeout(function(){ 
-                if(typeof toggleDelayInput === 'function') toggleDelayInput(); 
-                if(typeof toggleGlobalDelayInput === 'function') toggleGlobalDelayInput(); 
-            }, 100);
-            
-            // Rekap custom range handler
-            var periodSelect = document.getElementById('rekapPeriod'); 
-            var customRangeGroup = document.getElementById('customRangeGroup'); 
-            if(periodSelect && customRangeGroup){ 
-                var today = new Date(); 
-                var startDate = new Date(); 
-                startDate.setDate(today.getDate() - 30); 
-                var startInput = document.getElementById('rekapStartDate'); 
-                var endInput = document.getElementById('rekapEndDate'); 
-                if(startInput && !startInput.value) startInput.value = startDate.toISOString().split('T')[0]; 
-                if(endInput && !endInput.value) endInput.value = today.toISOString().split('T')[0]; 
-                function toggleCustomRange(){ 
-                    customRangeGroup.style.display = periodSelect.value === 'custom' ? 'flex' : 'none'; 
-                } 
-                periodSelect.addEventListener('change', toggleCustomRange); 
-                toggleCustomRange(); 
-            }
+            var periodSelect = document.getElementById('rekapPeriod'); var customRangeGroup = document.getElementById('customRangeGroup'); 
+            if(periodSelect && customRangeGroup){ var today = new Date(); var startDate = new Date(); startDate.setDate(today.getDate() - 30); var startInput = document.getElementById('rekapStartDate'); var endInput = document.getElementById('rekapEndDate'); 
+            if(startInput && !startInput.value) startInput.value = startDate.toISOString().split('T')[0]; if(endInput && !endInput.value) endInput.value = today.toISOString().split('T')[0]; 
+            function toggleCustomRange(){ customRangeGroup.style.display = periodSelect.value === 'custom' ? 'flex' : 'none'; } periodSelect.addEventListener('change', toggleCustomRange); toggleCustomRange(); }
             
             setTimeout(initTheme, 50);
             
@@ -1226,26 +831,13 @@
                 if(typeof initRekapPerSiswa === 'function') initRekapPerSiswa(); 
                 if(typeof initAISummary === 'function') initAISummary(); 
                 if(typeof initAIAssistant === 'function') initAIAssistant(); 
-                if(typeof initChatSystem === 'function' && !window._chatInitialized){ 
-                    window._chatInitialized = true; 
-                    initChatSystem(); 
-                } 
-                if(typeof initFriendsSystem === 'function' && !window._friendsInitialized){ 
-                    window._friendsInitialized = true; 
-                    initFriendsSystem(); 
-                } 
-                if(typeof initStatusSystem === 'function' && !window._statusInitialized){ 
-                    window._statusInitialized = true; 
-                    initStatusSystem(); 
-                }
-                if(typeof initLogsSystem === 'function' && !window._logsInitialized){
-                    window._logsInitialized = true;
-                    initLogsSystem();
-                }
+                if(typeof initChatSystem === 'function' && !window._chatInitialized){ window._chatInitialized = true; initChatSystem(); } 
+                if(typeof initFriendsSystem === 'function' && !window._friendsInitialized){ window._friendsInitialized = true; initFriendsSystem(); } 
+                if(typeof initStatusSystem === 'function' && !window._statusInitialized){ window._statusInitialized = true; initStatusSystem(); }
+                if(typeof initLogsSystem === 'function' && !window._logsInitialized){ window._logsInitialized = true; initLogsSystem(); }
             }, 1500);
         });
 
-        // Global exports
         window.showToast = showToast;
         window.closeModal = closeModal;
         window.toggleDropdown = toggleDropdown;
@@ -1261,7 +853,7 @@
     </script>
 
     <div class="branding-footer">
-        <img src="logo/hakatech.png" alt="HakaTech Logo" class="branding-logo">
+        <img src="logo/hakatech.png" alt="HakaTech" class="branding-logo">
         <span class="branding-text">Dikembangkan oleh CV Haka Jaya</span>
     </div>
 </body>
