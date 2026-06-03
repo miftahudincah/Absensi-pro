@@ -1,11 +1,9 @@
-// attendance.js - VERSION 4.4 (DENGAN FOTO SISWA DI TABEL ABSENSI)
+// attendance.js - VERSION 5.0 (DENGAN INTEGRASI WHATSAPP NOTIFIKASI)
 // Mengelola data absensi, filter, validasi delay pulang,
 // serta manual status (sakit, izin, alpha) untuk siswa yang tidak hadir.
-// PERUBAHAN V4.4: 
-//   - Menambahkan kolom foto di tabel absensi
-//   - Sinkron foto dengan akun siswa masing-masing
-//   - Fallback inisial jika belum punya akun
-//   - Modal untuk perbesar foto dari tabel absensi
+// PERUBAHAN V5.0: 
+//   - Menambahkan notifikasi WhatsApp saat absen masuk/pulang/terlambat
+//   - Menambahkan fungsi kirim notifikasi ke orang tua
 // ============================================================================
 
 // ======================== GLOBAL VARIABLES ========================
@@ -121,6 +119,119 @@ function showAttendanceStudentPhoto(studentId, studentName, photoUrl) {
     document.body.insertAdjacentHTML('beforeend', modalHtml);
 }
 
+// ======================== NOTIFIKASI WHATSAPP ========================
+
+/**
+ * Kirim notifikasi WhatsApp ke orang tua siswa
+ * @param {string} studentId - ID siswa
+ * @param {string} studentName - Nama siswa
+ * @param {string} type - Jenis notifikasi ('check_in', 'check_out', 'late', 'alpha')
+ * @param {string} time - Waktu kejadian
+ * @param {string} date - Tanggal (opsional)
+ */
+async function sendParentNotification(studentId, studentName, type, time, date = null) {
+    // Cek apakah fitur WhatsApp diaktifkan
+    if (typeof window.WHATSAPP_CONFIG === 'undefined' || !window.WHATSAPP_CONFIG.enabled) {
+        console.log('📱 WhatsApp notification disabled');
+        return;
+    }
+    
+    // Cek notifikasi berdasarkan jenis
+    if (type === 'check_in' && !window.WHATSAPP_CONFIG.sendOnCheckIn) return;
+    if (type === 'check_out' && !window.WHATSAPP_CONFIG.sendOnCheckOut) return;
+    if (type === 'late' && !window.WHATSAPP_CONFIG.sendOnLate) return;
+    if (type === 'alpha' && !window.WHATSAPP_CONFIG.sendOnAbsent) return;
+    
+    try {
+        // Ambil nomor WhatsApp orang tua
+        let phoneNumber = null;
+        
+        // Cari dari parent_contacts
+        const parentSnapshot = await db.ref(`parent_contacts/${studentId}`).once('value');
+        const parentData = parentSnapshot.val();
+        
+        if (parentData && parentData.phoneNumber) {
+            phoneNumber = parentData.phoneNumber;
+        } else {
+            // Cari dari data siswa
+            const studentSnapshot = await db.ref(`users/${studentId}`).once('value');
+            const student = studentSnapshot.val();
+            if (student && student.wa_ortu) {
+                phoneNumber = student.wa_ortu;
+            }
+        }
+        
+        if (!phoneNumber) {
+            console.log(`📱 No WhatsApp number for student ${studentName} (ID: ${studentId})`);
+            return;
+        }
+        
+        // Format nomor
+        let formattedNumber = phoneNumber.replace(/[^0-9]/g, '');
+        if (formattedNumber.startsWith('0')) formattedNumber = '62' + formattedNumber.substring(1);
+        if (!formattedNumber.startsWith('62')) formattedNumber = '62' + formattedNumber;
+        
+        // Format tanggal
+        const today = date || new Date().toISOString().split('T')[0];
+        const formattedDate = formatIndonesianDate(today);
+        
+        // Buat pesan sesuai jenis
+        let title = '';
+        let message = '';
+        
+        switch(type) {
+            case 'check_in':
+                title = '✅ Anak Anda Telah Masuk Sekolah';
+                message = `*${studentName}* telah masuk sekolah pada pukul *${time}*.\n\n📅 Tanggal: ${formattedDate}\n\nSemangat belajar! 📚✨`;
+                break;
+            case 'late':
+                title = '⚠️ Peringatan: Anak Anda Terlambat';
+                message = `*${studentName}* terlambat masuk sekolah pada pukul *${time}*.\n\n📅 Tanggal: ${formattedDate}\n\nMohon perhatikan jam kedatangan anak Anda. 🕐`;
+                break;
+            case 'check_out':
+                title = '🏠 Anak Anda Telah Pulang Sekolah';
+                message = `*${studentName}* telah pulang sekolah pada pukul *${time}*.\n\n📅 Tanggal: ${formattedDate}\n\nSemoga sampai rumah dengan selamat. 🏡`;
+                break;
+            case 'alpha':
+                title = '⚠️ Peringatan: Anak Tidak Masuk Sekolah';
+                message = `*${studentName}* TIDAK HADIR pada tanggal *${formattedDate}* tanpa keterangan.\n\nMohon konfirmasi ke wali kelas untuk informasi lebih lanjut. 📞`;
+                break;
+        }
+        
+        // Kirim notifikasi via Fonnte jika fungsi tersedia
+        if (typeof sendViaFonnte === 'function') {
+            const fullMessage = `*📢 SISTEM ABSENSI SEKOLAH*\n\n*${title}*\n\n${message}\n\n---\n📱 Sistem Absensi IoT - Real-time`;
+            const result = await sendViaFonnte(formattedNumber, fullMessage);
+            if (result) {
+                console.log(`📱 WhatsApp sent to ${studentName}: ${type}`);
+                
+                // Simpan log notifikasi
+                await db.ref(`notifications_log/${studentId}/${Date.now()}`).set({
+                    type: type,
+                    phoneNumber: formattedNumber,
+                    time: time,
+                    date: today,
+                    sentAt: firebase.database.ServerValue.TIMESTAMP
+                });
+            }
+        }
+        
+    } catch (error) {
+        console.error('Send parent notification error:', error);
+    }
+}
+
+/**
+ * Format tanggal Indonesia
+ */
+function formatIndonesianDate(dateStr) {
+    if (!dateStr) return '';
+    const parts = dateStr.split('-');
+    if (parts.length !== 3) return dateStr;
+    const bulan = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+    return `${parts[2]} ${bulan[parseInt(parts[1]) - 1]} ${parts[0]}`;
+}
+
 // ======================== EVENT LISTENER ========================
 
 function setupAttendanceDataReadyListener() {
@@ -203,7 +314,6 @@ function createAttendanceTableDynamic() {
     let table = tableContainer.querySelector('table');
     if (!table) {
         table = document.createElement('table');
-        // UPDATE HEADER: Tambah kolom Foto
         table.innerHTML = `
             <thead>
                 <tr>
@@ -617,7 +727,7 @@ function deleteAttendance(id) {
         });
 }
 
-// ======================== SIMULASI SCAN MASUK (DENGAN SEARCH SISWA) ========================
+// ======================== SIMULASI SCAN MASUK (DENGAN NOTIFIKASI WHATSAPP) ========================
 
 let currentStudentsListForIn = [];
 
@@ -801,6 +911,15 @@ async function executeSimulateIn() {
             logActivity('simulate_attendance_in', `Simulasi masuk: ${nama} (ID: ${studentId}) - Status: ${statusText}, Waktu: ${timeStr}`);
         }
         
+        // ======================== KIRIM NOTIFIKASI WHATSAPP ========================
+        if (statusCondition === 'hadir') {
+            const isLate = timeStr > '07:30';
+            const notifType = isLate ? 'late' : 'check_in';
+            await sendParentNotification(studentId, nama, notifType, timeStr, dateStr);
+        } else if (statusCondition === 'alpha') {
+            await sendParentNotification(studentId, nama, 'alpha', timeStr, dateStr);
+        }
+        
         // Clear cache foto untuk siswa ini
         attendancePhotoCache.delete(studentId);
         
@@ -813,7 +932,7 @@ async function executeSimulateIn() {
     }
 }
 
-// ======================== SIMULASI SCAN PULANG ========================
+// ======================== SIMULASI SCAN PULANG (DENGAN NOTIFIKASI) ========================
 
 let currentStudentsListForOut = [];
 
@@ -1029,6 +1148,9 @@ async function executeSimulateOut() {
         if (typeof logActivity === 'function') {
             logActivity('simulate_attendance_out', `Simulasi pulang: ${nama} (ID: ${studentId}) - Waktu pulang: ${timeOutStr}${warningMsg}`);
         }
+        
+        // ======================== KIRIM NOTIFIKASI PULANG ========================
+        await sendParentNotification(studentId, nama, 'check_out', timeOutStr, todayStr);
         
         closeModal('modal-simulate-out');
         if (typeof renderTable === 'function') setTimeout(() => renderTable(), 500);
@@ -1379,5 +1501,7 @@ window.waitForAttendanceElements = waitForAttendanceElements;
 window.getAttendanceStudentPhotoUrl = getAttendanceStudentPhotoUrl;
 window.clearAttendancePhotoCache = clearAttendancePhotoCache;
 window.showAttendanceStudentPhoto = showAttendanceStudentPhoto;
+// Ekspor fungsi notifikasi
+window.sendParentNotification = sendParentNotification;
 
-console.log("✅ attendance.js V4.4 loaded - Dengan foto siswa di tabel absensi dan log aktivitas");
+console.log("✅ attendance.js V5.0 loaded - Dengan integrasi WhatsApp notifikasi, foto siswa di tabel absensi, dan log aktivitas");

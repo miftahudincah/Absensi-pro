@@ -19,6 +19,34 @@ const firebaseConfig = {
 // PERINGATAN: Di production, pindahkan upload ke Cloud Function
 const IMGBB_KEY = "67650d8ee67ebb8bba94f3bb2c72eb4f";
 
+// ==================== WHATSAPP GATEWAY CONFIG ====================
+// Gunakan Fonnte API: https://fonnte.com (daftar gratis, 100 pesan/hari)
+// Cara setup:
+// 1. Daftar di https://fonnte.com
+// 2. Verifikasi nomor WhatsApp
+// 3. Dapatkan API Key dari dashboard
+// 4. API Key sudah diisi dengan key asli Anda
+const WHATSAPP_CONFIG = {
+    gateway: 'fonnte',           // 'fonnte', 'waba', 'wati'
+    fonnteApiKey: '2VoL53ZrVsDPxwDTNPdY', // API Key asli dari Fonnte
+    enabled: true,               // Aktifkan/nonaktifkan notifikasi WA
+    sendOnCheckIn: true,         // Notifikasi saat masuk
+    sendOnCheckOut: true,        // Notifikasi saat pulang
+    sendOnLate: true,            // Notifikasi jika terlambat
+    sendOnAbsent: true,          // Notifikasi jika alpha (tidak hadir)
+    senderNumber: ''             // Nomor pengirim (opsional, kosongkan jika pakai default)
+};
+
+// ==================== KONFIGURASI IZIN ONLINE ====================
+const IZIN_CONFIG = {
+    enabled: true,               // Aktifkan fitur izin online
+    maxFileSize: 2 * 1024 * 1024, // Maksimal 2MB untuk lampiran
+    allowedFileTypes: ['pdf', 'jpg', 'jpeg', 'png'],
+    autoApprove: false,          // True jika izin otomatis disetujui (tanpa review)
+    notificationOnApprove: true, // Kirim notifikasi saat izin disetujui
+    notificationOnReject: true   // Kirim notifikasi saat izin ditolak
+};
+
 // Pastikan Firebase SDK sudah dimuat sebelum inisialisasi
 if (typeof firebase === 'undefined') {
   console.error("❌ Firebase SDK tidak dimuat! Periksa koneksi internet dan urutan script.");
@@ -66,5 +94,10 @@ if (!allowedDomains.includes(origin) && !origin.endsWith('.web.app')) {
   console.log(`✅ Domain diizinkan: ${origin}`);
 }
 
-// Ekspor ke global (sudah otomatis)
-console.log("✅ config.js loaded - Firebase siap digunakan");
+// Ekspor ke global
+window.WHATSAPP_CONFIG = WHATSAPP_CONFIG;
+window.IZIN_CONFIG = IZIN_CONFIG;
+window.IMGBB_KEY = IMGBB_KEY;
+window.firebaseConfig = firebaseConfig;
+
+console.log("✅ config.js loaded - Firebase, WhatsApp Gateway (API Key: 2VoL53ZrVsDPxwDTNPdY), dan Izin Online siap digunakan");

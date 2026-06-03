@@ -1,6 +1,7 @@
-// init.js - VERSION 5.0 (SUPABASE INTEGRATION & AUTO-DELETE EXPIRED STATUS)
+// init.js - VERSION 5.1 (SUPABASE INTEGRATION + WHATSAPP + IZIN ONLINE)
 // INISIALISASI DATA DENGAN FLAG SYSTEM + EVENT DATA READY
 // DENGAN DUKUNGAN SUPABASE AUTO-DELETE UNTUK STATUS EXPIRED
+// PERUBAHAN V5.1: Menambahkan inisialisasi WhatsApp Gateway dan Izin Online
 // ============================================================================
 
 let appInitialized = false;
@@ -179,7 +180,34 @@ function renderAllData() {
     // 7. START AUTO-DELETE EXPIRED STATUS (SUPABASE INTEGRATION)
     initSupabaseAutoDelete();
     
-    console.log("✅ renderAllData completed");
+    // ==================== FITUR BARU ====================
+    
+    // 8. Inisialisasi WhatsApp Notification Gateway
+    if (typeof window.WHATSAPP_CONFIG !== 'undefined' && window.WHATSAPP_CONFIG.enabled) {
+        console.log("📱 WhatsApp Gateway is ENABLED - API Key:", window.WHATSAPP_CONFIG.fonnteApiKey ? 'Configured ✓' : 'NOT CONFIGURED ⚠️');
+        if (window.WHATSAPP_CONFIG.fonnteApiKey === 'YOUR_FONNTE_API_KEY_HERE') {
+            console.warn("⚠️ Please configure your Fonnte API Key in config.js!");
+        }
+    } else {
+        console.log("📱 WhatsApp Gateway is DISABLED (set enabled: true in config.js to activate)");
+    }
+    
+    // 9. Inisialisasi Izin Online
+    if (typeof initIzinOnline === 'function') {
+        console.log("📝 Initializing Izin Online module...");
+        try {
+            initIzinOnline();
+        } catch(e) { console.warn("initIzinOnline error:", e); }
+    } else {
+        console.log("⚠️ izin-online.js not loaded yet, will retry...");
+        setTimeout(() => {
+            if (typeof initIzinOnline === 'function') {
+                initIzinOnline();
+            }
+        }, 1000);
+    }
+    
+    console.log("✅ renderAllData completed - All modules initialized!");
 }
 
 /**
@@ -559,6 +587,32 @@ function initDataListeners() {
         }
     });
     
+    // ========== 8. LISTENER IZIN ONLINE (BARU) ==========
+    db.ref('izin').on('value', (snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+            const pendingCount = Object.values(data).filter(izin => izin.status === 'pending').length;
+            console.log(`📝 Izin Online: ${pendingCount} pending requests`);
+            
+            // Update badge di tab jika ada
+            const izinTabBtn = document.querySelector('.tab-btn[onclick*="izin"]');
+            if (izinTabBtn) {
+                let badge = izinTabBtn.querySelector('.izin-badge');
+                if (pendingCount > 0) {
+                    if (!badge) {
+                        badge = document.createElement('span');
+                        badge.className = 'izin-badge';
+                        badge.style.cssText = 'background:#f44336; color:white; border-radius:50%; padding:2px 6px; font-size:10px; margin-left:5px;';
+                        izinTabBtn.appendChild(badge);
+                    }
+                    badge.textContent = pendingCount > 99 ? '99+' : pendingCount;
+                } else if (badge) {
+                    badge.remove();
+                }
+            }
+        }
+    });
+    
     console.log("✅ All Firebase data listeners attached successfully");
 }
 
@@ -574,6 +628,7 @@ function cleanupInitListeners() {
         db.ref('settings/delayOut').off();
         db.ref('codes').off();
         db.ref('system_config/schoolName').off();
+        db.ref('izin').off(); // Tambahan cleanup untuk izin
         
         // Stop auto-delete for expired statuses
         stopSupabaseAutoDelete();
@@ -627,4 +682,4 @@ window.syncSchoolConfigToAll = syncSchoolConfigToAll;
 window.initSupabaseAutoDelete = initSupabaseAutoDelete;
 window.stopSupabaseAutoDelete = stopSupabaseAutoDelete;
 
-console.log("✅ init.js V5.0 loaded - Supabase integration with auto-delete for expired statuses");
+console.log("✅ init.js V5.1 loaded - Supabase integration + WhatsApp Gateway + Izin Online");
