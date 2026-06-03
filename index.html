@@ -16,6 +16,7 @@
     <link rel="stylesheet" href="css/components.css">
     <link rel="stylesheet" href="css/modules.css">
     <link rel="stylesheet" href="css/responsive.css">
+    <link rel="stylesheet" href="css/custom.css">
     
     <!-- Chart.js CDN -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -315,6 +316,26 @@
             border-color: #00bcd4;
         }
         
+        /* WhatsApp Button */
+        .btn-wa {
+            background: #25D366;
+            color: white;
+            border: none;
+            border-radius: 30px;
+            padding: 6px 12px;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .btn-wa:hover {
+            background: #128C7E;
+            transform: scale(1.05);
+        }
+        
         .badge-account {
             background: #4caf50;
             color: white;
@@ -511,6 +532,7 @@
                         <button onclick="switchTab('attendance'); closeAllDropdowns()">📋 Absensi</button>
                         <button onclick="switchTab('students'); closeAllDropdowns()">👨‍🎓 Data Siswa</button>
                         <button onclick="switchTab('rekap'); closeAllDropdowns()">📊 Rekap Absensi</button>
+                        <button onclick="switchTab('izin'); closeAllDropdowns()">📝 Izin Online</button>
                         <button onclick="switchTab('guide'); closeAllDropdowns()">📘 Panduan</button>
                     </div>
                 </div>
@@ -635,21 +657,21 @@
                 </div>
             </div>
             <div class="chart-container" style="margin-bottom:20px;"><div style="background:var(--bg-card); border-radius:20px; padding:15px;"><h4 style="margin:0 0 10px 0;">📊 Ringkasan Hari Ini</h4><div style="max-width:250px; margin:0 auto;"><canvas id="attendanceDonutChart" style="max-height:200px;"></canvas></div><div id="todayStatsText" class="text-small text-center" style="margin-top:10px;"></div></div></div>
-            <div class="table-container"><table><thead><tr><th>Foto</th><th>Waktu</th><th>ID FP</th><th>Nama</th><th>Kelas</th><th>Jurusan</th><th>Status</th><th>Aksi</th></tr></thead><tbody id="tbody-attendance"><tr><td colspan="8">Memuat data...<\/td><\/tr></tbody></table></div>
+            <div class="table-container"></td><thead><tr><th>Foto</th><th>Waktu</th><th>ID FP</th><th>Nama</th><th>Kelas</th><th>Jurusan</th><th>Status</th><th>Aksi</th></tr></thead><tbody id="tbody-attendance"><tr><td colspan="8">Memuat data...<\/td><\/tr></tbody></table></div>
         </div>
 
         <!-- TAB STUDENTS -->
         <div id="tab-students" class="tab-content">
             <div class="controls-bar"><div style="display:flex; gap:10px; flex-wrap:wrap; width:100%;"><input type="hidden" id="editMode" value="add"><div class="filter-group"><label>ID FP:</label><input type="number" id="newId" placeholder="ID" style="width:80px;"></div><div class="filter-group"><label>Nama:</label><input type="text" id="newNama" placeholder="Nama Siswa" style="width:200px;"></div><div class="filter-group"><label>Kelas:</label><select id="newKelas"></select></div><div class="filter-group"><label>Jurusan:</label><select id="newJurusan"></select></div><div class="filter-group"><label>Delay:</label><select id="delayUnit"><option value="minutes">Menit</option><option value="hours">Jam</option></select></div><div class="filter-group" id="delayMinutesGroup"><input type="number" id="delayMinutesValue" value="60" style="width:70px;"><span>menit</span></div><div class="filter-group" id="delayHoursGroup" style="display:none;"><select id="delayHoursValue"></select><span>jam</span></div><input type="hidden" id="newDelay" value="60"><button class="btn-action role-guru role-admin" id="btnSaveStudent" onclick="saveStudent()">➕ Simpan Siswa</button><button class="btn-action btn-danger hidden role-guru role-admin" id="btnCancelStudent" onclick="resetStudentForm()">Batal</button></div></div>
             <div class="controls-bar"><div class="filter-group"><label>Kelas:</label><select id="filterStudentKelas" onchange="renderStudentsTable()"><option value="all">Semua</option></select></div><div class="filter-group"><label>Jurusan:</label><select id="filterStudentJurusan" onchange="renderStudentsTable()"><option value="all">Semua</option></select></div><div class="search-box"><input type="text" id="searchStudentName" placeholder="🔍 Cari nama siswa..." oninput="renderStudentsTable()"></div></div>
-            <div class="table-container"></table><thead><tr><th>Foto</th><th>ID FP</th><th>Nama</th><th>Kelas</th><th>Jurusan</th><th>Delay</th><th>Aksi</th></tr></thead><tbody id="tbody-students"><tr><td colspan="7">Memuat data...<\/td><\/tr></tbody></table></div>
+            <div class="table-container"><table><thead><tr><th>Foto</th><th>ID FP</th><th>Nama</th><th>Kelas</th><th>Jurusan</th><th>Delay</th><th>Aksi</th></tr></thead><tbody id="tbody-students"><tr><td colspan="7">Memuat data...<\/td><\/tr></tbody></table></div>
         </div>
 
         <!-- TAB USERS -->
         <div id="tab-users" class="tab-content role-admin role-guru"><div class="controls-bar"><h4>🔑 Generate Kode Pendaftaran</h4></div><div class="key-box role-admin role-guru"><div style="flex:1;"><div style="margin-bottom:10px;"><label><input type="radio" name="genTarget" value="siswa" checked onchange="toggleGenerateInput()"> 👨‍🎓 Untuk Siswa</label><label><input type="radio" name="genTarget" value="guru" onchange="toggleGenerateInput()"> 👨‍🏫 Untuk Guru</label></div><div id="group-select-siswa"><select id="selectStudentForCode"><option value="">-- Pilih Siswa --</option></select></div><small class="text-small" id="gen-desc">🔒 Kode akan dikunci ke ID Siswa terpilih.</small></div><button class="btn-action btn-secondary" onclick="generateRegistrationCode()">✨ Generate Kode</button></div><div id="generatedKeyDisplay" style="display:none;"></div><h4 class="role-admin role-guru">📋 Daftar Kode Aktif</h4><div class="table-container role-admin role-guru"><table><thead><tr><th>Kode</th><th>Status</th><th>Dibuat</th><th>Pengguna</th><th>Aksi</th></tr></thead><tbody id="tbody-codes"></tbody></table></div><div class="controls-bar role-admin role-guru"><h4>👥 Daftar Pengguna</h4><div class="search-box"><input type="text" id="searchUser" placeholder="🔍 Cari user..." oninput="renderUsersTable()"></div></div><div class="table-container role-admin role-guru"><table><thead><tr><th>Foto</th><th>Nama</th><th>Email</th><th>Role</th><th>Detail</th><th>Aksi</th></tr></thead><tbody id="tbody-users"></tbody></table></div></div>
 
         <!-- TAB REKAP -->
-        <div id="tab-rekap" class="tab-content"><div class="controls-bar"><div class="filter-group"><label>📅 Periode:</label><select id="rekapPeriod" onchange="loadRekap()"><option value="minggu">Minggu Ini</option><option value="bulan">Bulan Ini</option><option value="semester">Semester Ini</option><option value="custom">Custom Range</option></select></div><div id="customRangeGroup" style="display:none; gap:10px;"><input type="date" id="rekapStartDate"><span>s/d</span><input type="date" id="rekapEndDate"></div><div style="margin-left:auto; display:flex; gap:10px;"><button class="btn-action btn-success" onclick="exportRekapToExcel()">📥 Excel</button><button class="btn-action btn-primary" onclick="exportRekapToPDF()">📄 PDF</button></div></div><div class="chart-container" style="margin-bottom:25px;"><div style="display:flex; flex-wrap:wrap; gap:20px;"><div style="flex:1; min-width:250px;"><canvas id="rekapPieChart" style="max-height:300px;"></canvas><p class="text-small text-center">Distribusi Status</p></div><div style="flex:2; min-width:300px;"><canvas id="rekapBarChart" style="max-height:300px;"></canvas><p class="text-small text-center">Absensi per Hari</p></div></div></div><div class="table-container"><table><thead><tr><th>No</th><th>ID FP</th><th>Nama</th><th>Kelas</th><th>Jurusan</th><th>Total Hari</th><th>Hadir</th><th>Sakit</th><th>Izin</th><th>Alpha</th><th>Persentase</th><th>Status</th></tr></thead><tbody id="rekapTbody"><tr><td colspan="12">Memuat data...<\/td><\/tr></tbody></table></div><div class="rekap-per-siswa-container" id="rekapPerSiswaContainer" style="margin-top:30px; display:none;"><div class="section-title" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:20px;"><span>📋 Detail Rekap Per Siswa</span><div style="display:flex; gap:10px;"><button class="btn-action btn-success" onclick="exportCurrentRekapPerSiswaToExcel()">📥 Export Excel</button><button class="btn-action btn-primary" onclick="exportCurrentRekapPerSiswaToPDF()">📄 Export PDF</button></div></div><div class="rekap-per-siswa-select-wrapper"><select id="rekapPerSiswaSelect"><option value="">-- Pilih Siswa --</option></select></div><div class="rekap-per-siswa-period-wrapper"><div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;"><label style="font-weight:500;">📅 Periode:</label><select id="rekapPerSiswaPeriod"><option value="minggu">📆 Minggu Ini</option><option value="bulan">📅 Bulan Ini</option><option value="semester">📚 Semester Ini</option><option value="tahun">🗓️ Tahun Ini</option><option value="pertama">⭐ Pertama Kali Absensi</option><option value="custom">📅 Custom Range</option></select><div id="rekapPerSiswaCustomRange" style="display:none; gap:10px; align-items:center; flex-wrap:wrap;"><input type="date" id="rekapPerSiswaStartDate"><span>s/d</span><input type="date" id="rekapPerSiswaEndDate"></div><button class="btn-action btn-primary" onclick="loadRekapPerSiswa()">🔍 Tampilkan Rekap</button></div></div><div id="rekapPerSiswaPeriodLabel" class="text-small" style="margin-bottom:15px; color:var(--text-muted); text-align:center;"></div><div id="rekapPerSiswaContent"><div style="text-align:center; padding:40px; color:var(--text-muted);">👈 Pilih siswa, pilih periode, lalu klik "Tampilkan Rekap" untuk melihat detail absensi per siswa</div></div></div></div>
+        <div id="tab-rekap" class="tab-content"><div class="controls-bar"><div class="filter-group"><label>📅 Periode:</label><select id="rekapPeriod" onchange="loadRekap()"><option value="minggu">Minggu Ini</option><option value="bulan">Bulan Ini</option><option value="semester">Semester Ini</option><option value="custom">Custom Range</option></select></div><div id="customRangeGroup" style="display:none; gap:10px;"><input type="date" id="rekapStartDate"><span>s/d</span><input type="date" id="rekapEndDate"></div><div style="margin-left:auto; display:flex; gap:10px;"><button class="btn-action btn-success" onclick="exportRekapToExcel()">📥 Excel</button><button class="btn-action btn-primary" onclick="exportRekapToPDF()">📄 PDF</button></div></div><div class="chart-container" style="margin-bottom:25px;"><div style="display:flex; flex-wrap:wrap; gap:20px;"><div style="flex:1; min-width:250px;"><canvas id="rekapPieChart" style="max-height:300px;"></canvas><p class="text-small text-center">Distribusi Status</p></div><div style="flex:2; min-width:300px;"><canvas id="rekapBarChart" style="max-height:300px;"></canvas><p class="text-small text-center">Absensi per Hari</p></div></div></div><div class="table-container"><td><thead><tr><th>No</th><th>ID FP</th><th>Nama</th><th>Kelas</th><th>Jurusan</th><th>Total Hari</th><th>Hadir</th><th>Sakit</th><th>Izin</th><th>Alpha</th><th>Persentase</th><th>Status</th></tr></thead><tbody id="rekapTbody"><tr><td colspan="12">Memuat data...<\/td><\/tr></tbody></table></div><div class="rekap-per-siswa-container" id="rekapPerSiswaContainer" style="margin-top:30px; display:none;"><div class="section-title" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:20px;"><span>📋 Detail Rekap Per Siswa</span><div style="display:flex; gap:10px;"><button class="btn-action btn-success" onclick="exportCurrentRekapPerSiswaToExcel()">📥 Export Excel</button><button class="btn-action btn-primary" onclick="exportCurrentRekapPerSiswaToPDF()">📄 Export PDF</button></div></div><div class="rekap-per-siswa-select-wrapper"><select id="rekapPerSiswaSelect"><option value="">-- Pilih Siswa --</option></select></div><div class="rekap-per-siswa-period-wrapper"><div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;"><label style="font-weight:500;">📅 Periode:</label><select id="rekapPerSiswaPeriod"><option value="minggu">📆 Minggu Ini</option><option value="bulan">📅 Bulan Ini</option><option value="semester">📚 Semester Ini</option><option value="tahun">🗓️ Tahun Ini</option><option value="pertama">⭐ Pertama Kali Absensi</option><option value="custom">📅 Custom Range</option></select><div id="rekapPerSiswaCustomRange" style="display:none; gap:10px; align-items:center; flex-wrap:wrap;"><input type="date" id="rekapPerSiswaStartDate"><span>s/d</span><input type="date" id="rekapPerSiswaEndDate"></div><button class="btn-action btn-primary" onclick="loadRekapPerSiswa()">🔍 Tampilkan Rekap</button></div></div><div id="rekapPerSiswaPeriodLabel" class="text-small" style="margin-bottom:15px; color:var(--text-muted); text-align:center;"></div><div id="rekapPerSiswaContent"><div style="text-align:center; padding:40px; color:var(--text-muted);">👈 Pilih siswa, pilih periode, lalu klik "Tampilkan Rekap" untuk melihat detail absensi per siswa</div></div></div></div>
 
         <!-- TAB FRIENDS -->
         <div id="tab-friends" class="tab-content">
@@ -732,6 +754,8 @@
                 <details open><summary>1. 📝 Pendaftaran Akun</summary><div class="guide-box"><h4>Cara Mendaftar sebagai Siswa:</h4><ol><li>Pastikan Anda sudah terdaftar di database siswa (ID Fingerprint sudah ada)</li><li>Klik "Daftar disini" pada halaman login</li><li>Pilih role "Siswa"</li><li>Masukkan ID Generate (ID Fingerprint yang diberikan guru)</li><li>Masukkan Email dan Password (minimal 6 karakter)</li><li>Masukkan Kode Pendaftaran yang diberikan guru (bisa scan QR)</li><li>Klik "DAFTAR" dan tunggu konfirmasi</li></ol><h4>Cara Mendaftar sebagai Guru:</h4><ol><li>Klik "Daftar disini" pada halaman login</li><li>Pilih role "Guru"</li><li>Masukkan Nama Lengkap dan Mata Pelajaran</li><li>Masukkan Email dan Password</li><li>Masukkan Kode Pendaftaran Guru dari Admin</li><li>Klik "DAFTAR"</li></ol></div></details>
                 <details><summary>2. 🔐 Login & Keamanan</summary><div class="guide-box"><h4>Cara Login:</h4><ol><li>Masukkan Email dan Password yang sudah didaftarkan</li><li>Klik tombol "MASUK"</li></ol><h4>Lupa Password?</h4><ol><li>Klik "Lupa Password?" di halaman login</li><li>Masukkan email yang terdaftar</li><li>Klik "Kirim Link"</li></ol></div></details>
                 <details><summary>3. 🤖 AI Assistant (Chat dengan AI)</summary><div class="guide-box"><h4>Perintah yang Didukung:</h4><ul><li><strong>📊 Data Siswa:</strong> "data siswa miftah", "id 1 siapa", "siswa kelas X", "siswa kelas X jurusan RPL"</li><li><strong>📈 Rekap & Statistik:</strong> "rekap miftah", "siswa paling prestasi", "statistik"</li><li><strong>✏️ Manajemen Data (Admin/Guru):</strong> "buat data siswa baru nama Titin id 8 kelas X jurusan Dev", "update siswa id 8 delay 90", "hapus siswa id 8"</li><li><strong>💬 Bantuan:</strong> "bantuan" atau "help"</li></ul><p>Klik tombol 💬 di pojok kanan bawah untuk membuka AI Assistant!</p></div></details>
+                <details><summary>4. 📱 Notifikasi WhatsApp</summary><div class="guide-box"><h4>Notifikasi Otomatis ke Orang Tua:</h4><ul><li>✅ Saat siswa masuk sekolah</li><li>⚠️ Jika siswa terlambat</li><li>🏠 Saat siswa pulang sekolah</li><li>❌ Jika siswa tidak hadir (Alpha)</li></ul><p>Admin/Guru dapat mengatur nomor WhatsApp orang tua di menu Data Siswa.</p></div></details>
+                <details><summary>5. 📝 Izin Online</summary><div class="guide-box"><h4>Cara Mengajukan Izin:</h4><ol><li>Buka tab "Izin Online"</li><li>Klik "Ajukan Izin Baru"</li><li>Pilih jenis izin (Sakit/Keperluan)</li><li>Isi tanggal dan alasan</li><li>Upload surat/dokumen pendukung (opsional)</li><li>Klik "Ajukan Izin"</li></ol><p>Guru/Admin akan menyetujui atau menolak izin yang diajukan.</p></div></details>
                 <div class="guide-footer"><hr><div class="text-small" style="text-align:center;"><p>📱 Sistem Absensi IoT - Fingerprint & Real-time</p><p>Dikembangkan oleh CV Haka Jaya | Versi 5.20 | © 2026</p></div></div>
             </div>
         </div>
@@ -742,6 +766,28 @@
                 <h3>📋 Daftar Semua Pengumuman</h3>
                 <div style="margin-bottom:15px;"><button class="btn-action btn-primary" onclick="openAnnouncementModal()">➕ Buat Pengumuman Baru</button></div>
                 <div id="fullAnnouncementList" class="full-announcement-list"><div style="text-align:center; padding:40px;">⏳ Memuat daftar pengumuman...</div></div>
+            </div>
+        </div>
+        
+        <!-- TAB IZIN ONLINE -->
+        <div id="tab-izin" class="tab-content">
+            <div class="izin-container">
+                <div class="izin-header">
+                    <h3>📝 Izin Online</h3>
+                    <p class="text-small">Ajukan izin sakit/keperluan keluarga secara online</p>
+                </div>
+                <div class="izin-actions">
+                    <button class="btn-action btn-primary" onclick="window.openAjukanIzinModal()">➕ Ajukan Izin Baru</button>
+                    <div class="izin-filter">
+                        <button class="filter-btn" onclick="window.filterIzinList('all')">Semua</button>
+                        <button class="filter-btn" onclick="window.filterIzinList('pending')">⏳ Menunggu</button>
+                        <button class="filter-btn" onclick="window.filterIzinList('approved')">✅ Disetujui</button>
+                        <button class="filter-btn" onclick="window.filterIzinList('rejected')">❌ Ditolak</button>
+                    </div>
+                </div>
+                <div id="izinListContainer" class="izin-list">
+                    <div class="loading-spinner-small" style="text-align:center; padding:40px;">⏳ Memuat data izin...</div>
+                </div>
             </div>
         </div>
     </div>
@@ -786,6 +832,12 @@
         </div>
     </div>
     
+    <!-- MODAL PARENT CONTACT (WhatsApp) -->
+    <div id="modal-parent-contact" class="modal-overlay"><div class="modal-box" style="max-width:450px;"><div class="modal-title"><span>📱 WhatsApp Orang Tua</span><span onclick="closeModal('modal-parent-contact')">✖</span></div><div style="padding:20px;"><div class="form-group"><label>👨‍🎓 Siswa</label><input type="text" id="parentStudentName" readonly style="background:var(--bg-hover);"></div><div class="form-group"><label>📱 Nomor WhatsApp Orang Tua</label><input type="tel" id="parentPhoneNumber" placeholder="Contoh: 08123456789 atau 628123456789"><small class="text-small">Format: 08xxxxxxxxx atau 628xxxxxxxxx</small></div><div class="form-group"><label>👤 Hubungan</label><select id="parentRelation"><option value="orang_tua">Orang Tua</option><option value="ayah">Ayah</option><option value="ibu">Ibu</option><option value="wali">Wali</option></select></div><div class="modal-actions"><button class="btn-cancel" onclick="closeModal('modal-parent-contact')">Batal</button><button class="btn-save" onclick="saveParentContactFromModal()">💾 Simpan</button></div></div></div></div>
+    
+    <!-- MODAL AJUKAN IZIN -->
+    <div id="modal-ajukan-izin" class="modal-overlay"><div class="modal-box" style="max-width:550px;"><div class="modal-title"><span>📝 Ajukan Izin</span><span onclick="closeModal('modal-ajukan-izin')">✖</span></div><div style="padding:20px;"><form id="formAjukanIzin" onsubmit="submitIzin(event)"><div class="form-group"><label>📋 Jenis Izin</label><select id="izinType" required><option value="sakit">🤒 Sakit</option><option value="keperluan">📝 Keperluan Keluarga</option></select></div><div class="form-group"><label>📅 Tanggal Mulai</label><input type="date" id="izinStartDate" required></div><div class="form-group"><label>📅 Tanggal Selesai</label><input type="date" id="izinEndDate" required></div><div class="form-group"><label>📝 Alasan / Keterangan</label><textarea id="izinReason" rows="4" placeholder="Jelaskan alasan izin..." required></textarea></div><div class="form-group"><label>📎 Lampiran (Opsional)</label><input type="file" id="izinAttachment" accept=".pdf,.jpg,.jpeg,.png"><small class="text-small">Format: PDF, JPG, PNG. Maksimal 2MB</small><div id="attachmentPreview" style="display:none; margin-top:10px;"><span id="attachmentName"></span><button type="button" class="btn-icon" onclick="clearAttachment()">✖</button></div></div><div class="modal-actions"><button type="button" class="btn-cancel" onclick="closeModal('modal-ajukan-izin')">Batal</button><button type="submit" class="btn-save">📤 Ajukan Izin</button></div></form></div></div></div>
+    
     <div id="modal-friends" class="modal-overlay"><div class="modal-box" style="max-width:500px;"><div class="modal-title"><span>👥 Teman</span><span onclick="closeModal('modal-friends')">✖</span></div><div id="friendsPanel"></div></div></div>
     <div id="modal-chat" class="modal-overlay"><div class="modal-box" style="max-width:800px; height:80vh;"><div class="modal-title"><span>💬 Pesan</span><span onclick="closeModal('modal-chat')">✖</span></div><div id="chatModalPanel" style="height:calc(100% - 60px); overflow:hidden;"><div class="chat-loading" style="text-align:center; padding:40px; color:var(--text-muted);">⏳ Memuat chat...</div></div></div></div>
     <div id="modal-create-status" class="modal-overlay"><div class="modal-box"><div class="modal-title"><span>📸 Buat Status</span><span onclick="closeModal('modal-create-status')">✖</span></div><div class="form-group"><label>Teks</label><textarea id="statusText" rows="3" placeholder="Apa yang sedang terjadi?"></textarea></div><div class="form-group"><label>Gambar</label><input type="file" id="statusImageInput" accept="image/*" onchange="previewStatusImage(this)"><div id="statusImagePreviewContainer" style="display:none; margin-top:10px;"><img id="statusImagePreview" style="max-width:100%; border-radius:12px;"></div></div><div class="modal-actions"><button class="btn-cancel" onclick="closeModal('modal-create-status')">Batal</button><button class="btn-save" onclick="createStatus()">Upload Status</button></div></div></div>
@@ -799,6 +851,8 @@
     <script src="js/db.js"></script>
     <script src="js/auth.js"></script>
     <script src="js/logger.js"></script>
+    <script src="js/whatsapp-notif.js"></script>
+    <script src="js/izin-online.js"></script>
     <script src="js/ui.js"></script>
     <script src="js/dashboard.js"></script>
     <script src="js/chat.js"></script>
@@ -926,6 +980,42 @@
         
         function escapeHtml(str) { if (!str) return ''; return str.replace(/[&<>]/g, function(m) { return m === '&' ? '&amp;' : m === '<' ? '&lt;' : '&gt;'; }); }
         
+        // ======================== WHATSAPP FUNCTIONS ========================
+        async function saveParentContactFromModal() {
+            const studentId = document.getElementById('parentStudentName').getAttribute('data-id');
+            const studentName = document.getElementById('parentStudentName').value;
+            const phoneNumber = document.getElementById('parentPhoneNumber').value.trim();
+            const relation = document.getElementById('parentRelation').value;
+            
+            if (!phoneNumber) {
+                showToast('Masukkan nomor WhatsApp!', 'error');
+                return;
+            }
+            
+            if (typeof window.saveParentContact === 'function') {
+                await window.saveParentContact(studentId, studentName, phoneNumber, relation);
+                closeModal('modal-parent-contact');
+            } else {
+                showToast('Fungsi saveParentContact tidak tersedia', 'error');
+            }
+        }
+        
+        // Override fungsi openParentContactModal
+        window.openParentContactModal = function(studentId, studentName) {
+            const modal = document.getElementById('modal-parent-contact');
+            if (modal) {
+                document.getElementById('parentStudentName').value = studentName;
+                document.getElementById('parentStudentName').setAttribute('data-id', studentId);
+                document.getElementById('parentPhoneNumber').value = '';
+                document.getElementById('parentRelation').value = 'orang_tua';
+                modal.classList.add('open');
+            }
+        };
+        
+        // ======================== IZIN FUNCTIONS ========================
+        // HINDARI DUPLIKASI FUNGSI - Langsung gunakan fungsi dari window (izin-online.js)
+        // Fungsi-fungsi ini hanya sebagai wrapper untuk memastikan tidak ada infinite loop
+        
         var originalSwitchTab = window.switchTab;
         if (originalSwitchTab) {
             window.switchTab = function(tabId) {
@@ -933,6 +1023,7 @@
                 if (tabId === 'announcement_list') { setTimeout(renderFullAnnouncementList, 100); }
                 if (tabId === 'chat') { setTimeout(function() { if (typeof forceRenderChat === 'function') forceRenderChat(); }, 100); }
                 if (tabId === 'friends') { setTimeout(function() { if (typeof loadFriendRequests === 'function') loadFriendRequests(); if (typeof loadFriendsList === 'function') loadFriendsList(); }, 100); }
+                if (tabId === 'izin') { setTimeout(function() { if (typeof window.renderIzinTab === 'function') window.renderIzinTab(); }, 100); }
             };
         }
         
@@ -997,6 +1088,7 @@
                 if (typeof initChatSystem === 'function' && !window._chatInitialized) { window._chatInitialized = true; initChatSystem(); }
                 if (typeof initFriendsSystem === 'function' && !window._friendsInitialized) { window._friendsInitialized = true; initFriendsSystem(); }
                 if (typeof initStatusSystem === 'function' && !window._statusInitialized) { window._statusInitialized = true; initStatusSystem(); }
+                if (typeof initIzinOnline === 'function' && !window._izinInitialized) { window._izinInitialized = true; initIzinOnline(); }
             }, 1500);
         });
         
@@ -1015,6 +1107,7 @@
         window.closeAIAssistantModal=closeAIAssistantModal;
         window.initTheme = initTheme;
         window.applyTheme = applyTheme;
+        window.saveParentContactFromModal = saveParentContactFromModal;
     </script>
 
     <div class="branding-footer"><img src="https://i.ibb.co.com/j9dVXQdc/Chat-GPT-Image-11-Mei-2026-10-31-44.png" alt="Logo" class="branding-logo"><span class="branding-text">Dikembangkan oleh CV Haka Jaya</span></div>
