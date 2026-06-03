@@ -1,42 +1,8 @@
-// ai-summary.js - VERSION 4.0 (DENGAN OPENAI - TERENKRIPSI)
-// PERINGATAN: API Key tetap bisa didekripsi oleh pengguna ahli
-// Gunakan di lingkungan internal/terpercaya SAJA!
+// ai-summary.js - VERSION 4.3 (ONLY STATIC FALLBACK - NO API CALLS)
+// Analisis statis tanpa API call untuk menghindari error
 // ============================================================================
 
-// 🔐 API Key OpenAI (terenkripsi base64 - BUKAN keamanan sesungguhnya!)
-// Hanya menyulitkan pembacaan biasa, TETAP BISA DIDEKRIPSI
-const OPENAI_ENCRYPTED = "c2stcHJvai0zSHlLZjdUNkJNNktkdFhkeGZ1UWxSYjFTUEJwTmx1S3Jva2U3TnJ3UldaZExCSkNIdG0tVUpSSzBnaDdYaXdUVHlWb29md3pzbVRrM0JsbGJGSk1Gb2t1azVZdnhjNkVIZ1NxWnlJMnlmN01YNWJid0FZZ1ZrYjVKclZEbk5BSE54aFlRd3V6ZUpNdUZRS3pUS2ExZU9YcnE4aUlB";
-
-// Decode base64 (INI BUKAN ENKRIPSI, hanya obfuscation!)
-function decryptKey() {
-    try {
-        return atob(OPENAI_ENCRYPTED);
-    } catch(e) {
-        console.error("Failed to decrypt API key");
-        return null;
-    }
-}
-
-// Konfigurasi API - Menggunakan OpenAI
-const AI_PROVIDERS = {
-    openai: {
-        url: "https://api.openai.com/v1/chat/completions",
-        key: decryptKey(), // 🔑 Key didekripsi saat runtime
-        model: "gpt-4o-mini"  // Model yang lebih murah (gpt-4o-mini ~ $0.15/1M token)
-    },
-    groq: {
-        url: "https://api.groq.com/openai/v1/chat/completions",
-        key: "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",
-        model: "llama3-70b-8192"
-    }
-};
-
-// Gunakan OpenAI sebagai primary (bisa diganti ke groq jika OpenAI error)
-let USE_OPENAI = true;  // Set ke false untuk menggunakan Groq
-
 let aiSummaryInitialized = false;
-let currentAIAnalysis = null;
-let aiCheckInterval = null;
 
 // ======================= CEK AKSES ========================
 
@@ -149,17 +115,7 @@ function addFloatingAISummaryButton() {
         z-index: 999;
         border: none;
         font-size: 28px;
-        transition: transform 0.2s;
     `;
-    
-    floatingBtn.addEventListener('mouseenter', () => {
-        floatingBtn.style.transform = 'scale(1.1)';
-        floatingBtn.style.boxShadow = '0 6px 20px rgba(0,0,0,0.4)';
-    });
-    floatingBtn.addEventListener('mouseleave', () => {
-        floatingBtn.style.transform = 'scale(1)';
-        floatingBtn.style.boxShadow = '0 4px 15px rgba(0,0,0,0.3)';
-    });
     
     document.body.appendChild(floatingBtn);
     console.log("✅ Floating AI button added for role:", currentUser.role);
@@ -202,10 +158,11 @@ async function openAISummaryModal() {
     
     modal.classList.add('open');
     
-    const analysis = await generateAnalysis();
+    const data = collectAttendanceData();
+    const html = generateStaticAnalysisHTML(data);
     
     const contentDiv = document.getElementById('aiSummaryContent');
-    if (contentDiv && analysis) {
+    if (contentDiv) {
         const roleBadge = currentUser?.role === 'admin' ? '👑 ADMIN' : (currentUser?.role === 'guru' ? '👨‍🏫 GURU' : '👨‍💻 DEVELOPER');
         
         contentDiv.innerHTML = `
@@ -215,12 +172,12 @@ async function openAISummaryModal() {
                         <span style="font-size:32px;">🤖</span>
                         <div style="flex:1;">
                             <h3 style="margin:0;">Analisis Kehadiran</h3>
-                            <p style="margin:0; font-size:12px;">${analysis.provider} • ${new Date().toLocaleString('id-ID')}</p>
+                            <p style="margin:0; font-size:12px;">Analisis Statis • ${new Date().toLocaleString('id-ID')}</p>
                         </div>
                         <div style="background:#00bcd4; padding:4px 12px; border-radius:20px; font-size:11px; color:white;">${roleBadge}</div>
                     </div>
                 </div>
-                <div class="ai-summary-content" style="line-height:1.6;">${analysis.html}</div>
+                <div class="ai-summary-content" style="line-height:1.6;">${html}</div>
             </div>
         `;
         
@@ -228,183 +185,6 @@ async function openAISummaryModal() {
         const copyBtn = document.getElementById('aiCopyBtn');
         if (exportBtn) exportBtn.style.display = 'inline-block';
         if (copyBtn) copyBtn.style.display = 'inline-block';
-    }
-}
-
-async function generateAnalysis() {
-    if (!hasAIAccess()) {
-        return { 
-            provider: 'Akses Ditolak', 
-            html: '<div style="text-align:center; padding:40px;"><span style="font-size:48px;">🔒</span><h3>Akses Terbatas</h3><p>Fitur AI Summary hanya tersedia untuk:<br><strong>Admin, Guru, dan Developer</strong></p></div>' 
-        };
-    }
-    
-    const data = collectAttendanceData();
-    if (!data || data.totalStudents === 0) {
-        return { provider: 'Fallback', html: '<p>📭 Data absensi tidak tersedia. Silakan tambahkan data siswa dan absensi terlebih dahulu.</p>' };
-    }
-    
-    // Coba OpenAI dulu jika USE_OPENAI true
-    if (USE_OPENAI && AI_PROVIDERS.openai.key) {
-        try {
-            console.log("🤖 Mencoba OpenAI API...");
-            const result = await callOpenAI(data);
-            if (result) {
-                return { provider: 'OpenAI (GPT-4o Mini)', html: result };
-            }
-        } catch(e) {
-            console.log("OpenAI API error, switching to Groq:", e.message);
-            USE_OPENAI = false; // Switch ke Groq untuk sementara
-        }
-    }
-    
-    // Coba Groq API
-    try {
-        console.log("🤖 Mencoba Groq API...");
-        const result = await callGroqAPI(data);
-        if (result) {
-            return { provider: 'Groq AI (Llama 3)', html: result };
-        }
-    } catch(e) {
-        console.log("Groq API error, using fallback:", e.message);
-    }
-    
-    // Fallback ke analisis statis
-    return { provider: 'Analisis Statis (Offline)', html: generateStaticAnalysisHTML(data) };
-}
-
-// ======================= OPENAI API (DENGAN BUDGET CONTROL) =======================
-
-async function callOpenAI(data) {
-    const prompt = `Anda adalah asisten AI untuk sistem absensi sekolah. Buat analisis kehadiran siswa berikut dalam bahasa Indonesia yang profesional:
-
-=== DATA KEHADIRAN ===
-Total siswa: ${data.totalStudents}
-Hadir hari ini: ${data.hadirToday} (${data.persenHariIni}%)
-Rata-rata kehadiran bulan ini: ${data.rataKehadiran}%
-
-=== 5 SISWA TERBAIK ===
-${data.topPerformers.map((s, i) => `${i+1}. ${s.nama} (${s.kelas}) - ${s.hadir} hari hadir`).join('\n')}
-
-=== 5 SISWA TERENDAH ===
-${data.lowestAttendance.map((s, i) => `${i+1}. ${s.nama} (${s.kelas}) - ${s.hadir}/${s.total} hari (${s.total > 0 ? ((s.hadir/s.total)*100).toFixed(1) : 0}%)`).join('\n')}
-
-=== STATISTIK PER KELAS ===
-${Object.entries(data.classStats).map(([k, v]) => `${k}: ${v.persen}% kehadiran`).join('\n')}
-
-=== FORMAT OUTPUT ===
-Buat analisis dalam format HTML dengan struktur berikut:
-<h2>📊 RINGKASAN EKSEKUTIF</h2>
-<p>[Ringkasan singkat tentang kondisi kehadiran saat ini]</p>
-
-<h2>📌 POIN PENTING</h2>
-<ul>
-<li>[Poin penting 1]</li>
-<li>[Poin penting 2]</li>
-<li>[Poin penting 3]</li>
-</ul>
-
-<h2>💡 REKOMENDASI</h2>
-<ul>
-<li>[Rekomendasi 1]</li>
-<li>[Rekomendasi 2]</li>
-<li>[Rekomendasi 3]</li>
-</ul>
-
-<h2>🔮 PREDIKSI</h2>
-<p>[Prediksi kehadiran minggu depan]</p>
-
-Gunakan bahasa yang mudah dipahami, profesional, dan berikan insight yang actionable.`;
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000); // Timeout 30 detik
-    
-    try {
-        const response = await fetch(AI_PROVIDERS.openai.url, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${AI_PROVIDERS.openai.key}`
-            },
-            body: JSON.stringify({
-                model: AI_PROVIDERS.openai.model,
-                messages: [
-                    { 
-                        role: "system", 
-                        content: "Anda adalah asisten AI profesional untuk analisis data absensi sekolah. Berikan analisis yang informatif, akurat, dan actionable." 
-                    },
-                    { role: "user", content: prompt }
-                ],
-                temperature: 0.7,
-                max_tokens: 1500
-            }),
-            signal: controller.signal
-        });
-        
-        clearTimeout(timeoutId);
-        
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            throw new Error(`HTTP ${response.status}: ${errorData.error?.message || 'Unknown error'}`);
-        }
-        
-        const result = await response.json();
-        return result.choices[0]?.message?.content || null;
-        
-    } catch (error) {
-        clearTimeout(timeoutId);
-        if (error.name === 'AbortError') {
-            throw new Error('OpenAI API timeout setelah 30 detik');
-        }
-        throw error;
-    }
-}
-
-// ======================= GROQ API (FALLBACK GRATIS) =======================
-
-async function callGroqAPI(data) {
-    const prompt = `Buat analisis kehadiran siswa berikut:
-- Total siswa: ${data.totalStudents}
-- Hadir hari ini: ${data.hadirToday} (${data.persenHariIni}%)
-- Rata-rata kehadiran bulan ini: ${data.rataKehadiran}%
-- 5 siswa terbaik: ${data.topPerformers.map(s => s.nama).join(', ')}
-- 5 siswa terendah: ${data.lowestAttendance.map(s => s.nama).join(', ')}
-- Statistik kelas: ${Object.entries(data.classStats).map(([k,v]) => `${k}:${v.persen}%`).join(', ')}
-
-Format HTML dengan:
-<h2>📊 Ringkasan Eksekutif</h2><p>...</p>
-<h2>📌 Poin Penting</h2><ul><li>...</li></ul>
-<h2>💡 Rekomendasi</h2><ul><li>...</li></ul>
-<h2>🔮 Prediksi</h2><p>...</p>`;
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000);
-    
-    try {
-        const response = await fetch(AI_PROVIDERS.groq.url, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${AI_PROVIDERS.groq.key}`
-            },
-            body: JSON.stringify({
-                model: AI_PROVIDERS.groq.model,
-                messages: [{ role: "user", content: prompt }],
-                temperature: 0.7,
-                max_tokens: 1000
-            }),
-            signal: controller.signal
-        });
-        
-        clearTimeout(timeoutId);
-        
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const result = await response.json();
-        return result.choices[0]?.message?.content || null;
-        
-    } catch (error) {
-        clearTimeout(timeoutId);
-        throw error;
     }
 }
 
@@ -467,8 +247,49 @@ function collectAttendanceData() {
 // ======================= FALLBACK STATIS =======================
 
 function generateStaticAnalysisHTML(data) {
+    if (!data || data.totalStudents === 0) {
+        return '<div style="text-align:center; padding:40px;">📭 Data absensi tidak tersedia. Silakan tambahkan data siswa dan absensi terlebih dahulu.</div>';
+    }
+    
     const persenHariIni = data.persenHariIni;
     const status = data.rataKehadiran >= 90 ? 'Sangat Baik' : (data.rataKehadiran >= 75 ? 'Baik' : (data.rataKehadiran >= 60 ? 'Cukup' : 'Perlu Perhatian'));
+    
+    const lowAttendanceCount = data.lowestAttendance.filter(s => {
+        const persen = s.total > 0 ? ((s.hadir / s.total) * 100) : 0;
+        return persen < 60;
+    }).length;
+    const highAttendanceCount = data.topPerformers.filter(s => s.hadir >= 18).length;
+    
+    let recommendations = [];
+    if (data.rataKehadiran < 75) {
+        recommendations.push("📢 **Tingkatkan komunikasi** dengan orang tua siswa yang sering absen melalui WhatsApp atau telepon.");
+    }
+    if (lowAttendanceCount > 0) {
+        recommendations.push(`⚠️ **${lowAttendanceCount} siswa** memiliki kehadiran di bawah 60%. Segera lakukan pembinaan dan pendekatan personal.`);
+    }
+    if (highAttendanceCount > 0) {
+        recommendations.push(`🏆 **Berikan apresiasi** kepada ${highAttendanceCount} siswa dengan kehadiran sempurna/tinggi sebagai motivasi.`);
+    }
+    if (Object.keys(data.classStats).length > 0) {
+        const worstClass = Object.entries(data.classStats).sort((a,b) => parseFloat(a[1].persen) - parseFloat(b[1].persen))[0];
+        if (worstClass && parseFloat(worstClass[1].persen) < 70) {
+            recommendations.push(`📚 **Perhatikan kelas ${worstClass[0]}** dengan kehadiran hanya ${worstClass[1].persen}%. Evaluasi jadwal dan metode pembelajaran.`);
+        }
+    }
+    if (recommendations.length === 0) {
+        recommendations.push("✅ **Pertahankan prestasi** yang sudah baik. Terus pantau dan beri motivasi kepada siswa.");
+    }
+    
+    let prediction = "";
+    if (data.rataKehadiran >= 85) {
+        prediction = "Dengan performa yang sangat baik, diprediksi kehadiran akan tetap stabil di atas 85% pada minggu mendatang.";
+    } else if (data.rataKehadiran >= 70) {
+        prediction = "Kehadiran cukup baik. Dengan sedikit peningkatan, target 85% dapat tercapai dalam 2 minggu ke depan.";
+    } else if (data.rataKehadiran >= 55) {
+        prediction = "Kehadiran masih di bawah target. Diperlukan intervensi segera untuk meningkatkan kesadaran siswa.";
+    } else {
+        prediction = "⚠️ **Peringatan!** Kehadiran sangat rendah. Segera lakukan evaluasi menyeluruh dan komunikasi dengan orang tua.";
+    }
     
     return `
         <h2>📊 RINGKASAN EKSEKUTIF</h2>
@@ -476,28 +297,33 @@ function generateStaticAnalysisHTML(data) {
         
         <h2>📌 POIN PENTING</h2>
         <h3>✅ 5 Siswa dengan Kehadiran Terbaik:</h3>
-        <ul>${data.topPerformers.map(s => `<li><strong>${s.nama}</strong> (${s.kelas}) - ${s.hadir} hari hadir</li>`).join('') || '<li>Belum ada data</li>'}</ul>
+        <ul>${data.topPerformers.map(s => `<li><strong>${escapeHtmlStatic(s.nama)}</strong> (${s.kelas}) - ${s.hadir} hari hadir</li>`).join('') || '<li>Belum ada data</li>'}</ul>
         
         <h3>⚠️ 5 Siswa yang Perlu Perhatian:</h3>
-        <ul>${data.lowestAttendance.map(s => `<li><strong>${s.nama}</strong> (${s.kelas}) - ${s.hadir}/${s.total} hari (${s.total > 0 ? ((s.hadir/s.total)*100).toFixed(1) : 0}%)</li>`).join('') || '<li>Semua siswa memiliki kehadiran baik</li>'}</ul>
+        <ul>${data.lowestAttendance.map(s => {
+            const persen = s.total > 0 ? ((s.hadir/s.total)*100).toFixed(1) : 0;
+            return `<li><strong>${escapeHtmlStatic(s.nama)}</strong> (${s.kelas}) - ${s.hadir}/${s.total} hari (${persen}%)</li>`;
+        }).join('') || '<li>Semua siswa memiliki kehadiran baik</li>'}</ul>
         
         <h3>🏫 Statistik per Kelas:</h3>
         <ul>${Object.entries(data.classStats).map(([k, v]) => `<li>${k}: <strong>${v.persen}%</strong> kehadiran (${v.hadir} dari ${v.total * 20} total)</li>`).join('')}</ul>
         
         <h2>💡 REKOMENDASI</h2>
-        <ul>
-            <li>${data.rataKehadiran >= 75 ? 'Pertahankan konsistensi kehadiran yang sudah baik.' : 'Tingkatkan komunikasi dengan orang tua siswa yang sering absen.'}</li>
-            <li>Berikan apresiasi untuk ${data.topPerformers.slice(0,3).map(s => s.nama).join(', ')} dengan kehadiran sempurna.</li>
-            <li>Lakukan pendekatan personal untuk siswa dengan kehadiran di bawah 60%.</li>
-        </ul>
+        <ul>${recommendations.map(r => `<li>${r}</li>`).join('')}</ul>
         
         <h2>🔮 PREDIKSI</h2>
-        <p>Dengan tren saat ini (${status.toLowerCase()}), diprediksi kehadiran akan ${data.rataKehadiran >= 75 ? 'tetap stabil' : 'meningkat jika ada intervensi'} pada minggu mendatang.</p>
+        <p>${prediction}</p>
         
-        <hr>
-        <p style="font-size:11px; color:#888;">📅 Analisis diperbarui: ${new Date().toLocaleString('id-ID')}</p>
-        <p style="font-size:10px; color:#888; margin-top:10px;">🔒 Fitur ini hanya tersedia untuk Admin, Guru, dan Developer</p>
+        <div style="margin-top: 20px; padding: 12px; background: rgba(102, 126, 234, 0.1); border-radius: 12px; font-size: 12px;">
+            <span>📅 Analisis diperbarui: ${new Date().toLocaleString('id-ID')}</span><br>
+            <span>🔒 Fitur ini hanya untuk Admin, Guru, dan Developer</span>
+        </div>
     `;
+}
+
+function escapeHtmlStatic(str) {
+    if (!str) return '';
+    return String(str).replace(/[&<>]/g, m => m === '&' ? '&amp;' : m === '<' ? '&lt;' : '&gt;');
 }
 
 // ======================= UTILITY FUNCTIONS =======================
@@ -536,12 +362,11 @@ function exportAISummaryToPDF() {
         ul{margin:10px 0}
         .header{text-align:center;margin-bottom:30px;padding-bottom:15px;border-bottom:2px solid #667eea}
         .footer{text-align:center;margin-top:30px;padding-top:15px;font-size:10px;color:#888;border-top:1px solid #ddd}
-        .role-badge{background:#00bcd4;color:white;padding:4px 12px;border-radius:20px;display:inline-block;font-size:12px}
         @media print{button{display:none}}
     </style></head><body>
     <div class="header"><h1>🤖 AI SUMMARY ABSENSI</h1><p>Dicetak oleh: ${roleText}</p><p>${new Date().toLocaleString('id-ID')}</p></div>
     ${html}
-    <div class="footer"><p>Sistem Absensi IoT - Fingerprint & Real-time</p><p>🔒 Fitur ini hanya untuk Admin, Guru, dan Developer</p></div>
+    <div class="footer"><p>Sistem Absensi IoT - Fingerprint & Real-time</p></div>
     <div style="text-align:center; margin-top:20px;"><button onclick="window.print()" style="padding:10px 20px; background:#667eea; color:white; border:none; border-radius:5px; cursor:pointer;">🖨️ Cetak PDF</button><button onclick="window.close()" style="padding:10px 20px; background:#666; color:white; border:none; border-radius:5px; cursor:pointer; margin-left:10px;">✖ Tutup</button></div>
     </body></html>`);
     win.document.close();
@@ -623,5 +448,4 @@ window.addEventListener('dataReady', () => {
     }
 });
 
-console.log("✅ ai-summary.js V4.0 loaded - OpenAI + Groq + Fallback");
-console.log("⚠️ PERINGATAN: API Key OpenAI terekspos! Gunakan di lingkungan terpercaya saja.");
+console.log("✅ ai-summary.js V4.3 loaded - Static analysis only (no API calls)");
