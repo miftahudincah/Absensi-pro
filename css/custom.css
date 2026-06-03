@@ -295,6 +295,26 @@
     border-color: #00bcd4;
 }
 
+/* WhatsApp Button di tabel siswa */
+.btn-wa {
+    background: #25D366;
+    color: white;
+    border: none;
+    border-radius: 30px;
+    padding: 6px 12px;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.btn-wa:hover {
+    background: #128C7E;
+    transform: scale(1.05);
+}
+
 .badge-account {
     background: #4caf50;
     color: white;
@@ -1347,6 +1367,262 @@ html {
     color: #f44336;
 }
 
+/* ==================== IZIN ONLINE STYLES ==================== */
+.izin-container {
+    padding: 20px;
+}
+
+.izin-header {
+    margin-bottom: 24px;
+}
+
+.izin-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.izin-filter {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.filter-btn {
+    padding: 8px 16px;
+    border-radius: 30px;
+    background: var(--bg-hover);
+    border: 1px solid var(--border);
+    cursor: pointer;
+    transition: all 0.2s;
+    color: var(--text-primary);
+}
+
+.filter-btn.active {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary);
+}
+
+.filter-btn:hover {
+    background: var(--primary);
+    color: white;
+    transform: translateY(-2px);
+}
+
+.izin-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+    gap: 20px;
+}
+
+.izin-card {
+    background: var(--bg-card);
+    border-radius: 16px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.izin-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+}
+
+.izin-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px;
+    background: var(--bg-hover);
+    border-bottom: 1px solid var(--border);
+}
+
+.izin-type {
+    font-weight: bold;
+    font-size: 1rem;
+}
+
+.izin-status {
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.status-pending {
+    background: #ff9800;
+    color: white;
+}
+
+.status-approved {
+    background: #4caf50;
+    color: white;
+}
+
+.status-rejected {
+    background: #f44336;
+    color: white;
+}
+
+.izin-card-body {
+    padding: 16px;
+}
+
+.izin-student {
+    margin-bottom: 12px;
+}
+
+.izin-student strong {
+    display: block;
+    margin-bottom: 4px;
+}
+
+.izin-date {
+    color: var(--text-muted);
+    margin-bottom: 12px;
+    font-size: 0.85rem;
+}
+
+.izin-reason {
+    background: var(--bg-hover);
+    padding: 12px;
+    border-radius: 12px;
+    margin: 12px 0;
+}
+
+.izin-attachment {
+    margin-top: 12px;
+}
+
+.izin-attachment a {
+    color: var(--primary);
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.8rem;
+}
+
+.izin-attachment a:hover {
+    text-decoration: underline;
+}
+
+.izin-reject-reason {
+    margin-top: 12px;
+    padding: 8px 12px;
+    background: rgba(244, 67, 54, 0.1);
+    border-radius: 8px;
+    color: #f44336;
+    font-size: 0.8rem;
+}
+
+.izin-card-footer {
+    padding: 12px 16px;
+    background: var(--bg-hover);
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.izin-actions-buttons {
+    display: flex;
+    gap: 8px;
+}
+
+.izin-empty {
+    text-align: center;
+    padding: 60px 20px;
+    background: var(--bg-hover);
+    border-radius: 16px;
+}
+
+/* Izin Badge di Tab */
+.izin-badge {
+    background: #f44336;
+    color: white;
+    border-radius: 50%;
+    padding: 2px 6px;
+    font-size: 10px;
+    margin-left: 5px;
+}
+
+/* ==================== WHATSAPP NOTIFICATION STYLES ==================== */
+/* Parent Contact Modal */
+#modal-parent-contact .modal-box {
+    max-width: 450px;
+}
+
+#modal-parent-contact .form-group input,
+#modal-parent-contact .form-group select {
+    width: 100%;
+    padding: 10px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: var(--bg-input);
+    color: var(--text-primary);
+}
+
+/* WhatsApp Status Indicator */
+.wa-status-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.7rem;
+    padding: 2px 8px;
+    border-radius: 20px;
+    background: rgba(37, 211, 102, 0.1);
+    color: #25D366;
+}
+
+.wa-status-indicator.disabled {
+    background: rgba(244, 67, 54, 0.1);
+    color: #f44336;
+}
+
+.wa-status-indicator.sent {
+    background: rgba(37, 211, 102, 0.2);
+    color: #128C7E;
+}
+
+/* WhatsApp Test Button */
+.btn-test-wa {
+    background: #25D366;
+    color: white;
+    border: none;
+    border-radius: 30px;
+    padding: 6px 12px;
+    font-size: 0.7rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-test-wa:hover {
+    background: #128C7E;
+    transform: scale(1.02);
+}
+
+/* Notifikasi Log di Settings */
+.notif-log-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.8rem;
+}
+
+.notif-log-time {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+}
+
 /* ==================== LIGHT MODE ADJUSTMENTS ==================== */
 body.light-mode .attendance-student-avatar {
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
@@ -1363,6 +1639,23 @@ body.light-mode .status-select {
 
 body.light-mode .absence-student-row {
     background: #fafafa;
+}
+
+body.light-mode .izin-card {
+    background: #ffffff;
+}
+
+body.light-mode .izin-reason {
+    background: #f5f5f5;
+}
+
+body.light-mode .filter-btn {
+    background: #f0f0f0;
+}
+
+body.light-mode .filter-btn.active {
+    background: var(--primary);
+    color: white;
 }
 
 /* ==================== ANIMATION DELAY UTILITIES ==================== */
@@ -1383,4 +1676,48 @@ body.light-mode .absence-student-row {
 
 .interactive-scale:active {
     transform: scale(0.98);
+}
+
+/* ==================== RESPONSIVE IZIN ONLINE ==================== */
+@media (max-width: 768px) {
+    .izin-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .izin-actions {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .izin-filter {
+        justify-content: center;
+    }
+    
+    .izin-card-header {
+        flex-direction: column;
+        gap: 8px;
+        text-align: center;
+    }
+    
+    .izin-card-footer {
+        flex-direction: column;
+        text-align: center;
+    }
+    
+    .izin-actions-buttons {
+        justify-content: center;
+    }
+}
+
+/* ==================== RESPONSIVE WHATSAPP ==================== */
+@media (max-width: 768px) {
+    #modal-parent-contact .modal-box {
+        width: 95%;
+        margin: 20px auto;
+    }
+    
+    .btn-wa {
+        padding: 4px 8px;
+        font-size: 0.7rem;
+    }
 }
