@@ -1,14 +1,10 @@
-// ai-assistant.js - VERSION 4.0 (ULTRA POWERFULL AI ASSISTANT)
+// ai-assistant.js - VERSION 5.1 (FIXED: CHANGE USER ROLE - REAL ACTION)
 // Asisten AI SUPER POWERFULL dengan Groq API + Action Executor
-// Fitur LENGKAP:
-// - CRUD siswa lengkap (tambah, edit, hapus via chat)
-// - Manajemen pengaturan sekolah (nama, logo, tipe, kelas, jurusan)
-// - Manajemen delay global dan individual
-// - Manajemen pengumuman
-// - Manajemen user (ubah role, hapus user, reset password)
-// - Analisis data absensi mendalam
-// - Prediksi dan rekomendasi cerdas
-// - Export data ke Excel/PDF
+// Fitur LENGKAP dengan aksi nyata ke database:
+// - CRUD siswa lengkap (tambah, edit, hapus via chat) - REAL
+// - Manajemen pengaturan sekolah (nama, tipe, kelas, jurusan) - REAL
+// - Manajemen delay global - REAL
+// - Manajemen user (ubah role, hapus user, reset password) - REAL (khusus admin/dev)
 // - Dan masih banyak lagi!
 // ============================================================================
 
@@ -81,6 +77,9 @@ async function updateSystemDataCache() {
         
         const minOutSnapshot = await db.ref('school_config/attendance_settings/minOutTime').once('value');
         systemDataCache.settings.minOutTime = minOutSnapshot.val() || '14:00';
+        
+        const schoolNameSnapshot = await db.ref('system_config/schoolName').once('value');
+        systemDataCache.settings.schoolName = schoolNameSnapshot.val() || 'Sistem Absensi';
     } catch(e) { console.warn(e); }
     
     console.log(`🤖 AI Cache: ${systemDataCache.students.length} siswa, ${systemDataCache.attendance.length} absensi, ${systemDataCache.usersAuth.length} user`);
@@ -112,32 +111,44 @@ function hasAdminAccess() {
     return ['admin', 'guru', 'developer'].includes(currentUser.role);
 }
 
-// ======================= INTENT PARSING (DIPERKAYA) =======================
+function canDeleteUser() {
+    if (!currentUser) return false;
+    return ['admin', 'developer'].includes(currentUser.role);
+}
+
+// ======================= INTENT PARSING =======================
 
 function parseProfessionalIntent(command) {
     const lowerCommand = String(command).toLowerCase();
     
-    // 1. SAPAAN & BASABASI
+    // SAPAAN
     if (lowerCommand.match(/^(hai|halo|hello|hey|selamat|pagi|siang|malam|apa kabar|how are you|hy|hii?|assalamualaikum)/i)) {
         return { intent: 'greeting', confidence: 0.99 };
     }
     
-    // 2. TERIMA KASIH
+    // TERIMA KASIH
     if (lowerCommand.match(/terima kasih|makasih|thanks|thank you|thx|tq/i)) {
         return { intent: 'thanks', confidence: 0.99 };
     }
     
-    // 3. PERKENALAN
+    // PERKENALAN
     if (lowerCommand.match(/siapa kamu|kamu siapa|perkenalan|tell me about yourself|fitur apa|bisa apa aja|keahlian/i)) {
         return { intent: 'introduction', confidence: 0.98 };
     }
     
-    // 4. BANTUAN
+    // BANTUAN
     if (lowerCommand.match(/bantuan|help|tolong|perintah|fitur|bisa apa|command|guide|panduan|list perintah|daftar perintah/i)) {
         return { intent: 'help', confidence: 0.99 };
     }
     
-    // 5. MANAJEMEN SISWA - TAMBAH
+    // MANAJEMEN USER - UBAH ROLE (khusus admin/dev) - DIPERBAIKI
+    const roleMatch = command.match(/(?:ubah role|set role|change role|ubah peran|ganti role)\s+(?:akun|user)?\s*["']?([A-Za-z0-9@.]+)["']?\s+(?:menjadi|jadi|to)\s+["']?([A-Za-z]+)["']?/i);
+    if (roleMatch && (currentUser?.role === 'admin' || currentUser?.role === 'developer')) {
+        console.log("🔧 Detected role change intent:", roleMatch[1], "->", roleMatch[2]);
+        return { intent: 'change_user_role', userIdentifier: roleMatch[1], newRole: roleMatch[2].toLowerCase(), confidence: 0.95 };
+    }
+    
+    // MANAJEMEN SISWA - TAMBAH
     const addMatch = command.match(/(?:tambah|buat|input|simpan|add)\s+(?:siswa|data siswa|student)\s+(?:nama|name)?\s*["']?([A-Za-z\s]+)["']?\s*(?:id|ID)?\s*(\d+)\s*(?:kelas|class)?\s*["']?([A-Z0-9\s]+)["']?\s*(?:jurusan|major)?\s*["']?([A-Za-z0-9\s]+)["']?\s*(?:delay)?\s*(\d+)?/i);
     if (lowerCommand.match(/tambah|buat|input|simpan|add/) && lowerCommand.match(/siswa|student/)) {
         if (addMatch && addMatch[1] && addMatch[2] && addMatch[3]) {
@@ -146,7 +157,7 @@ function parseProfessionalIntent(command) {
         return { intent: 'add_student', need_data: true };
     }
     
-    // 6. MANAJEMEN SISWA - UPDATE
+    // MANAJEMEN SISWA - UPDATE
     const updateMatch = command.match(/(?:update|edit|ubah|ganti)\s+(?:siswa|data siswa)\s+(?:id|ID)?\s*(\d+)\s*(?:delay|kelas|jurusan)?\s*(\d+|[A-Z0-9]+)?/i);
     if (lowerCommand.match(/update|edit|ubah|ganti/) && lowerCommand.match(/siswa/)) {
         if (updateMatch && updateMatch[1]) {
@@ -155,7 +166,7 @@ function parseProfessionalIntent(command) {
         return { intent: 'update_student', need_data: true };
     }
     
-    // 7. MANAJEMEN SISWA - HAPUS
+    // MANAJEMEN SISWA - HAPUS
     const deleteMatch = command.match(/(?:hapus|delete|remove|padam)\s+(?:siswa|data siswa)\s+(?:id|ID)?\s*(\d+)/i);
     if (lowerCommand.match(/hapus|delete|remove|padam/) && lowerCommand.match(/siswa/)) {
         if (deleteMatch && deleteMatch[1]) {
@@ -164,16 +175,16 @@ function parseProfessionalIntent(command) {
         return { intent: 'delete_student', need_id: true };
     }
     
-    // 8. MANAJEMEN NAMA SEKOLAH
+    // MANAJEMEN NAMA SEKOLAH
     if (lowerCommand.match(/ubah nama sekolah|ganti nama sekolah|set nama sekolah|nama sekolah menjadi|nama sekolah baru/i)) {
         const newNameMatch = command.match(/(?:menjadi|jadi|menjadi)\s+["']?([A-Za-z0-9\s]+)["']?/i);
         if (newNameMatch && newNameMatch[1]) {
             return { intent: 'change_school_name', newName: newNameMatch[1].trim(), confidence: 0.95 };
         }
-        return { intent: 'change_school_name', need_name: true, confidence: 0.9 };
+        return { intent: 'change_school_name', need_name: true };
     }
     
-    // 9. MANAJEMEN DELAY GLOBAL
+    // MANAJEMEN DELAY GLOBAL
     if (lowerCommand.match(/delay global|ubah delay global|set delay global|global delay/i)) {
         const delayMatch = command.match(/(\d+)\s*(?:menit|minute|minutes|jam|hour|hours)?/i);
         if (delayMatch) {
@@ -184,8 +195,8 @@ function parseProfessionalIntent(command) {
         return { intent: 'update_global_delay', need_value: true };
     }
     
-    // 10. MANAJEMEN KELAS
-    if (lowerCommand.match(/tambah kelas|buat kelas|add class/i)) {
+    // MANAJEMEN KELAS
+    if (lowerCommand.match(/tambah kelas|buat kelas|add class|tambah kelas baru/i)) {
         const classNameMatch = command.match(/(?:kelas|class)\s+["']?([A-Z0-9\s]+)["']?/i);
         if (classNameMatch && classNameMatch[1]) {
             return { intent: 'add_class', className: classNameMatch[1].trim().toUpperCase(), confidence: 0.93 };
@@ -201,8 +212,8 @@ function parseProfessionalIntent(command) {
         return { intent: 'remove_class', need_name: true };
     }
     
-    // 11. MANAJEMEN JURUSAN
-    if (lowerCommand.match(/tambah jurusan|buat jurusan|add major/i)) {
+    // MANAJEMEN JURUSAN
+    if (lowerCommand.match(/tambah jurusan|buat jurusan|add major|tambah jurusan baru/i)) {
         const majorMatch = command.match(/(?:jurusan|major)\s+["']?([A-Za-z0-9\s]+)["']?/i);
         if (majorMatch && majorMatch[1]) {
             return { intent: 'add_major', majorName: majorMatch[1].trim().toUpperCase(), confidence: 0.93 };
@@ -218,7 +229,7 @@ function parseProfessionalIntent(command) {
         return { intent: 'remove_major', need_name: true };
     }
     
-    // 12. MANAJEMEN TIPE SEKOLAH
+    // MANAJEMEN TIPE SEKOLAH
     if (lowerCommand.match(/tipe sekolah|ubah tipe sekolah|set tipe sekolah|school type/i)) {
         const typeMatch = command.match(/(smp|smk|both)/i);
         if (typeMatch) {
@@ -227,7 +238,7 @@ function parseProfessionalIntent(command) {
         return { intent: 'change_school_type', need_type: true };
     }
     
-    // 13. MANAJEMEN BATA TERLAMBAT
+    // MANAJEMEN BATAS TERLAMBAT
     if (lowerCommand.match(/batas terlambat|ubah batas terlambat|late threshold/i)) {
         const timeMatch = command.match(/(\d{1,2}):(\d{2})/);
         if (timeMatch) {
@@ -236,45 +247,25 @@ function parseProfessionalIntent(command) {
         return { intent: 'update_late_threshold', need_time: true };
     }
     
-    // 14. MANAJEMEN USER - UBAH ROLE
-    const roleMatch = command.match(/(?:ubah role|set role|change role)\s+(\S+)\s+(?:menjadi|jadi|to)\s+(\S+)/i);
-    if (roleMatch) {
-        return { intent: 'change_user_role', userIdentifier: roleMatch[1], newRole: roleMatch[2].toLowerCase(), confidence: 0.92 };
-    }
-    
-    // 15. RESET PASSWORD USER
+    // RESET PASSWORD USER (khusus admin/dev)
     const resetPassMatch = command.match(/(?:reset password|reset pass)\s+(?:user|akun)?\s*["']?([A-Za-z0-9@.]+)["']?/i);
-    if (resetPassMatch) {
+    if (resetPassMatch && (currentUser?.role === 'admin' || currentUser?.role === 'developer')) {
         return { intent: 'reset_user_password', email: resetPassMatch[1], confidence: 0.94 };
     }
     
-    // 16. HAPUS USER
+    // HAPUS USER (khusus admin/dev)
     const deleteUserMatch = command.match(/(?:hapus user|delete user|remove user)\s+["']?([A-Za-z\s]+)["']?/i);
-    if (deleteUserMatch) {
+    if (deleteUserMatch && (currentUser?.role === 'admin' || currentUser?.role === 'developer')) {
         return { intent: 'delete_user', userName: deleteUserMatch[1].trim(), confidence: 0.92 };
     }
     
-    // 17. BUAT PENGUMUMAN
+    // BUAT PENGUMUMAN
     const announcementMatch = command.match(/(?:buat pengumuman|tambah pengumuman|add announcement)\s+["']?([^"']+)["']?\s+(?:dengan isi|isi|content)?\s+["']?([^"']+)["']?/i);
     if (announcementMatch && lowerCommand.match(/pengumuman|announcement/)) {
         return { intent: 'create_announcement', title: announcementMatch[1], message: announcementMatch[2] || '', confidence: 0.91 };
     }
     
-    // 18. EXPORT DATA
-    if (lowerCommand.match(/export|ekspor|download|excel|pdf/)) {
-        if (lowerCommand.match(/absensi|attendance/)) {
-            return { intent: 'export_attendance', confidence: 0.94 };
-        }
-        if (lowerCommand.match(/siswa|student/)) {
-            return { intent: 'export_students', confidence: 0.94 };
-        }
-        if (lowerCommand.match(/rekap|summary/)) {
-            return { intent: 'export_rekap', confidence: 0.94 };
-        }
-        return { intent: 'export_data', confidence: 0.9 };
-    }
-    
-    // 19. CARI DATA SISWA
+    // CARI DATA SISWA
     const nameMatch = command.match(/(?:data|info|detail|cari|lihat|tampilkan|show)\s+(?:siswa|student)?\s*["']?([A-Za-z\s]+)["']?(?:\s|$)/i);
     const idMatch = command.match(/(?:id|ID|fingerprint|fp)\s*[:#]?\s*(\d+)/i);
     
@@ -285,13 +276,13 @@ function parseProfessionalIntent(command) {
         return { intent: 'query_student_by_id', id: idMatch[1], confidence: 0.98 };
     }
     
-    // 20. SISWA PER KELAS
+    // SISWA PER KELAS
     const kelasMatch = command.match(/(?:siswa|student|data)\s+(?:kelas|class)\s+["']?([A-Z0-9\s]+)["']?/i);
     if (kelasMatch) {
         return { intent: 'students_by_class', kelas: kelasMatch[1].trim().toUpperCase(), confidence: 0.94 };
     }
     
-    // 21. REKAP ABSENSI SISWA
+    // REKAP ABSENSI SISWA
     const rekapMatch = command.match(/(?:rekap|absensi|kehadiran|lihat absen|riwayat)\s+(?:siswa)?\s*["']?([A-Za-z\s]+)["']?/i);
     if (lowerCommand.match(/rekap|absensi|kehadiran|riwayat|lihat absen/i)) {
         if (rekapMatch && rekapMatch[1] && rekapMatch[1].length > 2) {
@@ -300,39 +291,39 @@ function parseProfessionalIntent(command) {
         return { intent: 'general_stats', confidence: 0.96 };
     }
     
-    // 22. STATISTIK & METRIK
+    // STATISTIK & METRIK
     if (lowerCommand.match(/statistik|stat|ringkasan|summary|dashboard|gambaran|total|berapa|jumlah/i)) {
         return { intent: 'general_stats', confidence: 0.95 };
     }
     
-    // 23. TOP/PERINGKAT SISWA
+    // TOP/PERINGKAT SISWA
     if (lowerCommand.match(/terbaik|tertinggi|teratas|juara|ranking|top|paling rajin|paling baik|pintar/i)) {
         const limitMatch = command.match(/(\d+)/);
         const limit = limitMatch ? Math.min(parseInt(limitMatch[1]), 20) : 5;
         return { intent: 'top_students', limit, confidence: 0.94 };
     }
     
-    // 24. PREDIKSI TREN
+    // PREDIKSI TREN
     if (lowerCommand.match(/prediksi|tren|forecast|proyeksi|ke depan|mendatang|akan datang/i)) {
         return { intent: 'predict_trend', confidence: 0.9 };
     }
     
-    // 25. PERBANDINGAN
+    // PERBANDINGAN
     if (lowerCommand.match(/bandingkan|perbandingan|vs|dibanding|lebih|kurang|naik|turun/i)) {
         return { intent: 'compare', confidence: 0.88 };
     }
     
-    // 26. REKOMENDASI
+    // REKOMENDASI
     if (lowerCommand.match(/rekomendasi|saran|advice|tips|solusi|how to|bagaimana cara|strategi/i)) {
         return { intent: 'recommendations', confidence: 0.92 };
     }
     
-    // 27. INFORMASI SISTEM/WEB
+    // INFORMASI SISTEM/WEB
     if (lowerCommand.match(/tentang|about|web ini|aplikasi|sistem absensi|fingerprint|esp32|fitur apa saja/i)) {
         return { intent: 'about_system', confidence: 0.92 };
     }
     
-    // 28. INFORMASI WAKTU
+    // INFORMASI WAKTU
     if (lowerCommand.match(/jam berapa|waktu|tanggal|hari ini|sekarang|date|time/i)) {
         return { intent: 'datetime', confidence: 0.97 };
     }
@@ -346,7 +337,6 @@ async function executeProfessionalIntent(intent) {
     await updateSystemDataCache();
     
     switch(intent.intent) {
-        // BASIC RESPONSES
         case 'greeting': return getProfessionalGreeting();
         case 'thanks': return getProfessionalThanks();
         case 'introduction': return getProfessionalIntroduction();
@@ -354,12 +344,10 @@ async function executeProfessionalIntent(intent) {
         case 'about_system': return getAboutSystem();
         case 'datetime': return getCurrentDateTime();
         
-        // MANAJEMEN SISWA
         case 'add_student': return await addStudentViaAI(intent);
         case 'update_student': return await updateStudentViaAI(intent);
         case 'delete_student': return await deleteStudentViaAI(intent);
         
-        // QUERY SISWA
         case 'query_student': return await queryStudentProfessional(intent.name);
         case 'query_student_by_id': return await queryStudentByIdProfessional(intent.id);
         case 'students_by_class': return await getStudentsByClassProfessional(intent.kelas);
@@ -370,7 +358,6 @@ async function executeProfessionalIntent(intent) {
         case 'compare': return await compareAttendanceProfessional();
         case 'recommendations': return await getProfessionalRecommendations();
         
-        // MANAJEMEN PENGATURAN
         case 'change_school_name': return await changeSchoolName(intent);
         case 'update_global_delay': return await updateGlobalDelay(intent);
         case 'add_class': return await addClassAction(intent);
@@ -380,18 +367,11 @@ async function executeProfessionalIntent(intent) {
         case 'change_school_type': return await changeSchoolTypeAction(intent);
         case 'update_late_threshold': return await updateLateThreshold(intent);
         
-        // MANAJEMEN USER
         case 'change_user_role': return await changeUserRoleAction(intent);
         case 'reset_user_password': return await resetUserPasswordAction(intent);
         case 'delete_user': return await deleteUserAction(intent);
         
-        // MANAJEMEN PENGUMUMAN
         case 'create_announcement': return await createAnnouncementAction(intent);
-        
-        // EXPORT DATA
-        case 'export_attendance': return await exportAttendanceAction();
-        case 'export_students': return await exportStudentsAction();
-        case 'export_rekap': return await exportRekapAction();
         
         default: return null;
     }
@@ -416,18 +396,17 @@ function getProfessionalGreeting() {
         default: roleText = 'Siswa';
     }
     
-    const schoolName = document.getElementById('schoolNameDisplay')?.innerText || 'Sekolah';
+    const schoolName = systemDataCache.settings.schoolName || 'Sekolah';
     
     return `👋 **${greeting}, ${escapeHtml(userName)}!**\n\nSaya adalah **Asisten AI Super Powerfull** sistem absensi **${escapeHtml(schoolName)}**.\n\n` +
            `📋 **Yang bisa saya bantu hari ini:**\n` +
            `• 🔍 **Cari data siswa** - "data siswa Budi" atau "id 123 siapa?"\n` +
            `• 📊 **Lihat rekap absensi** - "rekap Ani" atau "statistik kehadiran"\n` +
-           `• ✏️ **Kelola data siswa** - "tambah siswa nama Toni id 7 kelas X"\n` +
+           `• ✏️ **Kelola data siswa** - "tambah siswa nama Toni id 7 kelas X jurusan RPL"\n` +
            `• 🏆 **Lihat peringkat** - "siapa siswa terbaik?"\n` +
-           `• ⚙️ **Kelola pengaturan** - "ubah nama sekolah menjadi SMK Taruna"\n` +
-           `• 👥 **Kelola user** - "ubah role Budi menjadi admin"\n` +
-           `• 📢 **Buat pengumuman** - "buat pengumuman Libur dengan isi Besok libur nasional"\n` +
-           `• 📥 **Export data** - "export absensi ke excel"\n\n` +
+           `• ⚙️ **Kelola pengaturan** - "ubah nama sekolah menjadi SMK Taruna" atau "tambah kelas X A"\n` +
+           `• 👥 **Kelola user** (Admin/Developer) - "ubah role zaki5go@gmail.com menjadi siswa"\n` +
+           `• 📢 **Buat pengumuman** - "buat pengumuman Libur dengan isi Besok libur nasional"\n\n` +
            `💬 Ada yang bisa saya bantu, ${roleText} ${escapeHtml(userName)}?`;
 }
 
@@ -438,21 +417,19 @@ function getProfessionalThanks() {
 function getProfessionalIntroduction() {
     return `## 🤖 **Tentang Saya - AI Super Powerfull**\n\n` +
            `Saya adalah **Asisten AI Super Powerfull** untuk Sistem Absensi Berbasis Fingerprint ESP32.\n\n` +
-           `**⚡ Kemampuan Utama:**\n` +
-           `✅ **Manajemen Data Siswa** - Tambah, edit, hapus, cari data siswa\n` +
-           `✅ **Analisis Absensi** - Rekap, statistik, perbandingan, prediksi tren\n` +
-           `✅ **Manajemen Pengaturan** - Nama sekolah, delay global, kelas, jurusan\n` +
-           `✅ **Manajemen User** - Ubah role, reset password, hapus user\n` +
+           `**⚡ Kemampuan Utama (REAL ACTION):**\n` +
+           `✅ **Manajemen Data Siswa** - Tambah, edit, hapus, cari data siswa (Langsung ke database)\n` +
+           `✅ **Manajemen Pengaturan** - Nama sekolah, delay global, kelas, jurusan (Langsung ke database)\n` +
+           `✅ **Manajemen User** (Admin/Developer) - Ubah role, reset password, hapus user\n` +
            `✅ **Manajemen Pengumuman** - Buat dan kelola pengumuman\n` +
-           `✅ **Export Data** - Export ke Excel/PDF\n` +
-           `✅ **Rekomendasi Cerdas** - Saran berbasis data untuk peningkatan\n` +
-           `✅ **Informasi Umum** - Waktu, tanggal, pengetahuan umum\n\n` +
+           `✅ **Analisis Absensi** - Rekap, statistik, perbandingan, prediksi tren\n` +
+           `✅ **Rekomendasi Cerdas** - Saran berbasis data untuk peningkatan\n\n` +
            `💡 **Ketik "bantuan"** untuk melihat semua perintah yang tersedia!`;
 }
 
 function getAboutSystem() {
     return `## 🏫 **Tentang Sistem Absensi**\n\n` +
-           `**Nama Sekolah:** ${escapeHtml(document.getElementById('schoolNameDisplay')?.innerText || 'Sistem Absensi')}\n\n` +
+           `**Nama Sekolah:** ${escapeHtml(systemDataCache.settings.schoolName || 'Sistem Absensi')}\n\n` +
            `**📋 Fitur Sistem:**\n` +
            `1. **Absensi Fingerprint ESP32** - Real-time scan sidik jari\n` +
            `2. **Dashboard Interaktif** - Visualisasi data kehadiran\n` +
@@ -462,8 +439,7 @@ function getAboutSystem() {
            `6. **Sosial Media Internal** - Status, Chat, Teman\n` +
            `7. **Multi-role User** - Admin, Guru, Developer, Siswa\n` +
            `8. **Log Aktivitas** - Audit trail semua operasi\n` +
-           `9. **Export Data** - Excel & PDF untuk laporan\n` +
-           `10. **AI Assistant** - Saya! Yang siap membantu kapan saja\n\n` +
+           `9. **AI Assistant** - Saya! Yang siap membantu kapan saja\n\n` +
            `**📊 Data Real-time:**\n` +
            `• ${systemDataCache.students.length} Siswa terdaftar\n` +
            `• ${systemDataCache.attendance.length} Catatan absensi\n` +
@@ -482,7 +458,15 @@ function getCurrentDateTime() {
 
 function getProfessionalHelp() {
     return `## 📚 **PANDUAN LENGKAP ASISTEN AI**\n\n` +
-           `### 🔹 MANAJEMEN SISWA (CRUD)\n` +
+           `### 🔹 MANAJEMEN USER (KHUSUS ADMIN/DEVELOPER)\n` +
+           `| Perintah | Contoh |\n` +
+           `|----------|--------|\n` +
+           `| Ubah role | "ubah role zaki5go@gmail.com menjadi siswa" |\n` +
+           `| Ubah role | "ubah role Budi menjadi admin" |\n` +
+           `| Reset password | "reset password budi@sekolah.sch.id" |\n` +
+           `| Hapus user | "hapus user Budi" |\n\n` +
+           
+           `### 🔹 MANAJEMEN SISWA (CRUD - REAL ACTION)\n` +
            `| Perintah | Contoh |\n` +
            `|----------|--------|\n` +
            `| Tambah siswa | "tambah siswa nama Budi id 5 kelas X jurusan RPL" |\n` +
@@ -490,26 +474,19 @@ function getProfessionalHelp() {
            `| Hapus siswa | "hapus siswa id 5" |\n` +
            `| Cari siswa | "data siswa Budi" atau "id 5 siapa?" |\n\n` +
            
-           `### 🔹 PENGATURAN SEKOLAH\n` +
+           `### 🔹 PENGATURAN SEKOLAH (REAL ACTION)\n` +
            `| Perintah | Contoh |\n` +
            `|----------|--------|\n` +
            `| Ubah nama sekolah | "ubah nama sekolah menjadi SMK Taruna" |\n` +
            `| Delay global | "ubah delay global menjadi 90 menit" |\n` +
-           `| Tambah kelas | "tambah kelas XII" |\n` +
+           `| Tambah kelas | "tambah kelas X A" |\n` +
            `| Hapus kelas | "hapus kelas IX" |\n` +
            `| Tambah jurusan | "tambah jurusan RPL" |\n` +
            `| Hapus jurusan | "hapus jurusan TKJ" |\n` +
-           `| Tipe sekolah | "ubah tipe sekolah menjadi SMK" |\n` +
+           `| Tipe sekolah | "ubah tipe sekolah menjadi smk" |\n` +
            `| Batas terlambat | "ubah batas terlambat menjadi 07:15" |\n\n` +
            
-           `### 🔹 MANAJEMEN USER\n` +
-           `| Perintah | Contoh |\n` +
-           `|----------|--------|\n` +
-           `| Ubah role | "ubah role Budi menjadi admin" |\n` +
-           `| Reset password | "reset password budi@sekolah.sch.id" |\n` +
-           `| Hapus user | "hapus user Budi" |\n\n` +
-           
-           `### 🔹 PENGUMUMAN\n` +
+           `### 🔹 PENGUMUMAN (REAL ACTION)\n` +
            `| Perintah | Contoh |\n` +
            `|----------|--------|\n` +
            `| Buat pengumuman | "buat pengumuman Libur dengan isi Besok libur nasional" |\n\n` +
@@ -522,21 +499,87 @@ function getProfessionalHelp() {
            `| Siswa per kelas | "siswa kelas X" |\n` +
            `| Peringkat | "top 10 siswa" |\n\n` +
            
-           `### 🔹 EXPORT DATA\n` +
-           `| Perintah | Contoh |\n` +
-           `|----------|--------|\n` +
-           `| Export absensi | "export absensi ke excel" |\n` +
-           `| Export siswa | "export data siswa" |\n` +
-           `| Export rekap | "export rekap ke excel" |\n\n` +
-           
-           `### 🔹 ANALISIS & PREDIKSI\n` +
-           `| Perintah | Contoh |\n` +
-           `|----------|--------|\n` +
-           `| Prediksi tren | "prediksi kehadiran" |\n` +
-           `| Perbandingan | "bandingkan kehadiran" |\n` +
-           `| Rekomendasi | "saran untuk meningkatkan kehadiran" |\n\n` +
-           
            `✨ **Tips:** Gunakan bahasa natural, AI akan memahami maksud Anda!`;
+}
+
+// ======================= MANAJEMEN USER (KHUSUS ADMIN/DEVELOPER) =======================
+
+async function changeUserRoleAction(data) {
+    // Cek akses
+    if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'developer')) {
+        return "⛔ **Akses Ditolak!**\n\nFitur ubah role user hanya untuk **Admin dan Developer**.\n\nRole Anda saat ini: " + (currentUser?.role || 'tidak diketahui');
+    }
+    
+    if (data.need_data) {
+        return "📝 **Format Ubah Role User:**\n\n`ubah role [email atau nama user] menjadi [role baru]`\n\n**Contoh:**\n• `ubah role zaki5go@gmail.com menjadi siswa`\n• `ubah role Budi menjadi admin`\n\nRole yang tersedia: **siswa, guru, admin**\n\n⚠️ **Catatan:** Role Developer tidak dapat diubah!";
+    }
+    
+    if (!data.userIdentifier) {
+        return "❌ User identifier tidak boleh kosong! Contoh: `ubah role zaki5go@gmail.com menjadi siswa`";
+    }
+    
+    if (!data.newRole) {
+        return "❌ Role baru tidak boleh kosong! Pilih salah satu: **siswa, guru, admin**";
+    }
+    
+    // Validasi role
+    const validRoles = ['siswa', 'guru', 'admin'];
+    if (!validRoles.includes(data.newRole)) {
+        return `❌ Role "${data.newRole}" tidak valid! Pilih salah satu: ${validRoles.join(', ')}`;
+    }
+    
+    // Cari user berdasarkan email atau nama
+    const users = systemDataCache.usersAuth || [];
+    let targetUser = null;
+    let searchTerm = data.userIdentifier.toLowerCase();
+    
+    // Cari berdasarkan email
+    targetUser = users.find(u => u.email && u.email.toLowerCase() === searchTerm);
+    
+    // Jika tidak ditemukan, cari berdasarkan nama (partial match)
+    if (!targetUser) {
+        targetUser = users.find(u => u.nama && u.nama.toLowerCase().includes(searchTerm));
+    }
+    
+    if (!targetUser) {
+        return `❌ **User "${data.userIdentifier}" tidak ditemukan!**\n\nDaftar user yang terdaftar:\n${users.slice(0, 10).map(u => `• ${u.nama || 'Tanpa nama'} (${u.email || 'tanpa email'}) - ${u.role}`).join('\n')}\n\nGunakan email yang tepat atau nama lengkap.`;
+    }
+    
+    // Cek role developer (tidak bisa diubah)
+    if (targetUser.role === 'developer') {
+        return "⛔ **Role Developer tidak dapat diubah!**\n\nAkun developer adalah akun khusus yang dilindungi.";
+    }
+    
+    // Cek apakah mencoba mengubah role sendiri
+    if (currentUser.uid === targetUser.uid) {
+        return "❌ **Anda tidak dapat mengubah role sendiri!**\n\nMinta admin lain untuk mengubah role Anda.";
+    }
+    
+    const oldRole = targetUser.role;
+    const roleNames = { siswa: 'Siswa', guru: 'Guru', admin: 'Admin' };
+    
+    try {
+        // Update role di Firebase
+        await db.ref(`users_auth/${targetUser.uid}/role`).set(data.newRole);
+        
+        // Update cache
+        targetUser.role = data.newRole;
+        const index = systemDataCache.usersAuth.findIndex(u => u.uid === targetUser.uid);
+        if (index !== -1) {
+            systemDataCache.usersAuth[index].role = data.newRole;
+        }
+        
+        // Log aktivitas
+        if (typeof logActivity === 'function') {
+            logActivity('change_user_role', `Mengubah role ${targetUser.nama} (${targetUser.email}) dari ${oldRole} menjadi ${data.newRole} via AI Assistant`);
+        }
+        
+        return `✅ **BERHASIL!**\n\nRole **${targetUser.nama}** (${targetUser.email}) berhasil diubah dari **${roleNames[oldRole] || oldRole}** menjadi **${roleNames[data.newRole]}**.\n\nPerubahan akan langsung berlaku.`;
+        
+    } catch (error) {
+        console.error("Change role error:", error);
+        return `❌ **Gagal mengubah role!**\n\nError: ${error.message}\n\nSilakan coba lagi atau lakukan melalui halaman Manajemen User.`;
+    }
 }
 
 // ======================= MANAJEMEN PENGATURAN =======================
@@ -554,12 +597,11 @@ async function changeSchoolName(data) {
         return "❌ Nama sekolah baru tidak boleh kosong!";
     }
     
-    const oldName = document.getElementById('schoolNameDisplay')?.innerText || 'Sistem Absensi';
+    const oldName = systemDataCache.settings.schoolName || 'Sistem Absensi';
     
     try {
         await db.ref('system_config/schoolName').set(data.newName);
         
-        // Update tampilan
         const schoolNameElement = document.getElementById('schoolNameDisplay');
         if (schoolNameElement) {
             schoolNameElement.textContent = data.newName;
@@ -570,6 +612,8 @@ async function changeSchoolName(data) {
         
         const inputField = document.getElementById('inputSchoolName');
         if (inputField) inputField.value = data.newName;
+        
+        systemDataCache.settings.schoolName = data.newName;
         
         if (typeof logActivity === 'function') {
             logActivity('change_school_name', `Mengubah nama sekolah dari "${oldName}" menjadi "${data.newName}" via AI Assistant`);
@@ -604,6 +648,8 @@ async function updateGlobalDelay(data) {
         const displaySpan = document.getElementById('globalDelayDisplay');
         if (displaySpan) displaySpan.textContent = delayText;
         
+        systemDataCache.settings.delayOut = data.delay;
+        
         if (typeof logActivity === 'function') {
             logActivity('update_global_delay', `Mengubah delay global dari ${oldDelay} menjadi ${data.delay} menit via AI Assistant`);
         }
@@ -621,16 +667,23 @@ async function addClassAction(data) {
     }
     
     if (data.need_name) {
-        return "📝 **Format Tambah Kelas:**\n\n`tambah kelas [Nama Kelas]`\n\n**Contoh:** `tambah kelas XII` atau `tambah kelas X RPL`";
+        return "📝 **Format Tambah Kelas:**\n\n`tambah kelas [Nama Kelas]`\n\n**Contoh:** `tambah kelas X A` atau `tambah kelas XII RPL`";
     }
     
     if (!data.className) {
         return "❌ Nama kelas tidak boleh kosong!";
     }
     
-    const currentClasses = systemDataCache.schoolConfig.classes || [];
+    let currentClasses = [];
+    try {
+        const snapshot = await db.ref('school_config/classes').once('value');
+        currentClasses = snapshot.val() || [];
+    } catch(e) {
+        currentClasses = systemDataCache.schoolConfig.classes || [];
+    }
+    
     if (currentClasses.includes(data.className)) {
-        return `⚠️ **Kelas ${data.className} sudah ada!**`;
+        return `⚠️ **Kelas ${data.className} sudah ada!**\n\nDaftar kelas saat ini: ${currentClasses.join(', ')}`;
     }
     
     currentClasses.push(data.className);
@@ -639,11 +692,24 @@ async function addClassAction(data) {
     try {
         await db.ref('school_config/classes').set(currentClasses);
         
+        systemDataCache.schoolConfig.classes = currentClasses;
+        if (window.currentSchoolConfig) {
+            window.currentSchoolConfig.classes = currentClasses;
+        }
+        
         if (typeof logActivity === 'function') {
             logActivity('add_class', `Menambah kelas ${data.className} via AI Assistant`);
         }
         
-        return `✅ **BERHASIL!**\n\nKelas **${data.className}** berhasil ditambahkan.\n\n⚠️ Jangan lupa klik tombol "Simpan Semua Kelas" di halaman Pengaturan untuk menyimpan permanen.`;
+        setTimeout(() => {
+            if (typeof populateKelasOptions === 'function') populateKelasOptions();
+            if (typeof populateStudentFilters === 'function') populateStudentFilters();
+            if (typeof populateFilters === 'function') populateFilters();
+            if (typeof populateStudentSelectForCode === 'function') populateStudentSelectForCode();
+            if (typeof renderClassesList === 'function') renderClassesList();
+        }, 500);
+        
+        return `✅ **BERHASIL!**\n\nKelas **${data.className}** berhasil ditambahkan ke database.\n\n📚 **Daftar kelas saat ini:** ${currentClasses.join(', ')}`;
         
     } catch (error) {
         return `❌ **Gagal!** ${error.message}`;
@@ -663,9 +729,16 @@ async function removeClassAction(data) {
         return "❌ Nama kelas tidak boleh kosong!";
     }
     
-    const currentClasses = systemDataCache.schoolConfig.classes || [];
+    let currentClasses = [];
+    try {
+        const snapshot = await db.ref('school_config/classes').once('value');
+        currentClasses = snapshot.val() || [];
+    } catch(e) {
+        currentClasses = systemDataCache.schoolConfig.classes || [];
+    }
+    
     if (!currentClasses.includes(data.className)) {
-        return `⚠️ **Kelas ${data.className} tidak ditemukan!**`;
+        return `⚠️ **Kelas ${data.className} tidak ditemukan!**\n\nDaftar kelas saat ini: ${currentClasses.join(', ')}`;
     }
     
     const index = currentClasses.indexOf(data.className);
@@ -674,11 +747,21 @@ async function removeClassAction(data) {
     try {
         await db.ref('school_config/classes').set(currentClasses);
         
+        systemDataCache.schoolConfig.classes = currentClasses;
+        if (window.currentSchoolConfig) {
+            window.currentSchoolConfig.classes = currentClasses;
+        }
+        
         if (typeof logActivity === 'function') {
             logActivity('remove_class', `Menghapus kelas ${data.className} via AI Assistant`);
         }
         
-        return `✅ **BERHASIL!**\n\nKelas **${data.className}** berhasil dihapus.\n\n⚠️ Jangan lupa klik tombol "Simpan Semua Kelas" di halaman Pengaturan untuk menyimpan permanen.`;
+        setTimeout(() => {
+            if (typeof populateKelasOptions === 'function') populateKelasOptions();
+            if (typeof renderClassesList === 'function') renderClassesList();
+        }, 500);
+        
+        return `✅ **BERHASIL!**\n\nKelas **${data.className}** berhasil dihapus.\n\n📚 **Daftar kelas saat ini:** ${currentClasses.join(', ')}`;
         
     } catch (error) {
         return `❌ **Gagal!** ${error.message}`;
@@ -698,9 +781,16 @@ async function addMajorAction(data) {
         return "❌ Nama jurusan tidak boleh kosong!";
     }
     
-    const currentMajors = systemDataCache.schoolConfig.majors || [];
+    let currentMajors = [];
+    try {
+        const snapshot = await db.ref('school_config/majors').once('value');
+        currentMajors = snapshot.val() || [];
+    } catch(e) {
+        currentMajors = systemDataCache.schoolConfig.majors || [];
+    }
+    
     if (currentMajors.includes(data.majorName)) {
-        return `⚠️ **Jurusan ${data.majorName} sudah ada!**`;
+        return `⚠️ **Jurusan ${data.majorName} sudah ada!**\n\nDaftar jurusan saat ini: ${currentMajors.join(', ')}`;
     }
     
     currentMajors.push(data.majorName);
@@ -709,11 +799,21 @@ async function addMajorAction(data) {
     try {
         await db.ref('school_config/majors').set(currentMajors);
         
+        systemDataCache.schoolConfig.majors = currentMajors;
+        if (window.currentSchoolConfig) {
+            window.currentSchoolConfig.majors = currentMajors;
+        }
+        
         if (typeof logActivity === 'function') {
             logActivity('add_major', `Menambah jurusan ${data.majorName} via AI Assistant`);
         }
         
-        return `✅ **BERHASIL!**\n\nJurusan **${data.majorName}** berhasil ditambahkan.\n\n⚠️ Jangan lupa klik tombol "Simpan Semua Jurusan" di halaman Pengaturan untuk menyimpan permanen.`;
+        setTimeout(() => {
+            if (typeof populateJurusanOptions === 'function') populateJurusanOptions();
+            if (typeof renderMajorsList === 'function') renderMajorsList();
+        }, 500);
+        
+        return `✅ **BERHASIL!**\n\nJurusan **${data.majorName}** berhasil ditambahkan.\n\n🎓 **Daftar jurusan saat ini:** ${currentMajors.join(', ')}`;
         
     } catch (error) {
         return `❌ **Gagal!** ${error.message}`;
@@ -733,9 +833,16 @@ async function removeMajorAction(data) {
         return "❌ Nama jurusan tidak boleh kosong!";
     }
     
-    const currentMajors = systemDataCache.schoolConfig.majors || [];
+    let currentMajors = [];
+    try {
+        const snapshot = await db.ref('school_config/majors').once('value');
+        currentMajors = snapshot.val() || [];
+    } catch(e) {
+        currentMajors = systemDataCache.schoolConfig.majors || [];
+    }
+    
     if (!currentMajors.includes(data.majorName)) {
-        return `⚠️ **Jurusan ${data.majorName} tidak ditemukan!**`;
+        return `⚠️ **Jurusan ${data.majorName} tidak ditemukan!**\n\nDaftar jurusan saat ini: ${currentMajors.join(', ')}`;
     }
     
     const index = currentMajors.indexOf(data.majorName);
@@ -744,11 +851,21 @@ async function removeMajorAction(data) {
     try {
         await db.ref('school_config/majors').set(currentMajors);
         
+        systemDataCache.schoolConfig.majors = currentMajors;
+        if (window.currentSchoolConfig) {
+            window.currentSchoolConfig.majors = currentMajors;
+        }
+        
         if (typeof logActivity === 'function') {
             logActivity('remove_major', `Menghapus jurusan ${data.majorName} via AI Assistant`);
         }
         
-        return `✅ **BERHASIL!**\n\nJurusan **${data.majorName}** berhasil dihapus.\n\n⚠️ Jangan lupa klik tombol "Simpan Semua Jurusan" di halaman Pengaturan untuk menyimpan permanen.`;
+        setTimeout(() => {
+            if (typeof populateJurusanOptions === 'function') populateJurusanOptions();
+            if (typeof renderMajorsList === 'function') renderMajorsList();
+        }, 500);
+        
+        return `✅ **BERHASIL!**\n\nJurusan **${data.majorName}** berhasil dihapus.\n\n🎓 **Daftar jurusan saat ini:** ${currentMajors.join(', ')}`;
         
     } catch (error) {
         return `❌ **Gagal!** ${error.message}`;
@@ -786,6 +903,9 @@ async function changeSchoolTypeAction(data) {
             classes: newClasses
         });
         
+        systemDataCache.schoolConfig.type = data.schoolType;
+        systemDataCache.schoolConfig.classes = newClasses;
+        
         if (typeof logActivity === 'function') {
             logActivity('change_school_type', `Mengubah tipe sekolah dari ${oldType} menjadi ${data.schoolType} via AI Assistant`);
         }
@@ -815,58 +935,13 @@ async function updateLateThreshold(data) {
     try {
         await db.ref('school_config/attendance_settings/lateThreshold').set(data.time);
         
+        systemDataCache.settings.lateThreshold = data.time;
+        
         if (typeof logActivity === 'function') {
             logActivity('update_late_threshold', `Mengubah batas terlambat dari ${oldThreshold} menjadi ${data.time} via AI Assistant`);
         }
         
         return `✅ **BERHASIL!**\n\nBatas waktu terlambat berhasil diubah dari **${oldThreshold}** menjadi **${data.time}**.\n\nSiswa yang scan setelah jam ${data.time} akan dianggap TERLAMBAT.`;
-        
-    } catch (error) {
-        return `❌ **Gagal!** ${error.message}`;
-    }
-}
-
-// ======================= MANAJEMEN USER =======================
-
-async function changeUserRoleAction(data) {
-    if (!hasAdminAccess()) {
-        return "⛔ **Akses Ditolak!**\n\nFitur ini hanya untuk **Admin, Guru, dan Developer**.";
-    }
-    
-    const users = systemDataCache.usersAuth || [];
-    let targetUser = users.find(u => 
-        u.nama && u.nama.toLowerCase().includes(data.userIdentifier.toLowerCase()) ||
-        u.email && u.email.toLowerCase().includes(data.userIdentifier.toLowerCase())
-    );
-    
-    if (!targetUser) {
-        return `❌ **User "${data.userIdentifier}" tidak ditemukan!**\n\nCoba gunakan nama lengkap atau email.`;
-    }
-    
-    if (targetUser.role === 'developer') {
-        return "⛔ **Role Developer tidak dapat diubah!**";
-    }
-    
-    if (currentUser.uid === targetUser.uid) {
-        return "❌ **Anda tidak dapat mengubah role sendiri!**";
-    }
-    
-    const validRoles = ['siswa', 'guru', 'admin'];
-    if (!validRoles.includes(data.newRole)) {
-        return `❌ Role "${data.newRole}" tidak valid! Pilih salah satu: siswa, guru, admin.`;
-    }
-    
-    const oldRole = targetUser.role;
-    const roleNames = { siswa: 'Siswa', guru: 'Guru', admin: 'Admin' };
-    
-    try {
-        await db.ref(`users_auth/${targetUser.uid}`).update({ role: data.newRole });
-        
-        if (typeof logActivity === 'function') {
-            logActivity('change_user_role', `Mengubah role ${targetUser.nama} dari ${oldRole} menjadi ${data.newRole} via AI Assistant`);
-        }
-        
-        return `✅ **BERHASIL!**\n\nRole **${targetUser.nama}** berhasil diubah dari **${roleNames[oldRole]}** menjadi **${roleNames[data.newRole]}**.`;
         
     } catch (error) {
         return `❌ **Gagal!** ${error.message}`;
@@ -901,8 +976,8 @@ async function resetUserPasswordAction(data) {
 }
 
 async function deleteUserAction(data) {
-    if (!hasAdminAccess()) {
-        return "⛔ **Akses Ditolak!**\n\nFitur ini hanya untuk **Admin, Guru, dan Developer**.";
+    if (!canDeleteUser()) {
+        return "⛔ **Akses Ditolak!**\n\nFitur hapus user hanya untuk **Admin dan Developer**.";
     }
     
     const users = systemDataCache.usersAuth || [];
@@ -924,8 +999,6 @@ async function deleteUserAction(data) {
     
     return `⚠️ **Konfirmasi Hapus User**\n\nAnda akan menghapus:\n• Nama: **${targetUser.nama}**\n• Email: ${targetUser.email}\n• Role: ${targetUser.role.toUpperCase()}\n\n**Ketik "YA HAPUS ${targetUser.nama}"** untuk konfirmasi.\n_(Ketik "batal" untuk membatalkan)_`;
 }
-
-// ======================= MANAJEMEN PENGUMUMAN =======================
 
 async function createAnnouncementAction(data) {
     if (!hasAdminAccess()) {
@@ -957,47 +1030,6 @@ async function createAnnouncementAction(data) {
     } catch (error) {
         return `❌ **Gagal!** ${error.message}`;
     }
-}
-
-// ======================= EXPORT DATA =======================
-
-async function exportAttendanceAction() {
-    if (!hasAdminAccess()) {
-        return "⛔ **Akses Ditolak!**\n\nFitur ini hanya untuk **Admin, Guru, dan Developer**.";
-    }
-    
-    if (typeof exportToExcel === 'function') {
-        exportToExcel();
-        return "📥 **Export Absensi dimulai!**\n\nFile Excel akan segera diunduh.";
-    }
-    
-    return "❌ **Fitur export tidak tersedia saat ini.**";
-}
-
-async function exportStudentsAction() {
-    if (!hasAdminAccess()) {
-        return "⛔ **Akses Ditolak!**\n\nFitur ini hanya untuk **Admin, Guru, dan Developer**.";
-    }
-    
-    if (typeof exportStudentsToCSV === 'function') {
-        exportStudentsToCSV();
-        return "📥 **Export Data Siswa dimulai!**\n\nFile Excel akan segera diunduh.";
-    }
-    
-    return "❌ **Fitur export tidak tersedia saat ini.**";
-}
-
-async function exportRekapAction() {
-    if (!hasAdminAccess()) {
-        return "⛔ **Akses Ditolak!**\n\nFitur ini hanya untuk **Admin, Guru, dan Developer**.";
-    }
-    
-    if (typeof exportRekapToExcel === 'function') {
-        exportRekapToExcel();
-        return "📥 **Export Rekap Absensi dimulai!**\n\nFile Excel akan segera diunduh.";
-    }
-    
-    return "❌ **Fitur export tidak tersedia saat ini.**";
 }
 
 // ======================= CRUD SISWA VIA AI =======================
@@ -1242,19 +1274,23 @@ async function getGeneralStatsProfessional() {
     
     const delayGlobal = systemDataCache.settings.delayOut || 60;
     const lateThreshold = systemDataCache.settings.lateThreshold || '07:30';
+    const schoolName = systemDataCache.settings.schoolName || 'Sistem Absensi';
     
     return `## 📊 **STATISTIK SISTEM**\n\n` +
+           `**🏫 Nama Sekolah:** ${escapeHtml(schoolName)}\n\n` +
            `### 👥 **Data Siswa**\n` +
            `• Total siswa: **${totalSiswa}**\n` +
            `• Sudah berakun: ${totalAkun}\n` +
            `• Belum berakun: ${totalSiswa - totalAkun}\n\n` +
-           `### 📋 **Absensi Hari Ini**\n` +
+           `### 📋 **Absensi Hari Ini (${today})**\n` +
            `• ✅ Sudah masuk: **${hadirToday}** siswa\n` +
            `• 📊 Total transaksi: ${todayAbsensi.length}\n\n` +
            `### ⚙️ **Pengaturan**\n` +
            `• ⏰ Delay pulang global: ${delayGlobal} menit\n` +
-           `• 🕒 Batas terlambat: ${lateThreshold}\n\n` +
-           `💡 Total catatan absensi: **${totalAbsensi}** transaksi.`;
+           `• 🕒 Batas terlambat: ${lateThreshold}\n` +
+           `• 📚 Jumlah kelas: ${systemDataCache.schoolConfig.classes?.length || 0}\n` +
+           `• 🎓 Jumlah jurusan: ${systemDataCache.schoolConfig.majors?.length || 0}\n\n` +
+           `💡 Total catatan absensi di database: **${totalAbsensi}** transaksi.`;
 }
 
 async function predictTrendProfessional() {
@@ -1389,7 +1425,6 @@ async function getProfessionalRecommendations() {
         result += `💡 **Saran:** Berikan penghargaan/pujian, jadikan mereka duta kehadiran.\n\n`;
     }
     
-    // Analisis hari dengan kehadiran rendah
     const attendanceByDay = { Senin: 0, Selasa: 0, Rabu: 0, Kamis: 0, Jumat: 0 };
     systemDataCache.attendance.forEach(a => {
         const date = new Date(a.date);
@@ -1414,10 +1449,9 @@ async function getProfessionalRecommendations() {
     return result;
 }
 
-// ======================= CALL GROQ API (FIXED) =======================
+// ======================= CALL GROQ API =======================
 
 async function callGroqAPI(userMessage, contextData = null) {
-    // Cek konfirmasi hapus
     if (pendingDeleteConfirmation) {
         const confirmResult = await executeDeleteConfirmation(userMessage, pendingDeleteConfirmation);
         if (confirmResult) {
@@ -1427,7 +1461,6 @@ async function callGroqAPI(userMessage, contextData = null) {
         }
     }
     
-    // Cek konfirmasi hapus user
     if (pendingAction && pendingAction.type === 'delete_user') {
         const confirmPattern = new RegExp(`YA HAPUS ${pendingAction.userName}`, 'i');
         if (confirmPattern.test(userMessage)) {
@@ -1436,8 +1469,9 @@ async function callGroqAPI(userMessage, contextData = null) {
                 if (typeof logActivity === 'function') {
                     logActivity('delete_user', `Menghapus user ${pendingAction.userName} via AI Assistant`);
                 }
+                const userName = pendingAction.userName;
                 pendingAction = null;
-                return `✅ **BERHASIL DIHAPUS!**\n\nUser **${pendingAction.userName}** telah dihapus dari database.`;
+                return `✅ **BERHASIL DIHAPUS!**\n\nUser **${userName}** telah dihapus dari database.`;
             } catch (error) {
                 pendingAction = null;
                 return `❌ **Gagal Hapus!** ${error.message}`;
@@ -1450,7 +1484,6 @@ async function callGroqAPI(userMessage, contextData = null) {
         return null;
     }
     
-    // PASTIKAN userMessage ADALAH STRING
     const messageStr = String(userMessage || '');
     
     const systemPrompt = `Anda adalah Asisten AI Profesional untuk Sistem Absensi Sekolah.
@@ -1461,7 +1494,7 @@ Total absensi: ${systemDataCache.attendance.length}
 Total user: ${systemDataCache.usersAuth.length}
 Role pengguna: ${currentUser?.role || 'unknown'}
 Waktu: ${new Date().toLocaleString('id-ID')}
-Nama Sekolah: ${document.getElementById('schoolNameDisplay')?.innerText || 'Sistem Absensi'}
+Nama Sekolah: ${systemDataCache.settings.schoolName || 'Sistem Absensi'}
 
 === PENGATURAN ===
 Delay global: ${systemDataCache.settings.delayOut || 60} menit
@@ -1482,7 +1515,6 @@ Jumlah jurusan: ${systemDataCache.schoolConfig.majors?.length || 0}
 - Gunakan emoji secukupnya (✅, 📊, 👤, dll)
 - Untuk data, gunakan bullet points`;
 
-    // PASTIKAN SEMUA MESSAGE ADALAH STRING
     const messages = [
         { role: "system", content: String(systemPrompt) },
         { role: "user", content: messageStr }
@@ -1559,14 +1591,11 @@ function generateFallbackProfessional(message) {
 • ✏️ **Kelola** - "tambah siswa ...", "hapus siswa id 5"
 • 🏆 **Peringkat** - "siswa terbaik", "top 10"
 • ⚙️ **Pengaturan** - "ubah nama sekolah menjadi SMK Taruna"
-• 👥 **User** - "ubah role Budi menjadi admin"
+• 👥 **User** (Admin/Dev) - "ubah role Budi menjadi admin"
 • 📢 **Pengumuman** - "buat pengumuman Libur dengan isi ..."
-• 📥 **Export** - "export absensi ke excel"
 
 💬 **Ketik "bantuan"** untuk panduan lengkap.`;
 }
-
-// ======================= MAIN PROCESSOR =======================
 
 async function executeDeleteConfirmation(message, pendingDelete) {
     if (!pendingDelete) return null;
@@ -1617,7 +1646,7 @@ async function processAIMessage(message) {
         }
     }
     
-    if (intent.intent === 'delete_user' && intent.userName) {
+    if (intent.intent === 'delete_user' && intent.userName && canDeleteUser()) {
         const users = systemDataCache.usersAuth || [];
         const targetUser = users.find(u => 
             u.nama && u.nama.toLowerCase().includes(intent.userName.toLowerCase())
@@ -1695,7 +1724,7 @@ function openAIAssistantModal() {
                         </div>
                     </div>
                     <div style="padding: 15px; border-top: 1px solid var(--border); display: flex; gap: 10px;">
-                        <input type="text" id="aiChatInput" placeholder="Tanyakan sesuatu... misal: 'data siswa kelas X' atau 'ubah nama sekolah menjadi SMK Taruna'" 
+                        <input type="text" id="aiChatInput" placeholder="Tanyakan sesuatu... misal: 'tambah kelas X A' atau 'ubah nama sekolah menjadi SMK Taruna'" 
                                style="flex: 1; padding: 12px; border-radius: 30px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary);">
                         <button id="aiSendBtn" style="padding: 12px 20px; border-radius: 30px; background: linear-gradient(135deg, #00bcd4, #2196f3); border: none; color: white; cursor: pointer;">📤 Kirim</button>
                     </div>
@@ -1798,7 +1827,7 @@ function initAIAssistant() {
     }
     
     aiAssistantInitialized = true;
-    console.log("🤖 AI Assistant v4.0 initialized - Super Powerfull!");
+    console.log("🤖 AI Assistant v5.1 initialized - Super Powerfull with REAL ACTIONS!");
     
     addAIAssistantButton();
     setInterval(() => updateSystemDataCache(), 30000);
@@ -1807,7 +1836,6 @@ function initAIAssistant() {
     }, 15000);
 }
 
-// Event listeners
 window.addEventListener('uiReady', (e) => {
     if (e.detail?.currentUser) setTimeout(() => initAIAssistant(), 500);
 });
@@ -1816,9 +1844,8 @@ window.addEventListener('dataReady', () => {
     if (currentUser && hasAdminAccess() && !aiAssistantInitialized) initAIAssistant();
 });
 
-// Ekspor global
 window.initAIAssistant = initAIAssistant;
 window.openAIAssistantModal = openAIAssistantModal;
 window.closeAIAssistantModal = closeAIAssistantModal;
 
-console.log("✅ ai-assistant.js V4.0 loaded - SUPER POWERFULL AI with all actions!");
+console.log("✅ ai-assistant.js V5.1 loaded - SUPER POWERFULL AI with REAL DATABASE ACTIONS!");
