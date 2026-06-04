@@ -1,23 +1,66 @@
-// staff-attendance.js - VERSION 1.1 (FIXED - With Role-Based Menu Visibility)
-// Absensi Guru/Karyawan - Hanya untuk role Admin, Guru, Developer
+// staff-attendance.js - VERSION 2.0 (DENGAN ROLE BARU: WAKIL KEPALA SEKOLAH & STAFF TU)
+// Absensi Guru/Karyawan
+// Role yang didukung:
+// - Developer: akses penuh
+// - Admin (Kepala Sekolah): akses penuh
+// - Wakil Kepala Sekolah: akses penuh
+// - Staff TU: akses baca (dapat melihat absensi staff, TIDAK bisa absen/delete)
+// - Guru: akses penuh
+// - Siswa: TIDAK memiliki akses
 // ============================================================================
 
 let staffAttendanceDonutChart = null;
 let staffAttendanceListener = null;
 let staffAttendanceInitialized = false;
 
-// ======================= CEK AKSES ========================
+// ======================= ROLE HELPER FUNCTIONS ========================
 
-function canManageStaff() {
+function getRoleDisplayName(role) {
+    const names = {
+        developer: 'Developer',
+        admin: 'Kepala Sekolah',
+        wakil_kepala: 'Wakil Kepala Sekolah',
+        staff_tu: 'Staff TU',
+        guru: 'Guru',
+        siswa: 'Siswa'
+    };
+    return names[role] || role.toUpperCase();
+}
+
+function getRoleIcon(role) {
+    const icons = {
+        developer: '👨‍💻',
+        admin: '👑',
+        wakil_kepala: '👔',
+        staff_tu: '📋',
+        guru: '👨‍🏫',
+        siswa: '👨‍🎓'
+    };
+    return icons[role] || '👤';
+}
+
+function canManageStaffAttendance() {
     if (!currentUser) return false;
-    return (currentUser.role === 'admin' || currentUser.role === 'guru' || currentUser.role === 'developer');
+    const manageRoles = ['admin', 'developer', 'wakil_kepala', 'guru'];
+    return manageRoles.includes(currentUser.role);
+}
+
+function canViewStaffAttendance() {
+    if (!currentUser) return false;
+    const viewRoles = ['admin', 'developer', 'wakil_kepala', 'staff_tu', 'guru'];
+    return viewRoles.includes(currentUser.role);
+}
+
+function canDeleteStaffAttendance() {
+    if (!currentUser) return false;
+    const deleteRoles = ['admin', 'developer'];
+    return deleteRoles.includes(currentUser.role);
 }
 
 function isStaffAttendanceVisible() {
     if (!currentUser) return false;
-    // Menu Absensi Staff hanya untuk Admin, Guru, dan Developer
-    // SISWA TIDAK BISA MELIHAT MENU ABSENSI STAFF
-    return (currentUser.role === 'admin' || currentUser.role === 'guru' || currentUser.role === 'developer');
+    const visibleRoles = ['admin', 'developer', 'wakil_kepala', 'staff_tu', 'guru'];
+    return visibleRoles.includes(currentUser.role);
 }
 
 // ======================= RENDER TABEL ABSENSI STAFF ========================
@@ -25,13 +68,13 @@ function isStaffAttendanceVisible() {
 function renderStaffAttendanceTable() {
     console.log("📊 renderStaffAttendanceTable dipanggil");
     
-    // Jika user tidak berhak, jangan tampilkan
     if (!isStaffAttendanceVisible()) {
         console.log("🔒 Staff Attendance table hidden for role:", currentUser?.role);
         const tbody = document.getElementById('tbody-staff-attendance');
         if (tbody) {
-            tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:30px;">
-                🔒 Anda tidak memiliki akses ke halaman ini.
+            const roleDisplay = getRoleDisplayName(currentUser?.role);
+            tbody.innerHTML = `<td><td colspan="7" style="text-align:center; padding:30px;">
+                🔒 ${roleDisplay} tidak memiliki akses ke halaman ini.
             <\/td><\/tr>`;
         }
         return;
@@ -79,7 +122,6 @@ function renderStaffAttendanceTable() {
     const todayStr = new Date().toISOString().split('T')[0];
     let targetDate = filterDate === 'today' ? todayStr : filterDate;
     
-    // Tampilkan loading
     tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:30px;">
         <div style="display:inline-block; width:30px; height:30px; border:3px solid var(--border); border-top-color:#00bcd4; border-radius:50%; animation: spin 1s linear infinite;"></div>
         <div style="margin-top:10px;">⏳ Memuat data absensi staff...</div>
@@ -100,14 +142,16 @@ function renderStaffAttendanceTable() {
         if (attendanceList.length === 0) {
             tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:30px;">
                 📭 Belum ada data absensi staff pada tanggal ${targetDate}
-                <br><br>
-                <small>💡 Klik tombol "Absen Masuk Staff" untuk menambahkan absensi.</small>
+                ${canManageStaffAttendance() ? '<br><br><small>💡 Klik tombol "Absen Masuk Staff" untuk menambahkan absensi.</small>' : ''}
             <\/td><\/tr>`;
             updateStaffAttendanceStats(attendanceList, targetDate);
             return;
         }
         
-        const canDelete = canManageStaff();
+        const canManage = canManageStaffAttendance();
+        const canDelete = canDeleteStaffAttendance();
+        const isStaffTU = currentUser?.role === 'staff_tu';
+        
         tbody.innerHTML = '';
         
         for (const row of attendanceList) {
@@ -128,6 +172,8 @@ function renderStaffAttendanceTable() {
             let actionButtons = '';
             if (canDelete) {
                 actionButtons = `<button onclick="deleteStaffAttendance('${targetDate}', '${row.staffId}')" title="Hapus" style="background:#f44336; border:none; border-radius:8px; padding:5px 10px; cursor:pointer; color:white;">🗑️</button>`;
+            } else if (isStaffTU) {
+                actionButtons = '<span style="color:#888;">🔒 Read only</span>';
             } else {
                 actionButtons = '-';
             }
@@ -166,7 +212,6 @@ function getStaffPhotoUrlForAttendance(staffId, staffName) {
         return `https://ui-avatars.com/api/?name=${encodeURIComponent(initial)}&background=ff9800&color=fff&size=100&bold=true`;
     }
     
-    // Cek cache
     if (window.staffPhotoCache && window.staffPhotoCache.has(staffId)) {
         return window.staffPhotoCache.get(staffId);
     }
@@ -187,7 +232,6 @@ function getStaffPhotoUrlForAttendance(staffId, staffName) {
         photoUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(initial)}&background=ff9800&color=fff&size=100&bold=true`;
     }
     
-    // Simpan ke cache jika tersedia
     if (window.staffPhotoCache) {
         window.staffPhotoCache.set(staffId, photoUrl);
     }
@@ -226,12 +270,12 @@ function updateStaffAttendanceStats(attendanceList, date) {
 let currentStaffListForAttendance = [];
 
 function openSimulateStaffInModal() {
-    if (!canManageStaff()) {
-        showToast("⛔ Hanya Admin, Guru, dan Developer yang dapat mensimulasikan absen staff!", "error");
+    if (!canManageStaffAttendance()) {
+        const roleDisplay = getRoleDisplayName(currentUser?.role);
+        showToast(`⛔ ${roleDisplay} tidak dapat melakukan absen staff!`, "error");
         return;
     }
     
-    // Ambil data staff dari database
     firebase.database().ref('staff').once('value', (snapshot) => {
         const data = snapshot.val();
         currentStaffListForAttendance = [];
@@ -242,16 +286,21 @@ function openSimulateStaffInModal() {
             });
         }
         
-        // Juga ambil dari users_auth yang memiliki role guru
         if (window.dbData && window.dbData.users_auth) {
-            const guruUsers = window.dbData.users_auth.filter(u => u.role === 'guru' || u.role === 'developer');
-            guruUsers.forEach(user => {
+            const staffUsers = window.dbData.users_auth.filter(u => ['guru', 'developer', 'wakil_kepala', 'staff_tu', 'admin'].includes(u.role));
+            staffUsers.forEach(user => {
                 const existing = currentStaffListForAttendance.find(s => s.id === user.uid || s.id === user.staffId);
                 if (!existing) {
+                    let jabatan = 'Guru';
+                    if (user.role === 'developer') jabatan = 'Developer';
+                    else if (user.role === 'admin') jabatan = 'Kepala Sekolah';
+                    else if (user.role === 'wakil_kepala') jabatan = 'Wakil Kepala Sekolah';
+                    else if (user.role === 'staff_tu') jabatan = 'Staff TU';
+                    
                     currentStaffListForAttendance.push({
                         id: user.uid,
                         nama: user.nama || user.email?.split('@')[0] || 'Unknown',
-                        jabatan: user.role === 'developer' ? 'Developer' : 'Guru',
+                        jabatan: jabatan,
                         email: user.email,
                         source: 'user_auth'
                     });
@@ -387,7 +436,7 @@ async function executeSimulateStaffIn() {
         showToast(`✅ Absen masuk berhasil untuk ${nama} (${timeStr})`, "success");
         
         if (typeof logActivity === 'function') {
-            logActivity('simulate_staff_attendance_in', `Absen masuk staff: ${nama} (ID: ${staffId}) - Waktu: ${timeStr}`);
+            logActivity('simulate_staff_attendance_in', `Absen masuk staff: ${nama} (ID: ${staffId}) - Waktu: ${timeStr} oleh ${getRoleDisplayName(currentUser.role)}`);
         }
         
         closeModal('modal-simulate-staff-in');
@@ -405,8 +454,9 @@ async function executeSimulateStaffIn() {
 let currentStaffListForOut = [];
 
 function openSimulateStaffOutModal() {
-    if (!canManageStaff()) {
-        showToast("⛔ Hanya Admin, Guru, dan Developer yang dapat mensimulasikan pulang staff!", "error");
+    if (!canManageStaffAttendance()) {
+        const roleDisplay = getRoleDisplayName(currentUser?.role);
+        showToast(`⛔ ${roleDisplay} tidak dapat melakukan absen pulang staff!`, "error");
         return;
     }
     
@@ -535,7 +585,7 @@ async function executeSimulateStaffOut() {
         showToast(`✅ ${nama} berhasil absen pulang pukul ${timeOutStr}`, "success");
         
         if (typeof logActivity === 'function') {
-            logActivity('simulate_staff_attendance_out', `Absen pulang staff: ${nama} (ID: ${staffId}) - Waktu: ${timeOutStr}`);
+            logActivity('simulate_staff_attendance_out', `Absen pulang staff: ${nama} (ID: ${staffId}) - Waktu: ${timeOutStr} oleh ${getRoleDisplayName(currentUser.role)}`);
         }
         
         closeModal('modal-simulate-staff-out');
@@ -551,8 +601,8 @@ async function executeSimulateStaffOut() {
 // ======================= HAPUS ABSENSI STAFF ========================
 
 async function deleteStaffAttendance(date, staffId) {
-    if (!canManageStaff()) {
-        showToast("⛔ Anda tidak memiliki akses!", "error");
+    if (!canDeleteStaffAttendance()) {
+        showToast("⛔ Hanya Kepala Sekolah dan Developer yang dapat menghapus absensi staff!", "error");
         return;
     }
     
@@ -563,7 +613,7 @@ async function deleteStaffAttendance(date, staffId) {
         showToast("✅ Data absensi berhasil dihapus!", "success");
         
         if (typeof logActivity === 'function') {
-            logActivity('delete_staff_attendance', `Hapus absensi staff ID: ${staffId} tanggal ${date}`);
+            logActivity('delete_staff_attendance', `Hapus absensi staff ID: ${staffId} tanggal ${date} oleh ${getRoleDisplayName(currentUser.role)}`);
         }
         
         renderStaffAttendanceTable();
@@ -603,8 +653,8 @@ function showStaffPhotoModalForAttendance(staffId, staffName, photoUrl) {
 // ======================= EXPORT EXCEL ========================
 
 async function exportStaffAttendanceToExcel() {
-    if (!isStaffAttendanceVisible()) {
-        showToast("⛔ Anda tidak memiliki akses!", "error");
+    if (!canViewStaffAttendance()) {
+        showToast("⛔ Anda tidak memiliki akses untuk mengekspor data absensi staff!", "error");
         return;
     }
     
@@ -641,7 +691,7 @@ async function exportStaffAttendanceToExcel() {
     showToast("📥 Laporan absensi staff berhasil diunduh!", "success");
     
     if (typeof logActivity === 'function') {
-        logActivity('export_staff_attendance_excel', `Ekspor absensi staff tanggal ${targetDate} (${attendanceList.length} data)`);
+        logActivity('export_staff_attendance_excel', `Ekspor absensi staff tanggal ${targetDate} (${attendanceList.length} data) oleh ${getRoleDisplayName(currentUser.role)}`);
     }
 }
 
@@ -655,7 +705,6 @@ function initStaffAttendance() {
     
     console.log("📊 Initializing Staff Attendance system...");
     
-    // Tunggu currentUser
     if (!currentUser) {
         console.log("⏳ Waiting for currentUser...");
         setTimeout(initStaffAttendance, 500);
@@ -674,7 +723,6 @@ function initStaffAttendance() {
 }
 
 function addStaffAttendanceTab() {
-    // Hanya tambah tab jika user berhak
     if (!isStaffAttendanceVisible()) {
         console.log("🔒 Staff Attendance tab not added - user role:", currentUser?.role);
         return;
@@ -682,7 +730,6 @@ function addStaffAttendanceTab() {
     
     if (document.getElementById('tab-staff-attendance')) return;
     
-    // Tambahkan tab button ke dropdown Menu Utama
     const dropdownMainContent = document.getElementById('dropdownMainContent');
     if (dropdownMainContent) {
         const existingBtn = Array.from(dropdownMainContent.children).find(btn => btn.innerHTML === '📋 Absensi Staff');
@@ -690,9 +737,8 @@ function addStaffAttendanceTab() {
             const staffAttendanceBtn = document.createElement('button');
             staffAttendanceBtn.setAttribute('onclick', "switchTab('staff-attendance'); closeAllDropdowns()");
             staffAttendanceBtn.innerHTML = '📋 Absensi Staff';
-            staffAttendanceBtn.className = 'role-admin role-guru role-developer';
+            staffAttendanceBtn.className = 'role-admin role-guru role-developer role-wakil role-staff-tu';
             
-            // Cari posisi setelah Absensi Siswa
             const attendanceBtn = Array.from(dropdownMainContent.children).find(btn => btn.textContent.includes('Absensi Siswa'));
             if (attendanceBtn && attendanceBtn.nextSibling) {
                 dropdownMainContent.insertBefore(staffAttendanceBtn, attendanceBtn.nextSibling);
@@ -703,11 +749,10 @@ function addStaffAttendanceTab() {
         }
     }
     
-    // Tambahkan tab content
     const dashboardSection = document.getElementById('dashboard-section');
     if (dashboardSection && !document.getElementById('tab-staff-attendance')) {
         const staffAttendanceTabHtml = `
-            <div id="tab-staff-attendance" class="tab-content role-admin role-guru role-developer">
+            <div id="tab-staff-attendance" class="tab-content role-admin role-guru role-developer role-wakil role-staff-tu">
                 <div class="info-banner" style="background: var(--bg-hover); padding: 12px 16px; border-radius: 12px; margin-bottom: 15px; border-left: 4px solid #00bcd4;">
                     <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
                         <span style="font-size: 24px;">💡</span>
@@ -756,7 +801,6 @@ function addStaffAttendanceTab() {
         `;
         dashboardSection.insertAdjacentHTML('beforeend', staffAttendanceTabHtml);
         
-        // Populate date options (7 hari terakhir)
         const dateSelect = document.getElementById('filterStaffDate');
         if (dateSelect) {
             for (let i = 1; i <= 7; i++) {
@@ -801,7 +845,6 @@ function escapeHtmlStaffAttendance(str) {
     return String(str).replace(/[&<>]/g, m => m === '&' ? '&amp;' : m === '<' ? '&lt;' : '&gt;');
 }
 
-// Tambahkan CSS animation untuk spinner jika belum ada
 if (!document.querySelector('#staff-attendance-spinner-style')) {
     const style = document.createElement('style');
     style.id = 'staff-attendance-spinner-style';
@@ -822,8 +865,13 @@ window.openSimulateStaffOutModal = openSimulateStaffOutModal;
 window.deleteStaffAttendance = deleteStaffAttendance;
 window.exportStaffAttendanceToExcel = exportStaffAttendanceToExcel;
 window.isStaffAttendanceVisible = isStaffAttendanceVisible;
+window.canManageStaffAttendance = canManageStaffAttendance;
+window.canViewStaffAttendance = canViewStaffAttendance;
+window.canDeleteStaffAttendance = canDeleteStaffAttendance;
+window.getRoleDisplayName = getRoleDisplayName;
+window.getRoleIcon = getRoleIcon;
 
-console.log("✅ staff-attendance.js V1.1 loaded - With role-based menu visibility (Siswa cannot see Staff Attendance)");
+console.log("✅ staff-attendance.js V2.0 loaded - Dengan role: Developer, Kepala Sekolah, Wakil Kepala Sekolah, Staff TU (read-only), Guru");
 
 // Auto-initialize when DOM ready
 if (document.readyState === 'loading') {

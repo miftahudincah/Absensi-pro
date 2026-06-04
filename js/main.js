@@ -1,18 +1,85 @@
-// main.js - VERSION 5.3 (DENGAN ROLE-BASED DASHBOARD & THEME MANAGEMENT)
+// main.js - VERSION 6.0 (DENGAN ROLE BARU: WAKIL KEPALA SEKOLAH & STAFF TU)
 // Fokus: Session persistence, Auth state handler, Periodic refresh,
-//        Dashboard dengan filter berdasarkan role (siswa hanya lihat kelasnya sendiri)
+//        Dashboard dengan filter berdasarkan role (role-based filtering)
 //        Theme management dark/light mode
-// PERUBAHAN V5.3: 
-//   - Menambahkan fitur Dark/Light Mode
-//   - Integrasi dengan dashboard.js untuk role-based filtering
-//   - Siswa hanya melihat data kelas dan jurusannya sendiri
-//   - Guru/Admin/Developer melihat semua data
+// Role yang didukung: developer, admin (Kepala Sekolah), wakil_kepala, staff_tu, guru, siswa
 // ============================================================================
 
 // ======================== GLOBAL VARIABLES ========================
 let refreshInterval = null;
 let isInitialized = false;
 let mainDataReadyListenerAdded = false;
+
+// ======================== ROLE HELPER FUNCTIONS ========================
+
+/**
+ * Mendapatkan display name role
+ */
+function getRoleDisplayName(role) {
+    const names = {
+        developer: 'Developer',
+        admin: 'Kepala Sekolah',
+        wakil_kepala: 'Wakil Kepala Sekolah',
+        staff_tu: 'Staff TU',
+        guru: 'Guru',
+        siswa: 'Siswa'
+    };
+    return names[role] || role.toUpperCase();
+}
+
+/**
+ * Mendapatkan icon untuk role
+ */
+function getRoleIcon(role) {
+    const icons = {
+        developer: '👨‍💻',
+        admin: '👑',
+        wakil_kepala: '👔',
+        staff_tu: '📋',
+        guru: '👨‍🏫',
+        siswa: '👨‍🎓'
+    };
+    return icons[role] || '👤';
+}
+
+/**
+ * Cek apakah user memiliki akses full (admin atau developer)
+ */
+function hasFullAccess(role) {
+    return role === 'admin' || role === 'developer';
+}
+
+/**
+ * Cek apakah user memiliki akses membaca semua data
+ */
+function hasReadAllAccess(role) {
+    const readAllRoles = ['admin', 'developer', 'wakil_kepala', 'guru', 'staff_tu'];
+    return readAllRoles.includes(role);
+}
+
+/**
+ * Cek apakah user memiliki akses manajemen (tambah/edit/hapus)
+ */
+function hasManagementAccess(role) {
+    const managementRoles = ['admin', 'developer', 'wakil_kepala', 'guru'];
+    return managementRoles.includes(role);
+}
+
+/**
+ * Cek apakah user dapat melihat rekap
+ */
+function canAccessRekap(role) {
+    const rekapRoles = ['admin', 'developer', 'wakil_kepala', 'guru', 'staff_tu'];
+    return rekapRoles.includes(role);
+}
+
+/**
+ * Cek apakah user dapat mengakses AI Summary
+ */
+function canAccessAISummary(role) {
+    const aiRoles = ['admin', 'developer', 'wakil_kepala', 'guru'];
+    return aiRoles.includes(role);
+}
 
 // ======================== SESSION PERSISTENCE ========================
 
@@ -31,6 +98,7 @@ function saveUserToLocalStorage(userData) {
         fpId: userData.fpId || null,
         photoUrl: userData.photoUrl || '',
         subject: userData.subject || '',
+        bidang: userData.bidang || '',
         registeredAt: userData.registeredAt
     };
     localStorage.setItem('currentUser', JSON.stringify(storageData));
@@ -61,7 +129,10 @@ function clearUserSession() {
 
 /**
  * Mendapatkan daftar siswa yang sesuai dengan role pengguna
- * - Admin/Guru/Developer: semua siswa
+ * - Admin/Developer: semua siswa
+ * - Wakil Kepala Sekolah: semua siswa
+ * - Staff TU: semua siswa (hanya baca)
+ * - Guru: semua siswa
  * - Siswa: hanya siswa dengan kelas & jurusan yang sama
  */
 function getFilteredStudentsForDashboard() {
@@ -70,9 +141,9 @@ function getFilteredStudentsForDashboard() {
     // Filter siswa yang valid (punya nama)
     const validStudents = dbData.users.filter(s => s && s.nama && s.nama !== 'Tidak Diketahui' && s.nama.trim() !== '');
     
-    // Admin, Guru, Developer melihat semua siswa
-    if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'guru' || currentUser.role === 'developer')) {
-        console.log("📊 Full access: menampilkan semua siswa");
+    // Role dengan akses baca semua data
+    if (currentUser && hasReadAllAccess(currentUser.role)) {
+        console.log(`📊 Full access (${getRoleDisplayName(currentUser.role)}): menampilkan semua siswa`);
         return validStudents;
     }
     
@@ -102,8 +173,8 @@ function getFilteredStudentsForDashboard() {
 function getFilteredAttendanceForDashboard() {
     if (!dbData.attendance) return [];
     
-    // Admin, Guru, Developer melihat semua absensi
-    if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'guru' || currentUser.role === 'developer')) {
+    // Role dengan akses baca semua data
+    if (currentUser && hasReadAllAccess(currentUser.role)) {
         return dbData.attendance;
     }
     
@@ -132,16 +203,14 @@ async function updateDashboardModern() {
     
     if (!dbData.attendance || dbData.attendance.length === 0) {
         console.log("⏳ Dashboard update skipped: attendance data not ready yet");
-        // Tetap tampilkan data siswa meskipun belum ada absensi
         const filteredStudents = getFilteredStudentsForDashboard();
         updateDashboardStatsOnly(filteredStudents.length);
         return;
     }
     
-    console.log("📊 Updating modern dashboard with role-based filtering...");
+    console.log(`📊 Updating modern dashboard with role-based filtering (${getRoleDisplayName(currentUser.role)})...`);
     
     try {
-        // Dapatkan data yang sudah difilter berdasarkan role
         const students = getFilteredStudentsForDashboard();
         const attendance = getFilteredAttendanceForDashboard();
         
@@ -151,12 +220,10 @@ async function updateDashboardModern() {
         const today = new Date().toISOString().split('T')[0];
         let todayAttendance = attendance.filter(a => a.date === today);
         
-        // Filter hari libur jika fungsi tersedia
         if (typeof filterAttendanceByHoliday === 'function') {
             todayAttendance = filterAttendanceByHoliday(todayAttendance);
         }
         
-        // Hitung statistik
         let hadir = 0;
         let tidakHadir = 0;
         let terlambat = 0;
@@ -169,7 +236,6 @@ async function updateDashboardModern() {
                     hadirSet.add(record.studentId);
                     hadir++;
                 }
-                // Cek keterlambatan (jam masuk > 07:30)
                 if (record.timeIn && record.timeIn > '07:30') {
                     terlambatSet.add(record.studentId);
                 }
@@ -182,25 +248,16 @@ async function updateDashboardModern() {
         const persenTidakHadir = totalSiswa > 0 ? ((tidakHadir / totalSiswa) * 100).toFixed(1) : 0;
         const persenTerlambat = totalSiswa > 0 ? ((terlambat / totalSiswa) * 100).toFixed(1) : 0;
         
-        // Update statistik cards
         updateDashboardStatsUI(totalSiswa, hadir, tidakHadir, terlambat, persenHadir, persenTidakHadir, persenTerlambat, trendSiswa);
-        
-        // ========== Kehadiran per Kelas (progress bar) ==========
         renderClassAttendanceForDashboard(students, attendance, today);
-        
-        // ========== Absensi Terbaru (5 data terakhir) ==========
         renderRecentAttendanceForDashboard(attendance);
-        
-        // ========== Update info role di dashboard ==========
         updateDashboardRoleInfoUI();
         
-        // ========== GRAFIK MINGGUAN ==========
         if (typeof window.updateDashboardChart === 'function') {
-            // Untuk chart, gunakan data attendance yang sudah difilter
             window.updateDashboardChart();
         }
         
-        console.log(`✅ Dashboard updated: ${totalSiswa} siswa, ${hadir} hadir hari ini`);
+        console.log(`✅ Dashboard updated: ${totalSiswa} siswa, ${hadir} hadir hari ini (${getRoleDisplayName(currentUser.role)})`);
         
     } catch (err) {
         console.error("Error updating dashboard modern:", err);
@@ -265,7 +322,6 @@ function renderClassAttendanceForDashboard(students, attendance, today) {
     
     let kelasMap = new Map();
     
-    // Untuk siswa, hanya tampilkan kelasnya sendiri
     if (currentUser && currentUser.role === 'siswa') {
         const userKelas = currentUser.kelas;
         const userJurusan = currentUser.jurusan;
@@ -286,11 +342,9 @@ function renderClassAttendanceForDashboard(students, attendance, today) {
             const total = siswaDiKelas.length;
             const hadir = hadirDiKelas.size;
             const persen = total > 0 ? (hadir / total) * 100 : 0;
-            
             kelasMap.set(userKelas, { total, hadir, persen: persen.toFixed(1) });
         }
     } else {
-        // Admin/Guru/Developer: tampilkan semua kelas
         students.forEach(s => {
             const kelas = s.kelas || 'Tanpa Kelas';
             if (!kelasMap.has(kelas)) {
@@ -308,14 +362,12 @@ function renderClassAttendanceForDashboard(students, attendance, today) {
             }
         });
         
-        // Hitung persentase
         for (let [kelas, data] of kelasMap) {
             const persen = data.total > 0 ? (data.hadir / data.total) * 100 : 0;
             kelasMap.set(kelas, { ...data, persen: persen.toFixed(1) });
         }
     }
     
-    // Urutkan berdasarkan persentase
     const sortedKelas = Array.from(kelasMap.entries())
         .sort((a, b) => parseFloat(b[1].persen) - parseFloat(a[1].persen));
     
@@ -368,7 +420,6 @@ function updateDashboardRoleInfoUI() {
     
     const infoContainer = document.getElementById('dashboardRoleInfo');
     if (!infoContainer) {
-        // Create info container if not exists
         const statsGrid = document.querySelector('.stats-grid');
         if (statsGrid && !document.getElementById('dashboardRoleInfo')) {
             const infoDiv = document.createElement('div');
@@ -380,12 +431,15 @@ function updateDashboardRoleInfoUI() {
         }
     }
     
+    const roleIcon = getRoleIcon(currentUser.role);
+    const roleDisplay = getRoleDisplayName(currentUser.role);
     const infoEl = document.getElementById('dashboardRoleInfo');
+    
     if (infoEl) {
         if (currentUser.role === 'siswa') {
             infoEl.innerHTML = `
                 <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-                    <span>👨‍🎓 <strong>Mode Siswa</strong></span>
+                    <span>${roleIcon} <strong>Mode ${roleDisplay}</strong></span>
                     <span style="color: var(--text-muted);">|</span>
                     <span>📚 Kelas: <strong>${currentUser.kelas || '-'}</strong></span>
                     <span>🎓 Jurusan: <strong>${currentUser.jurusan || '-'}</strong></span>
@@ -395,23 +449,41 @@ function updateDashboardRoleInfoUI() {
         } else if (currentUser.role === 'guru') {
             infoEl.innerHTML = `
                 <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-                    <span>👨‍🏫 <strong>Mode Guru</strong></span>
+                    <span>${roleIcon} <strong>Mode ${roleDisplay}</strong></span>
                     <span style="color: var(--text-muted);">|</span>
                     <span>📚 Mata Pelajaran: <strong>${currentUser.subject || '-'}</strong></span>
+                    <span style="color: #00bcd4; font-size: 12px;">ℹ️ Dashboard menampilkan semua data siswa</span>
+                </div>
+            `;
+        } else if (currentUser.role === 'wakil_kepala') {
+            infoEl.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                    <span>${roleIcon} <strong>Mode ${roleDisplay}</strong></span>
+                    <span style="color: var(--text-muted);">|</span>
+                    <span>📋 Bidang: <strong>${currentUser.bidang || '-'}</strong></span>
+                    <span style="color: #00bcd4; font-size: 12px;">ℹ️ Dashboard menampilkan semua data siswa</span>
+                </div>
+            `;
+        } else if (currentUser.role === 'staff_tu') {
+            infoEl.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                    <span>${roleIcon} <strong>Mode ${roleDisplay}</strong></span>
+                    <span style="color: var(--text-muted);">|</span>
+                    <span>📋 Departemen: <strong>${currentUser.departemen || '-'}</strong></span>
                     <span style="color: #00bcd4; font-size: 12px;">ℹ️ Dashboard menampilkan semua data siswa</span>
                 </div>
             `;
         } else if (currentUser.role === 'admin') {
             infoEl.innerHTML = `
                 <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-                    <span>👑 <strong>Mode Administrator</strong></span>
+                    <span>${roleIcon} <strong>Mode ${roleDisplay}</strong></span>
                     <span style="color: #00bcd4; font-size: 12px;">ℹ️ Dashboard menampilkan semua data siswa</span>
                 </div>
             `;
         } else if (currentUser.role === 'developer') {
             infoEl.innerHTML = `
                 <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-                    <span>👨‍💻 <strong>Mode Developer</strong></span>
+                    <span>${roleIcon} <strong>Mode ${roleDisplay}</strong></span>
                     <span style="color: #00bcd4; font-size: 12px;">ℹ️ Dashboard menampilkan semua data siswa</span>
                 </div>
             `;
@@ -465,6 +537,14 @@ function initAuthStateHandler() {
                 const snapshot = await db.ref('users_auth/' + user.uid).once('value');
                 if (snapshot.exists()) {
                     const userData = snapshot.val();
+                    
+                    // Validasi role
+                    const validRoles = ['developer', 'admin', 'wakil_kepala', 'staff_tu', 'guru', 'siswa'];
+                    if (!userData.role || !validRoles.includes(userData.role)) {
+                        userData.role = 'siswa';
+                        console.log("🔧 Fixed invalid role to:", userData.role);
+                    }
+                    
                     currentUser = { uid: user.uid, email: user.email, ...userData };
                     if (currentUser.kelas) currentUser.kelas = currentUser.kelas.toUpperCase();
                     saveUserToLocalStorage(currentUser);
@@ -476,15 +556,13 @@ function initAuthStateHandler() {
                     await loadDashboardComponents();
                     if (typeof initApp === 'function') initApp();
                     
-                    // Inisialisasi dashboard dengan filter role
                     if (typeof initDashboard === 'function') {
                         initDashboard();
                     } else {
-                        // Fallback ke updateDashboardModern jika dashboard.js tidak ada
                         setTimeout(() => updateDashboardModern(), 100);
                     }
                     
-                    console.log("✅ Login successful for:", currentUser.nama, "Role:", currentUser.role);
+                    console.log(`✅ Login successful for: ${currentUser.nama}, Role: ${getRoleDisplayName(currentUser.role)}`);
                 } else {
                     console.warn("⚠️ User data not found!");
                     clearUserSession();
@@ -560,27 +638,18 @@ function resetAppState() {
 
 /**
  * Inisialisasi tema (dark/light mode)
- * - Membaca preferensi dari localStorage
- * - Menerapkan tema yang sesuai
- * - Menambahkan event listener ke tombol toggle
  */
 function initTheme() {
     console.log("🎨 Initializing theme system...");
     
-    // Baca tema yang tersimpan, default ke 'dark'
     const savedTheme = localStorage.getItem('theme') || 'dark';
-    
-    // Terapkan tema
     applyTheme(savedTheme);
     
-    // Setup tombol toggle tema
     const themeToggleBtn = document.getElementById('themeToggleBtn');
     if (themeToggleBtn) {
-        // Hapus event listener lama jika ada (untuk mencegah duplikasi)
         const newToggleBtn = themeToggleBtn.cloneNode(true);
         themeToggleBtn.parentNode.replaceChild(newToggleBtn, themeToggleBtn);
         
-        // Tambah event listener baru
         newToggleBtn.addEventListener('click', () => {
             const currentTheme = document.body.classList.contains('light-mode') ? 'light' : 'dark';
             const newTheme = currentTheme === 'light' ? 'dark' : 'light';
@@ -601,7 +670,6 @@ function applyTheme(theme) {
     const isLight = theme === 'light';
     const toggleBtn = document.getElementById('themeToggleBtn');
     
-    // Terapkan class ke body
     if (isLight) {
         document.body.classList.add('light-mode');
         if (toggleBtn) toggleBtn.innerHTML = '☀️';
@@ -612,18 +680,14 @@ function applyTheme(theme) {
         console.log("🌙 Dark mode activated");
     }
     
-    // Simpan ke localStorage
     localStorage.setItem('theme', theme);
-    
-    // Update komponen yang membutuhkan refresh tema
     refreshThemeDependentComponents();
 }
 
 /**
- * Refresh komponen yang bergantung pada tema (chart, dll)
+ * Refresh komponen yang bergantung pada tema
  */
 function refreshThemeDependentComponents() {
-    // Update dashboard chart jika ada
     if (typeof updateDashboardChart === 'function') {
         setTimeout(() => {
             try {
@@ -635,7 +699,6 @@ function refreshThemeDependentComponents() {
         }, 100);
     }
     
-    // Update attendance donut chart jika ada
     if (typeof updateAttendanceDonutChart === 'function') {
         setTimeout(() => {
             try {
@@ -647,7 +710,6 @@ function refreshThemeDependentComponents() {
         }, 150);
     }
     
-    // Update rekap charts jika tab rekap aktif
     if (typeof loadRekap === 'function' && document.getElementById('tab-rekap')?.classList.contains('active')) {
         setTimeout(() => {
             try {
@@ -659,14 +721,6 @@ function refreshThemeDependentComponents() {
         }, 200);
     }
     
-    // Update weekly chart jika ada
-    const weeklyChartCanvas = document.getElementById('weeklyBarChart');
-    if (weeklyChartCanvas && window.dashboardChart) {
-        // Chart akan otomatis update dengan warna baru karena menggunakan CSS variables
-        console.log("📈 Weekly chart will use new theme colors");
-    }
-    
-    // Update sensor status panel jika ada
     const sensorPanel = document.getElementById('sensorStatusPanel');
     if (sensorPanel && sensorPanel.style.display !== 'none') {
         if (typeof refreshSensorStatus === 'function') {
@@ -691,7 +745,7 @@ function getCurrentTheme() {
 }
 
 /**
- * Toggle tema secara manual (alternatif)
+ * Toggle tema secara manual
  */
 function toggleTheme() {
     const currentTheme = getCurrentTheme();
@@ -728,6 +782,15 @@ window.updateDashboardModern = updateDashboardModern;
 window.getFilteredStudentsForDashboard = getFilteredStudentsForDashboard;
 window.getFilteredAttendanceForDashboard = getFilteredAttendanceForDashboard;
 
+// Ekspor fungsi role helper
+window.getRoleDisplayName = getRoleDisplayName;
+window.getRoleIcon = getRoleIcon;
+window.hasFullAccess = hasFullAccess;
+window.hasReadAllAccess = hasReadAllAccess;
+window.hasManagementAccess = hasManagementAccess;
+window.canAccessRekap = canAccessRekap;
+window.canAccessAISummary = canAccessAISummary;
+
 // Ekspor fungsi tema
 window.initTheme = initTheme;
 window.applyTheme = applyTheme;
@@ -746,7 +809,6 @@ function waitForFirebaseAndInit() {
     }
     setupDataReadyListener();
     
-    // Inisialisasi tema setelah DOM siap
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', () => {
             setTimeout(() => initTheme(), 50);
@@ -763,4 +825,4 @@ function waitForFirebaseAndInit() {
 }
 
 waitForFirebaseAndInit();
-console.log("✅ main.js V5.3 loaded - Role-based dashboard filtering & Theme management integrated");
+console.log("✅ main.js V6.0 loaded - Role-based dashboard filtering (Developer, Kepala Sekolah, Wakil Kepala Sekolah, Staff TU, Guru, Siswa) & Theme management integrated");

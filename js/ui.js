@@ -1,9 +1,6 @@
-// ui.js - VERSION 5.18 (FIX: USER NAME & ROLE SYNC ISSUE)
+// ui.js - VERSION 6.0 (DENGAN ROLE BARU: WAKIL KEPALA SEKOLAH & STAFF TU)
 // Berisi fungsi-fungsi antarmuka pengguna, modal, profil, dan inisialisasi dashboard
-// PERUBAHAN V5.18: 
-//   - Memperbaiki updateUserInterface() untuk update navbar user (nama & role)
-//   - Menambahkan force update setelah login untuk memastikan data sinkron
-//   - Menambahkan validasi dan perbaikan data user saat login
+// Role yang didukung: developer, admin (Kepala Sekolah), wakil_kepala, staff_tu, guru, siswa
 // ============================================================================
 
 // ======================== GLOBAL UI STATE ========================
@@ -16,6 +13,107 @@ const MAX_POPULATE_RETRY = 20;
 let chatRenderRetryCount = 0;
 const MAX_CHAT_RENDER_RETRY = 10;
 let photoRefreshListenerAttached = false;
+
+// ======================== ROLE HELPER FUNCTIONS ========================
+
+/**
+ * Mendapatkan display name role
+ */
+function getRoleDisplayName(role) {
+    const names = {
+        developer: 'Developer',
+        admin: 'Kepala Sekolah',
+        wakil_kepala: 'Wakil Kepala Sekolah',
+        staff_tu: 'Staff TU',
+        guru: 'Guru',
+        siswa: 'Siswa'
+    };
+    return names[role] || role.toUpperCase();
+}
+
+/**
+ * Mendapatkan icon untuk role
+ */
+function getRoleIcon(role) {
+    const icons = {
+        developer: '👨‍💻',
+        admin: '👑',
+        wakil_kepala: '👔',
+        staff_tu: '📋',
+        guru: '👨‍🏫',
+        siswa: '👨‍🎓'
+    };
+    return icons[role] || '👤';
+}
+
+/**
+ * Mendapatkan class CSS untuk role badge
+ */
+function getRoleBadgeClass(role) {
+    const classes = {
+        developer: 'role-developer',
+        admin: 'role-admin',
+        wakil_kepala: 'role-wakil-kepala',
+        staff_tu: 'role-staff-tu',
+        guru: 'role-guru',
+        siswa: 'role-siswa'
+    };
+    return classes[role] || 'role-siswa';
+}
+
+/**
+ * Cek apakah user memiliki akses admin (Kepala Sekolah atau Developer)
+ */
+function isAdminOrDev(role) {
+    return role === 'admin' || role === 'developer';
+}
+
+/**
+ * Cek apakah user memiliki akses guru (termasuk admin, wakil, staff_tu, developer)
+ */
+function isGuruOrHigher(role) {
+    const allowedRoles = ['admin', 'developer', 'wakil_kepala', 'staff_tu', 'guru'];
+    return allowedRoles.includes(role);
+}
+
+/**
+ * Cek apakah user memiliki akses manajemen penuh
+ */
+function hasFullAccess(role) {
+    return role === 'admin' || role === 'developer';
+}
+
+/**
+ * Cek apakah user dapat mengakses config
+ */
+function canAccessConfig(role) {
+    const allowedRoles = ['admin', 'developer', 'wakil_kepala'];
+    return allowedRoles.includes(role);
+}
+
+/**
+ * Cek apakah user dapat mengakses logs
+ */
+function canAccessLogs(role) {
+    const allowedRoles = ['admin', 'developer', 'wakil_kepala'];
+    return allowedRoles.includes(role);
+}
+
+/**
+ * Cek apakah user dapat mengelola user
+ */
+function canManageUsers(role) {
+    const allowedRoles = ['admin', 'developer'];
+    return allowedRoles.includes(role);
+}
+
+/**
+ * Cek apakah user dapat mengelola pengumuman
+ */
+function canManageAnnouncements(role) {
+    const allowedRoles = ['admin', 'developer', 'wakil_kepala', 'guru'];
+    return allowedRoles.includes(role);
+}
 
 // ======================== HELPER FUNCTIONS ========================
 
@@ -59,18 +157,18 @@ function validateAndFixCurrentUser() {
         currentUser.role = 'developer';
         changed = true;
         console.log("🔧 Fixed role to developer for:", currentUser.email);
-        // Update ke Firebase
         if (currentUser.uid) {
             db.ref(`users_auth/${currentUser.uid}/role`).set('developer')
                 .catch(err => console.warn("Failed to update role in Firebase:", err));
         }
     }
     
-    // Pastikan role tidak undefined
-    if (!currentUser.role) {
+    // Validasi role yang valid
+    const validRoles = ['developer', 'admin', 'wakil_kepala', 'staff_tu', 'guru', 'siswa'];
+    if (!currentUser.role || !validRoles.includes(currentUser.role)) {
         currentUser.role = 'siswa';
         changed = true;
-        console.log("🔧 Fixed missing role to:", currentUser.role);
+        console.log("🔧 Fixed invalid role to:", currentUser.role);
     }
     
     if (changed) {
@@ -92,20 +190,16 @@ function refreshAllAvatars() {
     
     console.log("🖼️ refreshAllAvatars called - Current photoUrl:", currentUser.photoUrl);
     
-    // Gunakan timestamp untuk bypass cache browser
     const timestamp = Date.now();
     let photoUrl = currentUser.photoUrl;
     
-    // Jika tidak ada foto, gunakan avatar default dari UI Avatars
     if (!photoUrl) {
         photoUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser.nama || 'User')}&background=00bcd4&color=fff&size=100`;
     } else {
-        // Tambahkan timestamp ke URL untuk force refresh
         const separator = photoUrl.includes('?') ? '&' : '?';
         photoUrl = photoUrl.split('?')[0] + separator + 't=' + timestamp;
     }
     
-    // Update semua element avatar yang ada
     const avatarElements = [
         'headerAvatar',
         'navbarAvatar', 
@@ -121,19 +215,16 @@ function refreshAllAvatars() {
         }
     });
     
-    // Update juga gambar di sidebar user info jika ada struktur berbeda
     const sidebarUserImg = document.querySelector('#sidebarUserInfo img');
     if (sidebarUserImg && photoUrl) {
         sidebarUserImg.src = photoUrl;
     }
     
-    // Update navbar user image jika ada
     const navbarUserImg = document.querySelector('.navbar-user img');
     if (navbarUserImg && photoUrl) {
         navbarUserImg.src = photoUrl;
     }
     
-    // Update header user image jika ada struktur berbeda
     const headerUserImg = document.querySelector('.header-user img');
     if (headerUserImg && photoUrl) {
         headerUserImg.src = photoUrl;
@@ -262,9 +353,8 @@ function updateSidebarUserInfo() {
         sidebarUserName.textContent = currentUser.nama || currentUser.email;
     }
     if (sidebarUserRole) {
-        let roleText = currentUser.role?.toUpperCase() || 'SISWA';
-        if (currentUser.role === 'developer') roleText = 'DEVELOPER';
-        sidebarUserRole.textContent = roleText;
+        sidebarUserRole.textContent = getRoleDisplayName(currentUser.role);
+        sidebarUserRole.className = `role-badge ${getRoleBadgeClass(currentUser.role)}`;
     }
     
     if (sidebarClassInfo) {
@@ -304,8 +394,11 @@ function applySidebarRolePermissions() {
     if (!currentUser) return;
     
     const role = currentUser.role;
-    const isAdminOrDev = (role === 'admin' || role === 'developer');
-    const isGuruOrDev = (role === 'admin' || role === 'guru' || role === 'developer');
+    const hasFull = hasFullAccess(role);
+    const hasGuruAccess = isGuruOrHigher(role);
+    const canAccessConfigMenu = canAccessConfig(role);
+    const canAccessLogsMenu = canAccessLogs(role);
+    const canManageUsersMenu = canManageUsers(role);
     
     const sidebarBtns = document.querySelectorAll('.sidebar-btn');
     sidebarBtns.forEach(btn => {
@@ -313,34 +406,24 @@ function applySidebarRolePermissions() {
         const hasRoleAdmin = btn.classList.contains('role-admin');
         const hasRoleGuru = btn.classList.contains('role-guru');
         const hasRoleDeveloper = btn.classList.contains('role-developer');
+        const hasRoleWakil = btn.classList.contains('role-wakil');
+        const hasRoleStaffTu = btn.classList.contains('role-staff-tu');
         
         // Tombol Pengaturan (config)
         if (btnTab === 'config') {
-            if (isGuruOrDev) {
-                btn.style.display = 'flex';
-            } else {
-                btn.style.display = 'none';
-            }
+            btn.style.display = canAccessConfigMenu ? 'flex' : 'none';
             return;
         }
         
         // Tombol Log Aktivitas (logs)
         if (btnTab === 'logs') {
-            if (isGuruOrDev) {
-                btn.style.display = 'flex';
-            } else {
-                btn.style.display = 'none';
-            }
+            btn.style.display = canAccessLogsMenu ? 'flex' : 'none';
             return;
         }
         
         // Tombol Manajemen User (users)
         if (btnTab === 'users') {
-            if (isGuruOrDev) {
-                btn.style.display = 'flex';
-            } else {
-                btn.style.display = 'none';
-            }
+            btn.style.display = canManageUsersMenu ? 'flex' : 'none';
             return;
         }
         
@@ -350,14 +433,26 @@ function applySidebarRolePermissions() {
             return;
         }
         
-        // Tombol dengan class role-admin
-        if (hasRoleAdmin && !isAdminOrDev) {
+        // Tombol dengan class role-admin (Kepala Sekolah)
+        if (hasRoleAdmin && !hasFull) {
             btn.style.display = 'none';
             return;
         }
         
         // Tombol dengan class role-guru
-        if (hasRoleGuru && !isGuruOrDev) {
+        if (hasRoleGuru && !hasGuruAccess) {
+            btn.style.display = 'none';
+            return;
+        }
+        
+        // Tombol dengan class role-wakil (Wakil Kepala Sekolah)
+        if (hasRoleWakil && role !== 'wakil_kepala' && !hasFull) {
+            btn.style.display = 'none';
+            return;
+        }
+        
+        // Tombol dengan class role-staff-tu (Staff TU)
+        if (hasRoleStaffTu && role !== 'staff_tu' && !hasFull) {
             btn.style.display = 'none';
             return;
         }
@@ -369,9 +464,6 @@ function applySidebarRolePermissions() {
 
 // ======================== FUNGSI KHUSUS UNTUK CHAT RENDER ========================
 
-/**
- * Memastikan chat container siap dan merender chat dengan retry mechanism
- */
 function forceRenderChat() {
     console.log("💬 forceRenderChat called - Chat render retry count:", chatRenderRetryCount);
     
@@ -386,22 +478,15 @@ function forceRenderChat() {
         return;
     }
     
-    // Reset retry counter on success
     chatRenderRetryCount = 0;
-    
-    // Bersihkan container
     chatPanel.innerHTML = '<div class="chat-loading" style="text-align: center; padding: 40px; color: var(--text-muted);">⏳ Memuat fitur chat...</div>';
-    
-    // Pastikan container terlihat
     chatPanel.style.display = 'block';
     chatPanel.style.minHeight = '500px';
     
-    // Inisialisasi chat system jika belum
     if (typeof initChatSystem === 'function' && !window._chatInitialized) {
         console.log("💬 Initializing chat system from forceRenderChat...");
         window._chatInitialized = true;
         initChatSystem();
-        // Beri waktu untuk inisialisasi
         setTimeout(() => {
             if (typeof renderChatInterface === 'function') {
                 renderChatInterface('chatPanel');
@@ -422,14 +507,10 @@ function forceRenderChat() {
     }
 }
 
-/**
- * Fungsi untuk memeriksa dan memastikan chat container sudah ter-render dengan benar
- */
 function ensureChatRendered() {
     const chatPanel = document.getElementById('chatPanel');
     if (!chatPanel) return false;
     
-    // Cek apakah chat container sudah memiliki struktur chat-container
     const hasChatContainer = chatPanel.querySelector('.chat-container');
     if (!hasChatContainer) {
         console.log("⚠️ Chat container not found in chatPanel, forcing render...");
@@ -437,7 +518,6 @@ function ensureChatRendered() {
         return false;
     }
     
-    // Cek apakah chat list sudah terisi
     const chatList = document.getElementById('chatList');
     if (chatList && (chatList.innerHTML.includes('Memuat chat') || chatList.children.length === 0)) {
         console.log("⚠️ Chat list not loaded, reloading...");
@@ -463,7 +543,6 @@ function initApp() {
         return;
     }
     
-    // ========== VALIDASI DAN PERBAIKAN DATA USER ==========
     validateAndFixCurrentUser();
     
     const authSection = document.getElementById('auth-section');
@@ -471,7 +550,6 @@ function initApp() {
     if (authSection) authSection.style.display = 'none';
     if (dashboardSection) dashboardSection.style.display = 'block';
     
-    // Update UI utama
     updateUserInterface();
     applyRolePermissions();
     initSidebar();
@@ -479,11 +557,8 @@ function initApp() {
     loadSchoolLogo();
     updateSchoolLogoUI();
     setupChartYearListener();
-    
-    // Setup realtime listener untuk foto profil
     setupPhotoRealtimeListener();
     
-    // ========== FORCE UPDATE SETELAH DELAY ==========
     setTimeout(() => {
         console.log("🔄 Force re-update UI after 1 second...");
         updateUserInterface();
@@ -493,7 +568,6 @@ function initApp() {
         applyRolePermissions();
     }, 1000);
     
-    // ========== FORCE UPDATE SETELAH 3 DETIK (UNTUK JAGA-JAGA) ==========
     setTimeout(() => {
         console.log("🔄 Second force re-update UI after 3 seconds...");
         updateUserInterface();
@@ -543,31 +617,26 @@ function initApp() {
     
     switchTab('dashboard');
     
-    // ========== FLOATING BUTTONS - PASTIKAN MUNCUL UNTUK SEMUA USER ==========
     setTimeout(() => {
-        // Tombol Chat - selalu tampil untuk semua user yang login
         const floatingChatBtn = document.getElementById('floatingChatBtn');
         if (floatingChatBtn) {
             floatingChatBtn.style.display = 'flex';
             console.log("✅ Floating chat button shown");
         }
         
-        // Tombol Friends - selalu tampil untuk semua user yang login
         const floatingFriendsBtn = document.getElementById('floatingFriendsBtn');
         if (floatingFriendsBtn) {
             floatingFriendsBtn.style.display = 'flex';
             console.log("✅ Floating friends button shown");
         }
         
-        // Tombol Status - selalu tampil untuk semua user yang login
         const floatingStatusBtn = document.getElementById('floatingStatusBtn');
         if (floatingStatusBtn) {
             floatingStatusBtn.style.display = 'flex';
             console.log("✅ Floating status button shown");
         }
         
-        // Tombol Pengumuman - hanya untuk admin, guru, developer
-        if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'guru' || currentUser.role === 'developer')) {
+        if (currentUser && canManageAnnouncements(currentUser.role)) {
             const floatingAnnouncementBtn = document.getElementById('floatingAnnouncementBtn');
             if (floatingAnnouncementBtn) {
                 floatingAnnouncementBtn.style.display = 'flex';
@@ -704,8 +773,7 @@ function setupChartYearListener() {
 }
 
 /**
- * UPDATE USER INTERFACE - Versi lengkap dengan update navbar user
- * Memperbaiki masalah nama user dan role yang tidak sinkron
+ * UPDATE USER INTERFACE - Versi lengkap dengan semua role baru
  */
 function updateUserInterface() {
     if (!currentUser) {
@@ -714,6 +782,10 @@ function updateUserInterface() {
     }
     
     console.log("🎨 updateUserInterface called for user:", currentUser.nama, "Role:", currentUser.role);
+    
+    const roleDisplay = getRoleDisplayName(currentUser.role);
+    const roleIcon = getRoleIcon(currentUser.role);
+    const roleClass = getRoleBadgeClass(currentUser.role);
     
     // ========== UPDATE USER PROFILE DISPLAY (Header) ==========
     const userProfileDisplay = document.getElementById('userProfileDisplay');
@@ -731,34 +803,12 @@ function updateUserInterface() {
     // ========== UPDATE ROLE DISPLAY DI HEADER ==========
     const userRoleDisplay = document.getElementById('userRoleDisplay');
     if (userRoleDisplay) {
-        let roleText = '';
-        let roleIcon = '';
-        
-        switch(currentUser.role) {
-            case 'developer':
-                roleText = 'DEVELOPER';
-                roleIcon = '👨‍💻';
-                break;
-            case 'admin':
-                roleText = 'ADMIN';
-                roleIcon = '👑';
-                break;
-            case 'guru':
-                roleText = 'GURU';
-                roleIcon = '👨‍🏫';
-                break;
-            default:
-                roleText = 'SISWA';
-                roleIcon = '👨‍🎓';
-                break;
-        }
-        
-        userRoleDisplay.textContent = `${roleIcon} ${roleText}`;
-        userRoleDisplay.className = `role-badge role-${currentUser.role}`;
-        console.log("✅ userRoleDisplay updated to:", roleText);
+        userRoleDisplay.textContent = `${roleIcon} ${roleDisplay}`;
+        userRoleDisplay.className = `role-badge ${roleClass}`;
+        console.log("✅ userRoleDisplay updated to:", roleDisplay);
     }
     
-    // ========== UPDATE NAVBAR USER (PENTING UNTUK MENU DROPDOWN) ==========
+    // ========== UPDATE NAVBAR USER ==========
     const navbarUserName = document.getElementById('navbarUserName');
     if (navbarUserName) {
         navbarUserName.textContent = currentUser.nama || currentUser.email || 'User';
@@ -767,15 +817,9 @@ function updateUserInterface() {
     
     const navbarUserRole = document.getElementById('navbarUserRole');
     if (navbarUserRole) {
-        let roleText = '';
-        switch(currentUser.role) {
-            case 'developer': roleText = 'DEVELOPER'; break;
-            case 'admin': roleText = 'ADMIN'; break;
-            case 'guru': roleText = 'GURU'; break;
-            default: roleText = 'SISWA';
-        }
-        navbarUserRole.textContent = roleText;
-        console.log("✅ navbarUserRole updated to:", roleText);
+        navbarUserRole.textContent = roleDisplay;
+        navbarUserRole.className = `role-badge ${roleClass}`;
+        console.log("✅ navbarUserRole updated to:", roleDisplay);
     }
     
     // ========== UPDATE CLASS DISPLAY ==========
@@ -787,6 +831,9 @@ function updateUserInterface() {
             userClassDisplay.style.display = 'inline-flex';
         } else if (currentUser.role === 'guru' && currentUser.subject) {
             userClassDisplay.innerHTML = `📖 ${currentUser.subject}`;
+            userClassDisplay.style.display = 'inline-flex';
+        } else if ((currentUser.role === 'wakil_kepala' || currentUser.role === 'staff_tu') && currentUser.bidang) {
+            userClassDisplay.innerHTML = `📋 ${currentUser.bidang}`;
             userClassDisplay.style.display = 'inline-flex';
         } else {
             userClassDisplay.style.display = 'none';
@@ -801,10 +848,8 @@ function updateUserInterface() {
         console.log("✅ navbarAvatar updated");
     }
     
-    // Refresh semua avatar
     refreshAllAvatars();
     
-    // Update sidebar user info juga
     if (typeof updateSidebarUserInfo === 'function') {
         updateSidebarUserInfo();
     }
@@ -860,7 +905,7 @@ function formatDelayText(delayMinutes) {
     return `${minutes} menit`;
 }
 
-// ======================== LOGO SEKOLAH (SUPABASE INTEGRATION) ========================
+// ======================== LOGO SEKOLAH ========================
 function loadSchoolLogo() {
     if (typeof db === 'undefined' || !db) {
         console.warn("Firebase db not available for loading logo");
@@ -886,7 +931,7 @@ function loadSchoolLogo() {
                     previewLogo.src = logoUrl;
                     previewLogo.classList.remove('skeleton');
                 }
-                if (btnRemove && currentUser && (currentUser.role === 'admin' || currentUser.role === 'developer')) {
+                if (btnRemove && currentUser && hasFullAccess(currentUser.role)) {
                     btnRemove.style.display = 'inline-block';
                 }
                 console.log("🏫 Logo sekolah loaded:", logoUrl);
@@ -917,8 +962,8 @@ async function uploadSchoolLogo(input) {
         showToast('Anda harus login!', 'error');
         return;
     }
-    if (currentUser.role !== 'admin' && currentUser.role !== 'developer') {
-        showToast('⛔ Hanya Admin atau Developer yang dapat mengubah logo sekolah!', 'error');
+    if (!hasFullAccess(currentUser.role)) {
+        showToast('⛔ Hanya Kepala Sekolah dan Developer yang dapat mengubah logo sekolah!', 'error');
         return;
     }
     if (!input.files || !input.files[0]) return;
@@ -978,7 +1023,7 @@ async function uploadSchoolLogo(input) {
         showToast(`✅ Logo sekolah berhasil diperbarui!${fallbackMsg}`, 'success');
         
         if (typeof logActivity === 'function') {
-            logActivity('upload_school_logo', `Upload logo sekolah${result.isFallback ? ' (fallback ImgBB)' : ' (Supabase)'}`);
+            logActivity('upload_school_logo', `Upload logo sekolah${result.isFallback ? ' (fallback ImgBB)' : ' (Supabase)'} oleh ${getRoleDisplayName(currentUser.role)}`);
         }
         
         if (result.isFallback) {
@@ -1006,8 +1051,8 @@ async function removeSchoolLogo() {
         showToast('Anda harus login!', 'error');
         return;
     }
-    if (currentUser.role !== 'admin' && currentUser.role !== 'developer') {
-        showToast('⛔ Hanya Admin atau Developer yang dapat menghapus logo sekolah!', 'error');
+    if (!hasFullAccess(currentUser.role)) {
+        showToast('⛔ Hanya Kepala Sekolah dan Developer yang dapat menghapus logo sekolah!', 'error');
         return;
     }
     if (!confirm('⚠️ Yakin ingin menghapus logo sekolah?\n\nLogo akan kembali ke default.')) return;
@@ -1032,7 +1077,7 @@ async function removeSchoolLogo() {
         showToast('✅ Logo sekolah berhasil dihapus', 'success');
         
         if (typeof logActivity === 'function') {
-            logActivity('remove_school_logo', 'Menghapus logo sekolah');
+            logActivity('remove_school_logo', `Menghapus logo sekolah oleh ${getRoleDisplayName(currentUser.role)}`);
         }
         
         const defaultIcon = 'https://ui-avatars.com/api/?name=S&background=00bcd4&color=fff&size=80';
@@ -1059,7 +1104,8 @@ function updateSchoolLogoUI() {
         const uploadHint = logoSettingGroup.querySelector('.logo-upload-hint');
         const removeBtn = document.getElementById('btnRemoveLogo');
         const previewWrapper = logoSettingGroup.querySelector('.logo-preview-wrapper');
-        const isAdminOrDev = (currentUser.role === 'admin' || currentUser.role === 'developer');
+        const isAdminOrDev = hasFullAccess(currentUser.role);
+        
         if (!isAdminOrDev) {
             if (uploadHint) uploadHint.style.display = 'none';
             if (removeBtn) removeBtn.style.display = 'none';
@@ -1108,35 +1154,37 @@ function applyRolePermissions() {
     const role = currentUser.role;
     console.log("🎭 Apply role permissions untuk role:", role);
     
-    const isAdminOrDev = (role === 'admin' || role === 'developer');
-    const isGuruOrDev = (role === 'admin' || role === 'guru' || role === 'developer');
+    const hasFull = hasFullAccess(role);
+    const hasGuruAccess = isGuruOrHigher(role);
+    const canAccessConfigMenu = canAccessConfig(role);
+    const canAccessLogsMenu = canAccessLogs(role);
+    const canManageUsersMenu = canManageUsers(role);
+    const canManageAnnouncementsMenu = canManageAnnouncements(role);
     
     // ========== UNTUK ELEMEN DENGAN CLASS role-admin ==========
     document.querySelectorAll('.role-admin').forEach(el => {
-        if (isAdminOrDev) {
-            el.style.display = '';
-            el.style.visibility = 'visible';
-            el.style.opacity = '1';
-        } else {
-            el.style.display = 'none';
-        }
+        el.style.display = hasFull ? '' : 'none';
     });
     
     // ========== UNTUK ELEMEN DENGAN CLASS role-guru ==========
     document.querySelectorAll('.role-guru').forEach(el => {
-        if (isGuruOrDev) {
-            el.style.display = '';
-            el.style.visibility = 'visible';
-            el.style.opacity = '1';
-        } else {
-            el.style.display = 'none';
-        }
+        el.style.display = hasGuruAccess ? '' : 'none';
+    });
+    
+    // ========== UNTUK ELEMEN DENGAN CLASS role-wakil (Wakil Kepala Sekolah) ==========
+    document.querySelectorAll('.role-wakil').forEach(el => {
+        el.style.display = (role === 'wakil_kepala' || hasFull) ? '' : 'none';
+    });
+    
+    // ========== UNTUK ELEMEN DENGAN CLASS role-staff-tu (Staff TU) ==========
+    document.querySelectorAll('.role-staff-tu').forEach(el => {
+        el.style.display = (role === 'staff_tu' || hasFull) ? '' : 'none';
     });
     
     // ========== BUTTON PENGUMUMAN ==========
     const btnAnnouncement = document.querySelector('.btn-announcement');
     if (btnAnnouncement) {
-        btnAnnouncement.style.display = isGuruOrDev ? 'inline-flex' : 'none';
+        btnAnnouncement.style.display = canManageAnnouncementsMenu ? 'inline-flex' : 'none';
     }
     
     // ========== FLOATING BUTTONS ==========
@@ -1157,7 +1205,7 @@ function applyRolePermissions() {
     
     const floatingAnnouncementBtn = document.getElementById('floatingAnnouncementBtn');
     if (floatingAnnouncementBtn) {
-        floatingAnnouncementBtn.style.display = isGuruOrDev ? 'flex' : 'none';
+        floatingAnnouncementBtn.style.display = canManageAnnouncementsMenu ? 'flex' : 'none';
     }
     
     // ========== NAV TABS (DESKTOP) ==========
@@ -1182,16 +1230,24 @@ function applyRolePermissions() {
                 const hasRoleDeveloper = btn.classList.contains('role-developer');
                 const hasRoleAdmin = btn.classList.contains('role-admin');
                 const hasRoleGuru = btn.classList.contains('role-guru');
+                const hasRoleWakil = btn.classList.contains('role-wakil');
+                const hasRoleStaffTu = btn.classList.contains('role-staff-tu');
                 
                 let shouldShow = true;
                 
                 if (hasRoleDeveloper && role !== 'developer') {
                     shouldShow = false;
                 }
-                else if (hasRoleAdmin && !isAdminOrDev) {
+                else if (hasRoleAdmin && !hasFull) {
                     shouldShow = false;
                 }
-                else if (hasRoleGuru && !isGuruOrDev) {
+                else if (hasRoleGuru && !hasGuruAccess) {
+                    shouldShow = false;
+                }
+                else if (hasRoleWakil && role !== 'wakil_kepala' && !hasFull) {
+                    shouldShow = false;
+                }
+                else if (hasRoleStaffTu && role !== 'staff_tu' && !hasFull) {
                     shouldShow = false;
                 }
                 
@@ -1200,9 +1256,9 @@ function applyRolePermissions() {
         }
     }
     
-    // ========== FORCE SHOW UNTUK CONFIG DAN LOGS DI DESKTOP ==========
+    // ========== FORCE SHOW UNTUK CONFIG DAN LOGS ==========
     setTimeout(() => {
-        if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'guru' || currentUser.role === 'developer')) {
+        if (currentUser && canAccessConfigMenu) {
             const configBtn = document.querySelector('.tab-btn[onclick*="switchTab(\'config\')"]');
             if (configBtn) {
                 configBtn.style.display = '';
@@ -1210,7 +1266,9 @@ function applyRolePermissions() {
                 configBtn.style.opacity = '1';
                 console.log("✅ Config button force shown");
             }
-            
+        }
+        
+        if (currentUser && canAccessLogsMenu) {
             const logsBtn = document.querySelector('.tab-btn[onclick*="switchTab(\'logs\')"]');
             if (logsBtn) {
                 logsBtn.style.display = '';
@@ -1239,7 +1297,7 @@ function updateClock() {
     }
 }
 
-// ======================== SWITCH TAB (DIPERBAIKI UNTUK CHAT) ========================
+// ======================== SWITCH TAB ========================
 function switchTab(tabId) {
     console.log("📑 Switching to tab:", tabId);
     document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
@@ -1277,14 +1335,11 @@ function switchTab(tabId) {
             if (typeof loadFriendRequests === 'function') loadFriendRequests();
             if (typeof loadFriendsList === 'function') loadFriendsList();
         } else if (tabId === 'chat') {
-            // ========== PERBAIKAN UNTUK CHAT ==========
             console.log("💬 Switching to chat tab, calling forceRenderChat...");
-            // Bersihkan container terlebih dahulu
             const chatPanel = document.getElementById('chatPanel');
             if (chatPanel) {
                 chatPanel.innerHTML = '<div class="chat-loading" style="text-align: center; padding: 40px; color: var(--text-muted);">⏳ Memuat fitur chat...</div>';
             }
-            // Panggil forceRenderChat untuk memastikan chat tampil
             forceRenderChat();
         } else if (tabId === 'logs') {
             if (typeof initLogsSystem === 'function') {
@@ -1327,6 +1382,8 @@ function showToast(msg, type = 'success') {
 }
 
 // ======================== DASHBOARD MODERN FUNCTIONS ========================
+// (fungsi debugAttendanceData, updateYearDropdownOptions, renderDashboard, 
+//  updateDashboardChart, renderRecentActivities, renderDashboardTasks tetap sama)
 
 function debugAttendanceData() {
     console.log("========== DEBUG DATA ABSENSI ==========");
@@ -1612,13 +1669,17 @@ function openProfileModal() {
     if (profileJurusan) profileJurusan.value = currentUser.jurusan || '';
     const profileSubject = document.getElementById('profileSubject');
     if (profileSubject) profileSubject.value = currentUser.subject || '';
+    const profileBidang = document.getElementById('profileBidang');
+    if (profileBidang) profileBidang.value = currentUser.bidang || '';
 
     const nameInput = document.getElementById('profileNameInput');
     const kelasInput = document.getElementById('profileKelas');
     const jurusanInput = document.getElementById('profileJurusan');
     const subjectGroup = document.getElementById('group-subject');
+    const bidangGroup = document.getElementById('group-bidang');
     const saveBtn = document.querySelector('#modal-profile .btn-save');
     let delayGroup = document.getElementById('group-profile-delay');
+    
     if (!delayGroup) {
         const jurusanDiv = document.getElementById('profileJurusan')?.parentElement;
         if (jurusanDiv && currentUser.role === 'siswa') {
@@ -1630,19 +1691,39 @@ function openProfileModal() {
             delayGroup = newDelayGroup;
         }
     }
+    
+    // Role-based form visibility
     if (currentUser.role === 'siswa') {
         if (nameInput) { nameInput.readOnly = true; nameInput.style.cssText = 'border:none;background:transparent;color:#888'; }
         if (kelasInput) { kelasInput.readOnly = true; kelasInput.style.cssText = 'border:none;background:transparent'; }
         if (jurusanInput) { jurusanInput.readOnly = true; jurusanInput.style.cssText = 'border:none;background:transparent'; }
         if (subjectGroup) subjectGroup.style.display = 'none';
+        if (bidangGroup) bidangGroup.style.display = 'none';
         if (saveBtn) saveBtn.style.display = 'none';
         if (delayGroup) delayGroup.style.display = 'block';
         updateProfileDelayDisplay();
+    } else if (currentUser.role === 'guru') {
+        if (nameInput) { nameInput.readOnly = false; nameInput.style.cssText = 'border:1px solid var(--border);background:#2c2c2c;color:#fff'; }
+        if (kelasInput) { kelasInput.readOnly = true; kelasInput.style.cssText = 'border:none;background:transparent;color:#888'; }
+        if (jurusanInput) { jurusanInput.readOnly = true; jurusanInput.style.cssText = 'border:none;background:transparent;color:#888'; }
+        if (subjectGroup) subjectGroup.style.display = 'block';
+        if (bidangGroup) bidangGroup.style.display = 'none';
+        if (saveBtn) saveBtn.style.display = 'block';
+        if (delayGroup) delayGroup.style.display = 'none';
+    } else if (currentUser.role === 'wakil_kepala' || currentUser.role === 'staff_tu') {
+        if (nameInput) { nameInput.readOnly = false; nameInput.style.cssText = 'border:1px solid var(--border);background:#2c2c2c;color:#fff'; }
+        if (kelasInput) { kelasInput.readOnly = true; kelasInput.style.cssText = 'border:none;background:transparent;color:#888'; }
+        if (jurusanInput) { jurusanInput.readOnly = true; jurusanInput.style.cssText = 'border:none;background:transparent;color:#888'; }
+        if (subjectGroup) subjectGroup.style.display = 'none';
+        if (bidangGroup) bidangGroup.style.display = 'block';
+        if (saveBtn) saveBtn.style.display = 'block';
+        if (delayGroup) delayGroup.style.display = 'none';
     } else {
         if (nameInput) { nameInput.readOnly = false; nameInput.style.cssText = 'border:1px solid var(--border);background:#2c2c2c;color:#fff'; }
-        if (kelasInput) { kelasInput.readOnly = false; kelasInput.style.cssText = 'border:1px solid var(--border);background:#2c2c2c'; }
-        if (jurusanInput) { jurusanInput.readOnly = false; jurusanInput.style.cssText = 'border:1px solid var(--border);background:#2c2c2c'; }
-        if (subjectGroup) subjectGroup.style.display = 'block';
+        if (kelasInput) { kelasInput.readOnly = true; kelasInput.style.cssText = 'border:none;background:transparent;color:#888'; }
+        if (jurusanInput) { jurusanInput.readOnly = true; jurusanInput.style.cssText = 'border:none;background:transparent;color:#888'; }
+        if (subjectGroup) subjectGroup.style.display = 'none';
+        if (bidangGroup) bidangGroup.style.display = 'none';
         if (saveBtn) saveBtn.style.display = 'block';
         if (delayGroup) delayGroup.style.display = 'none';
     }
@@ -1677,15 +1758,19 @@ function closeModal(id) {
     if (modal) modal.classList.remove('open');
 }
 
-// ======================== UPDATE PROFIL (DENGAN LOG) ========================
+// ======================== UPDATE PROFIL ========================
 function handleUpdateProfileInfo() {
     if (!currentUser) { showToast('Anda harus login terlebih dahulu!', 'error'); return; }
     if (currentUser.role === 'siswa') { showToast('Siswa tidak dapat mengubah data profil. Hubungi Admin/Guru.', 'error'); return; }
+    
     const newNama = document.getElementById('profileNameInput').value.trim();
-    const newKelas = document.getElementById('profileKelas').value.toUpperCase();
-    const newJurusan = document.getElementById('profileJurusan').value;
-    const newSubject = document.getElementById('profileSubject').value;
+    const newKelas = document.getElementById('profileKelas')?.value.toUpperCase() || '';
+    const newJurusan = document.getElementById('profileJurusan')?.value || '';
+    const newSubject = document.getElementById('profileSubject')?.value || '';
+    const newBidang = document.getElementById('profileBidang')?.value || '';
+    
     if (!newNama) { showToast('Nama wajib diisi!', 'error'); return; }
+    
     const btn = document.querySelector('#modal-profile .btn-save');
     if (!btn) return;
     const originalText = btn.innerText;
@@ -1696,14 +1781,23 @@ function handleUpdateProfileInfo() {
     const oldKelas = currentUser.kelas;
     const oldJurusan = currentUser.jurusan;
     const oldSubject = currentUser.subject;
+    const oldBidang = currentUser.bidang;
     
-    const updateData = { nama: newNama, kelas: newKelas, jurusan: newJurusan, subject: newSubject };
+    const updateData = { 
+        nama: newNama, 
+        kelas: newKelas, 
+        jurusan: newJurusan, 
+        subject: newSubject,
+        bidang: newBidang
+    };
+    
     db.ref(`users_auth/${currentUser.uid}`).update(updateData)
         .then(() => {
             currentUser.nama = newNama;
             currentUser.kelas = newKelas;
             currentUser.jurusan = newJurusan;
             currentUser.subject = newSubject;
+            currentUser.bidang = newBidang;
             if (typeof saveUserToLocalStorage === 'function') saveUserToLocalStorage(currentUser);
             showToast('✅ Profil berhasil diperbarui');
             
@@ -1713,6 +1807,7 @@ function handleUpdateProfileInfo() {
                 if (oldKelas !== newKelas) changes.push(`kelas: ${oldKelas} → ${newKelas}`);
                 if (oldJurusan !== newJurusan) changes.push(`jurusan: ${oldJurusan} → ${newJurusan}`);
                 if (oldSubject !== newSubject) changes.push(`subject: ${oldSubject} → ${newSubject}`);
+                if (oldBidang !== newBidang) changes.push(`bidang: ${oldBidang} → ${newBidang}`);
                 if (changes.length) {
                     logActivity('update_profile', `Memperbarui profil: ${changes.join(', ')}`);
                 } else {
@@ -1763,7 +1858,7 @@ function handleChangePassword(e) {
         .finally(() => { if (btn) { btn.disabled = false; btn.textContent = 'Simpan'; } });
 }
 
-// ======================== UPLOAD PROFILE PHOTO (SUPABASE) DENGAN PERBAIKAN ========================
+// ======================== UPLOAD PROFILE PHOTO ========================
 async function uploadProfilePhoto(input) {
     if (!input.files || !input.files[0]) return;
     
@@ -1805,30 +1900,23 @@ async function uploadProfilePhoto(input) {
         
         await db.ref(`users_auth/${currentUser.uid}`).update({ photoUrl: result.url });
         
-        // Update currentUser object
         const oldPhotoUrl = currentUser.photoUrl;
         currentUser.photoUrl = result.url;
         
-        // Simpan ke localStorage
         if (typeof saveUserToLocalStorage === 'function') {
             saveUserToLocalStorage(currentUser);
         }
         
-        // ========== PERBAIKAN: Refresh semua avatar dengan force ==========
         refreshAllAvatars();
-        
-        // Juga update modal profile image
         imgEl.src = result.url;
         
         const fallbackMsg = result.isFallback ? ' (via ImgBB fallback)' : '';
         showToast(`✅ Foto profil berhasil diperbarui!${fallbackMsg}`, 'success');
         
-        // LOG: Upload foto profil
         if (typeof logActivity === 'function') {
-            logActivity('upload_profile_photo', `Upload foto profil${result.isFallback ? ' (fallback ImgBB)' : ' (Supabase)'}`);
+            logActivity('upload_profile_photo', `Upload foto profil${result.isFallback ? ' (fallback ImgBB)' : ' (Supabase)'} oleh ${getRoleDisplayName(currentUser.role)}`);
         }
         
-        // Optional: Tampilkan info jika menggunakan fallback
         if (result.isFallback) {
             console.warn('Supabase gagal, menggunakan ImgBB sebagai fallback');
             setTimeout(() => {
@@ -1902,17 +1990,17 @@ function toggleGenerateInput() {
         if (desc) desc.innerText = '🔒 Kode akan dikunci ke ID Siswa terpilih.';
     } else {
         if (selectGroup) selectGroup.style.display = 'none';
-        if (desc) desc.innerText = '🔓 Kode bebas digunakan oleh Guru mana saja.';
+        if (desc) desc.innerText = '🔓 Kode bebas digunakan oleh Guru/Staff.';
     }
 }
 
-// ======================== PENGATURAN NAMA SEKOLAH (DENGAN LOG) ========================
+// ======================== PENGATURAN NAMA SEKOLAH ========================
 function saveSchoolName() {
     if (!currentUser) { showToast('Anda harus login!', 'error'); return; }
     const newSchoolName = document.getElementById('inputSchoolName').value.trim();
     if (!newSchoolName) { showToast('Nama sekolah tidak boleh kosong!', 'error'); return; }
-    if (currentUser.role !== 'admin' && currentUser.role !== 'developer') {
-        showToast('⛔ Hanya Admin atau Developer yang bisa mengubah nama sekolah.', 'error');
+    if (!hasFullAccess(currentUser.role)) {
+        showToast('⛔ Hanya Kepala Sekolah dan Developer yang bisa mengubah nama sekolah.', 'error');
         return;
     }
     
@@ -1931,7 +2019,7 @@ function saveSchoolName() {
             if (headerTitle) headerTitle.textContent = newSchoolName;
             
             if (typeof logActivity === 'function') {
-                logActivity('save_school_name', `Mengubah nama sekolah dari "${oldSchoolName}" menjadi "${newSchoolName}"`);
+                logActivity('save_school_name', `Mengubah nama sekolah dari "${oldSchoolName}" menjadi "${newSchoolName}" oleh ${getRoleDisplayName(currentUser.role)}`);
             }
         })
         .catch(err => { console.error('Save school name error:', err); showToast('❌ Gagal update: ' + err.message, 'error'); })
@@ -1958,12 +2046,12 @@ function renderUsersTable() {
     const search = searchInput ? searchInput.value.toLowerCase() : '';
     tbody.innerHTML = '';
     if (!dbData.users_auth || dbData.users_auth.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:20px; color:#888;">📭 Tidak ada pengguna ditemukan.${search ? '<br><small>Coba kata kunci lain</small>' : ''}NonNull</div></div>`;
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:20px; color:#888;">📭 Tidak ada pengguna ditemukan.${search ? '<br><small>Coba kata kunci lain</small>' : ''}<\/td><\/tr>`;
         return;
     }
     let data = dbData.users_auth.filter(u => u.nama && u.nama.toLowerCase().includes(search));
     if (data.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:20px; color:#888;">🔍 Tidak ada pengguna yang cocok dengan pencarian.${search ? '<br><small>Coba kata kunci lain</small>' : ''}</div></div>`;
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:20px; color:#888;">🔍 Tidak ada pengguna yang cocok dengan pencarian.${search ? '<br><small>Coba kata kunci lain</small>' : ''}<\/td><\/tr>`;
         return;
     }
     data.forEach(u => {
@@ -1971,35 +2059,39 @@ function renderUsersTable() {
         const avatar = u.photoUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.nama || 'User')}&background=random&color=fff&size=32`;
         let roleHtml = '', actionsHtml = '-';
         const isDeveloper = (u.role === 'developer');
+        const canManage = currentUser && (currentUser.role === 'admin' || currentUser.role === 'developer');
         
         if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'developer') && !isMe && !isDeveloper) {
             roleHtml = `<select class="form-control" onchange="updateUserRole('${u.uid}', this.value)" style="background:#2c2c2c; color:white; border:1px solid #444; padding:5px; border-radius:4px; font-size:0.8rem;">
-                <option value="siswa" ${u.role === 'siswa' ? 'selected' : ''}>📚 Siswa</option>
+                <option value="siswa" ${u.role === 'siswa' ? 'selected' : ''}>👨‍🎓 Siswa</option>
                 <option value="guru" ${u.role === 'guru' ? 'selected' : ''}>👨‍🏫 Guru</option>
-                <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>👑 Admin</option>
+                <option value="staff_tu" ${u.role === 'staff_tu' ? 'selected' : ''}>📋 Staff TU</option>
+                <option value="wakil_kepala" ${u.role === 'wakil_kepala' ? 'selected' : ''}>👔 Wakil Kepala Sekolah</option>
+                <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>👑 Kepala Sekolah</option>
             </select>`;
             actionsHtml = `<button class="btn-icon delete" onclick="deleteUser('${u.uid}', '${escapeHtmlString(u.nama)}')" title="Hapus User" style="background:transparent; border:none; cursor:pointer; color:#f44336; font-size:18px;">🗑️</button>`;
         } else {
-            let roleClass = 'role-siswa', roleIcon = '📚';
-            if (u.role === 'admin') { roleClass = 'role-admin'; roleIcon = '👑'; }
-            else if (u.role === 'guru') { roleClass = 'role-guru'; roleIcon = '👨‍🏫'; }
-            else if (u.role === 'developer') { roleClass = 'role-developer'; roleIcon = '👨‍💻'; }
-            roleHtml = `<span class="role-badge ${roleClass}">${roleIcon} ${u.role.toUpperCase()}</span>`;
+            const roleIcon = getRoleIcon(u.role);
+            const roleDisplay = getRoleDisplayName(u.role);
+            let roleClass = getRoleBadgeClass(u.role);
+            roleHtml = `<span class="role-badge ${roleClass}">${roleIcon} ${roleDisplay}</span>`;
             if (isMe) roleHtml += ` <small style="color:#4a90e2;">(Anda)</small>`;
         }
         let detailText = '';
         if (u.role === 'siswa') detailText = `${u.kelas || '-'} / ${u.jurusan || '-'}`;
         else if (u.role === 'guru') detailText = u.subject || '-';
+        else if (u.role === 'staff_tu') detailText = u.departemen || 'Staff TU';
+        else if (u.role === 'wakil_kepala') detailText = u.bidang || 'Wakil Kepala Sekolah';
         else if (u.role === 'developer') detailText = 'Developer (Paten)';
-        else detailText = '-';
+        else detailText = 'Kepala Sekolah';
         tbody.innerHTML += `<tr>
-            <td style="text-align:center;"><img src="${avatar}" style="width:32px; height:32px; border-radius:50%; object-fit:cover;"></div>
-            <td><strong>${escapeHtmlString(u.nama)}</strong>${isMe ? '<br><small style="color:#4a90e2;">Akun Anda</small>' : ''}</div>
-            <td style="color:#aaa; font-size:0.9rem;">${u.email || '-'}</div>
-            <td>${roleHtml}</div>
-            <td style="color:#888; font-size:0.85rem;">${escapeHtmlString(detailText)}</div></div>
-            <td style="text-align:center;">${actionsHtml}</div></div>
-        `;
+            <td style="text-align:center;"><img src="${avatar}" style="width:32px; height:32px; border-radius:50%; object-fit:cover;"><\/td>
+            <td><strong>${escapeHtmlString(u.nama)}</strong>${isMe ? '<br><small style="color:#4a90e2;">Akun Anda</small>' : ''}<\/td>
+            <td style="color:#aaa; font-size:0.9rem;">${u.email || '-'}<\/td>
+            <td>${roleHtml}<\/td>
+            <td style="color:#888; font-size:0.85rem;">${escapeHtmlString(detailText)}<\/td>
+            <td style="text-align:center;">${actionsHtml}<\/td>
+        </tr>`;
     });
     console.log(`📊 renderUsersTable: ${data.length} users displayed`);
 }
@@ -2040,7 +2132,6 @@ function cleanupUI() {
     if (typeof cleanupSensorStatus === 'function') {
         cleanupSensorStatus();
     }
-    // Bersihkan listener foto profil
     if (photoRefreshListenerAttached && currentUser && currentUser.uid) {
         db.ref(`users_auth/${currentUser.uid}/photoUrl`).off('value');
         photoRefreshListenerAttached = false;
@@ -2083,6 +2174,18 @@ window.refreshAllAvatars = refreshAllAvatars;
 window.setupPhotoRealtimeListener = setupPhotoRealtimeListener;
 window.validateAndFixCurrentUser = validateAndFixCurrentUser;
 
+// Role helper exports
+window.getRoleDisplayName = getRoleDisplayName;
+window.getRoleIcon = getRoleIcon;
+window.getRoleBadgeClass = getRoleBadgeClass;
+window.isAdminOrDev = isAdminOrDev;
+window.isGuruOrHigher = isGuruOrHigher;
+window.hasFullAccess = hasFullAccess;
+window.canAccessConfig = canAccessConfig;
+window.canAccessLogs = canAccessLogs;
+window.canManageUsers = canManageUsers;
+window.canManageAnnouncements = canManageAnnouncements;
+
 // ======================== SIDEBAR EXPORTS ========================
 window.toggleSidebar = toggleSidebar;
 window.closeSidebar = closeSidebar;
@@ -2094,4 +2197,4 @@ window.applySidebarRolePermissions = applySidebarRolePermissions;
 // Debug function
 window.debugAttendanceData = debugAttendanceData;
 
-console.log("✅ ui.js V5.18 loaded - User name & role sync fixed!");
+console.log("✅ ui.js V6.0 loaded - Dengan role: Developer, Kepala Sekolah, Wakil Kepala Sekolah, Staff TU, Guru, Siswa");

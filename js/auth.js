@@ -1,8 +1,7 @@
-// auth.js - VERSI REGISTRASI LANGSUNG (QR SCANNER IMPROVED v2)
-// DENGAN DUKUNGAN ROLE DEVELOPER UNTUK zaki5go@gmail.com
-// DAN UPLOAD FOTO PROFIL KE SUPABASE (DELETE FOTO LAMA OTOMATIS)
-// DILENGKAPI DENGAN LOG AKTIVITAS (AUDIT TRAIL)
-// PERBAIKAN VERSI: Menambahkan refreshAllAvatars() setelah upload foto
+// auth.js - VERSION 5.0 (DENGAN ROLE BARU: WAKIL KEPALA SEKOLAH & STAFF TU)
+// Fitur: Registrasi langsung, QR Scanner, Upload foto profil ke Supabase
+// Role yang didukung: developer, admin (Kepala Sekolah), wakil_kepala, staff_tu, guru, siswa
+// ============================================================================
 
 let lastRegisterAttempt = 0;
 const REGISTER_COOLDOWN = 30000;
@@ -11,7 +10,72 @@ const REGISTER_COOLDOWN = 30000;
 let html5QrCode = null;
 let isScanning = false;
 
-// ======================= FUNGSI QR SCANNER (DIPERBAIKI) =======================
+// ======================= ROLE HELPER FUNCTIONS =======================
+
+/**
+ * Validasi apakah role valid
+ */
+function isValidRole(role) {
+    const validRoles = ['developer', 'admin', 'wakil_kepala', 'staff_tu', 'guru', 'siswa'];
+    return validRoles.includes(role);
+}
+
+/**
+ * Mendapatkan display name role
+ */
+function getRoleDisplayName(role) {
+    const names = {
+        developer: 'Developer',
+        admin: 'Kepala Sekolah',
+        wakil_kepala: 'Wakil Kepala Sekolah',
+        staff_tu: 'Staff TU',
+        guru: 'Guru',
+        siswa: 'Siswa'
+    };
+    return names[role] || role.toUpperCase();
+}
+
+/**
+ * Mendapatkan icon untuk role
+ */
+function getRoleIcon(role) {
+    const icons = {
+        developer: '👨‍💻',
+        admin: '👑',
+        wakil_kepala: '👔',
+        staff_tu: '📋',
+        guru: '👨‍🏫',
+        siswa: '👨‍🎓'
+    };
+    return icons[role] || '👤';
+}
+
+/**
+ * Update tampilan user interface berdasarkan role
+ */
+function updateUserInterfaceByRole() {
+    if (!currentUser) return;
+    
+    // Update navbar
+    const navbarUserRole = document.getElementById('navbarUserRole');
+    if (navbarUserRole) {
+        navbarUserRole.textContent = getRoleDisplayName(currentUser.role);
+    }
+    
+    // Update user role display
+    const userRoleDisplay = document.getElementById('userRoleDisplay');
+    if (userRoleDisplay) {
+        userRoleDisplay.textContent = `${getRoleIcon(currentUser.role)} ${getRoleDisplayName(currentUser.role)}`;
+    }
+    
+    // Update sidebar user role
+    const sidebarUserRole = document.getElementById('sidebarUserRole');
+    if (sidebarUserRole) {
+        sidebarUserRole.textContent = getRoleDisplayName(currentUser.role);
+    }
+}
+
+// ======================= FUNGSI QR SCANNER =======================
 
 function openQrScanner() {
     const modal = document.getElementById('modal-qr-scanner');
@@ -172,7 +236,7 @@ window.closeModal = function(id) {
     if (originalCloseModal) originalCloseModal(id);
 };
 
-// ======================= FUNGSI LOGIN (DENGAN DETEKSI DEVELOPER) =======================
+// ======================= FUNGSI LOGIN (DENGAN DETEKSI ROLE) =======================
 
 function handleLogin(e) {
     e.preventDefault();
@@ -193,26 +257,37 @@ function handleLogin(e) {
                 if (userData) {
                     if (userData.kelas) userData.kelas = userData.kelas.toUpperCase();
                     
-                    // ============ ROLE DEVELOPER ============
+                    // ============ ROLE DEVELOPER (SUPER ADMIN) ============
                     // Jika email adalah zaki5go@gmail.com, role dipaksa menjadi 'developer'
                     if (user.email === 'zaki5go@gmail.com') {
                         userData.role = 'developer';
-                        // Pastikan juga tersimpan di Firebase (jika belum)
                         if (snapshot.val().role !== 'developer') {
                             db.ref('users_auth/' + user.uid + '/role').set('developer');
                         }
+                    }
+                    
+                    // ============ VALIDASI ROLE ============
+                    // Pastikan role yang tersimpan valid
+                    if (!isValidRole(userData.role)) {
+                        console.warn(`⚠️ Role tidak valid: ${userData.role}, default ke siswa`);
+                        userData.role = 'siswa';
+                        db.ref('users_auth/' + user.uid + '/role').set('siswa');
                     }
                     // ========================================
                     
                     currentUser = { uid: user.uid, email: user.email, ...userData };
                     
+                    // Update UI berdasarkan role
+                    updateUserInterfaceByRole();
+                    
                     // LOG: Login berhasil
                     if (typeof logActivity === 'function') {
-                        logActivity('login', `Login berhasil sebagai ${userData.role} (${userData.nama || userData.email})`);
+                        const roleDisplay = getRoleDisplayName(userData.role);
+                        logActivity('login', `Login berhasil sebagai ${roleDisplay} (${userData.nama || userData.email})`);
                     }
                     
                     initApp();
-                    showToast(`Selamat datang, ${userData.nama}`);
+                    showToast(`Selamat datang, ${userData.nama} (${getRoleDisplayName(userData.role)})`);
                 } else {
                     showToast("Data user tidak ditemukan di Database!", "error");
                     auth.signOut();
@@ -232,7 +307,7 @@ function handleLogin(e) {
         });
 }
 
-// ======================= FUNGSI REGISTRASI (TIDAK DAPAT MEMBUAT DEVELOPER) =======================
+// ======================= FUNGSI REGISTRASI =======================
 
 async function handleRegister(e) {
     e.preventDefault();
@@ -262,7 +337,7 @@ async function handleRegister(e) {
         return;
     }
     
-    // Cegah registrasi dengan email developer
+    // Cegah registrasi dengan email developer (super admin)
     if (email === 'zaki5go@gmail.com') {
         showToast("❌ Email ini tidak dapat didaftarkan melalui kode registrasi.", "error");
         return;
@@ -288,6 +363,8 @@ async function handleRegister(e) {
         const codeSnapshot = await db.ref(`codes/${codeInput}`).once('value');
         const codeData = codeSnapshot.val();
         if (!codeData || codeData.used === true) throw new Error('Kode tidak valid atau sudah digunakan');
+        
+        // Validasi tipe kode (siswa/guru)
         if (codeData.type !== regType) throw new Error(`Kode ini untuk ${codeData.type}, bukan ${regType}`);
 
         const methods = await auth.fetchSignInMethodsForEmail(email);
@@ -296,8 +373,17 @@ async function handleRegister(e) {
         const userCredential = await auth.createUserWithEmailAndPassword(email, pass);
         const user = userCredential.user;
 
-        let userData = { uid: user.uid, email, role: regType, registeredAt: firebase.database.ServerValue.TIMESTAMP };
+        // Role default sesuai tipe registrasi
+        let userRole = regType; // 'siswa' atau 'guru'
+        
+        let userData = { 
+            uid: user.uid, 
+            email, 
+            role: userRole, 
+            registeredAt: firebase.database.ServerValue.TIMESTAMP 
+        };
         let userName = '';
+        
         if (regType === 'siswa') {
             const fpId = extraData.fpId;
             const studentSnap = await db.ref(`users/${fpId}`).once('value');
@@ -318,21 +404,26 @@ async function handleRegister(e) {
         }
 
         await db.ref(`users_auth/${user.uid}`).set(userData);
-        await db.ref(`codes/${codeInput}`).update({ used: true, userId: user.uid, usedAt: firebase.database.ServerValue.TIMESTAMP });
+        await db.ref(`codes/${codeInput}`).update({ 
+            used: true, 
+            userId: user.uid, 
+            usedAt: firebase.database.ServerValue.TIMESTAMP 
+        });
 
-        // LOG: Registrasi berhasil (tanpa currentUser, langsung tulis ke Firebase)
+        // LOG: Registrasi berhasil
         try {
+            const roleDisplay = getRoleDisplayName(userRole);
             const logEntry = {
                 action: 'register',
                 userId: user.uid,
                 userName: userName,
-                userRole: regType,
-                details: `Registrasi berhasil sebagai ${regType} dengan email ${email}`,
+                userRole: userRole,
+                details: `Registrasi berhasil sebagai ${roleDisplay} dengan email ${email}`,
                 timestamp: firebase.database.ServerValue.TIMESTAMP,
                 userAgent: navigator.userAgent.substring(0, 200)
             };
             await db.ref('logs').push(logEntry);
-            console.log(`📝 Log activity: register - ${regType} ${email}`);
+            console.log(`📝 Log activity: register - ${roleDisplay} ${email}`);
         } catch (logErr) {
             console.warn("Gagal menyimpan log registrasi:", logErr);
         }
@@ -358,7 +449,7 @@ async function handleRegister(e) {
 function handleLogout() {
     // LOG: Logout sebelum cleanup
     if (typeof logActivity === 'function' && currentUser) {
-        logActivity('logout', `Logout dari akun ${currentUser.nama || currentUser.email}`);
+        logActivity('logout', `Logout dari akun ${currentUser.nama || currentUser.email} (${getRoleDisplayName(currentUser.role)})`);
     }
     
     const cleanups = [
@@ -386,7 +477,6 @@ function processForgot() {
             if (typeof logActivity === 'function' && currentUser) {
                 logActivity('forgot_password', `Link reset password dikirim ke ${email}`);
             } else {
-                // Jika belum login, catat log dengan email saja
                 db.ref('logs').push({
                     action: 'forgot_password',
                     userId: 'unknown',
@@ -454,7 +544,7 @@ function togglePassword(id, icon) {
     if (icon) icon.style.color = input.type === "text" ? "var(--primary)" : "#aaa";
 }
 
-// ======================= FUNGSI UPLOAD FOTO PROFIL (DENGAN REFRESH ALL AVATARS) =======================
+// ======================= FUNGSI UPLOAD FOTO PROFIL =======================
 
 async function uploadProfilePhoto(input) {
     if (!input.files || !input.files[0]) return;
@@ -483,45 +573,36 @@ async function uploadProfilePhoto(input) {
     showToast('📤 Mengunggah ke Supabase...', 'neutral');
     
     try {
-        // Gunakan uploadWithFallback dari supabase-config.js
         if (typeof uploadWithFallback === 'undefined') {
             throw new Error('Fungsi uploadWithFallback tidak tersedia. Pastikan supabase-config.js sudah dimuat.');
         }
         
         const result = await uploadWithFallback(file, 'profiles', currentUser.uid);
         
-        // HAPUS FOTO LAMA DARI SUPABASE
         if (typeof deleteOldProfilePhoto === 'function') {
             await deleteOldProfilePhoto(currentUser.uid, result.url);
         } else {
             console.warn('deleteOldProfilePhoto function not available, skipping old photo deletion');
         }
         
-        // Simpan URL ke Firebase
         await db.ref(`users_auth/${currentUser.uid}`).update({ photoUrl: result.url });
         
-        // Update currentUser object
         const oldPhotoUrl = currentUser.photoUrl;
         currentUser.photoUrl = result.url;
         
-        // Simpan ke localStorage
         if (typeof saveUserToLocalStorage === 'function') {
             saveUserToLocalStorage(currentUser);
         }
         
-        // ========== PERBAIKAN: Refresh semua avatar dengan force ==========
         if (typeof refreshAllAvatars === 'function') {
             refreshAllAvatars();
         } else {
-            // Fallback manual update jika fungsi belum ada
             console.warn("refreshAllAvatars not available, using manual update");
             const headerAvatar = document.getElementById('headerAvatar');
             if (headerAvatar) headerAvatar.src = result.url;
             imgEl.src = result.url;
             const sidebarAvatar = document.getElementById('sidebarAvatar');
             if (sidebarAvatar) sidebarAvatar.src = result.url;
-            
-            // Update navbar avatar jika ada
             const navbarAvatar = document.getElementById('navbarAvatar');
             if (navbarAvatar) navbarAvatar.src = result.url;
         }
@@ -529,12 +610,10 @@ async function uploadProfilePhoto(input) {
         const fallbackMsg = result.isFallback ? ' (via ImgBB fallback)' : '';
         showToast(`✅ Foto profil berhasil diperbarui!${fallbackMsg}`, 'success');
         
-        // LOG: Upload foto profil
         if (typeof logActivity === 'function') {
             logActivity('upload_profile_photo', `Upload foto profil ${result.isFallback ? '(fallback ImgBB)' : '(Supabase)'}`);
         }
         
-        // Optional: Tampilkan info jika menggunakan fallback
         if (result.isFallback) {
             console.warn('Supabase gagal, menggunakan ImgBB sebagai fallback');
             setTimeout(() => {
@@ -564,5 +643,9 @@ window.togglePassword = togglePassword;
 window.processForgot = processForgot;
 window.handleChangePassword = handleChangePassword;
 window.uploadProfilePhoto = uploadProfilePhoto;
+window.isValidRole = isValidRole;
+window.getRoleDisplayName = getRoleDisplayName;
+window.getRoleIcon = getRoleIcon;
+window.updateUserInterfaceByRole = updateUserInterfaceByRole;
 
-console.log("✅ auth.js (dengan role developer, upload profile ke Supabase, dan log aktivitas) loaded");
+console.log("✅ auth.js V5.0 loaded - Dengan role: Developer, Kepala Sekolah, Wakil Kepala Sekolah, Staff TU, Guru, Siswa");

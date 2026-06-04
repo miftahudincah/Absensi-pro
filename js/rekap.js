@@ -1,9 +1,12 @@
-// rekap.js - VERSION 3.9 (REKAP DINONAKTIFKAN UNTUK SISWA)
+// rekap.js - VERSION 4.0 (DENGAN ROLE BARU: WAKIL KEPALA SEKOLAH & STAFF TU)
 // Fitur Rekap Absensi per Siswa
-// PERUBAHAN V3.9: 
-//   - Menonaktifkan akses rekap untuk role SISWA
-//   - Menampilkan pesan akses terbatas untuk siswa
-//   - Filter data hanya untuk admin/guru/developer
+// Role yang didukung:
+// - Developer: akses penuh
+// - Admin (Kepala Sekolah): akses penuh
+// - Wakil Kepala Sekolah: akses penuh
+// - Staff TU: akses baca (dapat melihat rekap)
+// - Guru: akses penuh
+// - Siswa: TIDAK memiliki akses
 // ============================================================================
 
 let currentRekapData = [];
@@ -13,6 +16,38 @@ let rekapBarChart = null;
 let rekapDataReadyListenerAdded = false;
 let rekapUiReadyListenerAdded = false;
 let isLoadingRekap = false;
+
+// ======================= ROLE HELPER FUNCTIONS ========================
+
+/**
+ * Mendapatkan display name role
+ */
+function getRoleDisplayName(role) {
+    const names = {
+        developer: 'Developer',
+        admin: 'Kepala Sekolah',
+        wakil_kepala: 'Wakil Kepala Sekolah',
+        staff_tu: 'Staff TU',
+        guru: 'Guru',
+        siswa: 'Siswa'
+    };
+    return names[role] || role.toUpperCase();
+}
+
+/**
+ * Mendapatkan icon untuk role
+ */
+function getRoleIcon(role) {
+    const icons = {
+        developer: '👨‍💻',
+        admin: '👑',
+        wakil_kepala: '👔',
+        staff_tu: '📋',
+        guru: '👨‍🏫',
+        siswa: '👨‍🎓'
+    };
+    return icons[role] || '👤';
+}
 
 // ======================= FALLBACK JIKA FUNGSI DARI SETTING.JS BELUM ADA =======================
 if (typeof isHoliday === 'undefined') {
@@ -28,38 +63,86 @@ if (typeof getHolidayCountInRange === 'undefined') {
 }
 
 // ======================= CEK AKSES REKAP ========================
+
+/**
+ * Cek apakah user memiliki akses ke fitur rekap
+ * - Siswa: TIDAK memiliki akses
+ * - Staff TU: memiliki akses baca
+ * - Guru/Wakil Kepala Sekolah/Admin/Developer: memiliki akses penuh
+ */
 function isRekapAccessible() {
     if (!currentUser) return false;
-    // Hanya admin, guru, dan developer yang dapat mengakses rekap
-    return (currentUser.role === 'admin' || currentUser.role === 'guru' || currentUser.role === 'developer');
+    // Semua role kecuali siswa dapat mengakses rekap
+    // Staff TU dapat melihat rekap (read-only)
+    const allowedRoles = ['admin', 'developer', 'wakil_kepala', 'staff_tu', 'guru'];
+    return allowedRoles.includes(currentUser.role);
 }
 
 /**
- * Menampilkan pesan akses terbatas untuk siswa
+ * Cek apakah user memiliki akses edit/export rekap
+ * - Staff TU: hanya baca, tidak bisa export
+ * - Guru/Wakil/Admin/Developer: bisa export
+ */
+function canExportRekap() {
+    if (!currentUser) return false;
+    const exportRoles = ['admin', 'developer', 'wakil_kepala', 'guru'];
+    return exportRoles.includes(currentUser.role);
+}
+
+/**
+ * Mendapatkan pesan akses berdasarkan role
+ */
+function getAccessDeniedMessage() {
+    if (!currentUser) return "Silakan login terlebih dahulu.";
+    
+    if (currentUser.role === 'siswa') {
+        return "Fitur Rekap Absensi hanya tersedia untuk Guru, Staff TU, Wakil Kepala Sekolah, dan Kepala Sekolah.";
+    }
+    return "Anda tidak memiliki akses ke fitur ini.";
+}
+
+/**
+ * Mendapatkan daftar role yang diizinkan untuk ditampilkan di pesan
+ */
+function getAllowedRolesList() {
+    return [
+        { role: 'admin', label: 'Kepala Sekolah', icon: '👑', color: '#f44336' },
+        { role: 'wakil_kepala', label: 'Wakil Kepala Sekolah', icon: '👔', color: '#9c27b0' },
+        { role: 'staff_tu', label: 'Staff TU', icon: '📋', color: '#607d8b' },
+        { role: 'guru', label: 'Guru', icon: '👨‍🏫', color: '#ff9800' },
+        { role: 'developer', label: 'Developer', icon: '👨‍💻', color: '#00bcd4' }
+    ];
+}
+
+/**
+ * Menampilkan pesan akses terbatas
  */
 function showRekapBlockedMessage() {
     const tabRekap = document.getElementById('tab-rekap');
     if (!tabRekap) return;
     
-    // Cek apakah sudah ada pesan blocked
     if (tabRekap.querySelector('.rekap-blocked-message')) return;
     
-    // Simpan konten asli jika belum disimpan
     if (!tabRekap.getAttribute('data-original-content')) {
         tabRekap.setAttribute('data-original-content', tabRekap.innerHTML);
     }
+    
+    const allowedRoles = getAllowedRolesList();
+    const rolesHtml = allowedRoles.map(r => `
+        <span style="background: ${r.color}; padding: 5px 15px; border-radius: 20px; color: white;">
+            ${r.icon} ${r.label}
+        </span>
+    `).join('');
     
     tabRekap.innerHTML = `
         <div class="rekap-blocked-message" style="text-align: center; padding: 80px 20px;">
             <div style="font-size: 64px; margin-bottom: 20px;">🔒</div>
             <h2 style="color: var(--text-primary); margin-bottom: 10px;">Akses Terbatas</h2>
-            <p style="color: var(--text-muted); margin-bottom: 8px;">Fitur Rekap Absensi hanya tersedia untuk:</p>
+            <p style="color: var(--text-muted); margin-bottom: 8px;">${getAccessDeniedMessage()}</p>
             <div style="display: flex; justify-content: center; gap: 20px; flex-wrap: wrap; margin: 20px 0;">
-                <span style="background: #4caf50; padding: 5px 15px; border-radius: 20px;">👑 Admin</span>
-                <span style="background: #ff9800; padding: 5px 15px; border-radius: 20px;">👨‍🏫 Guru</span>
-                <span style="background: #00bcd4; padding: 5px 15px; border-radius: 20px;">👨‍💻 Developer</span>
+                ${rolesHtml}
             </div>
-            <p style="color: var(--text-muted); font-size: 14px;">Silakan hubungi guru Anda untuk informasi kehadiran.</p>
+            <p style="color: var(--text-muted); font-size: 14px;">Silakan hubungi guru atau kepala sekolah untuk informasi kehadiran.</p>
             <button class="btn-action btn-primary" onclick="switchTab('attendance')" style="margin-top: 25px;">📋 Kembali ke Absensi</button>
         </div>
     `;
@@ -89,9 +172,9 @@ function setupRekapDataReadyListener() {
     window.addEventListener('dataReady', (e) => {
         console.log("📊 rekap.js: dataReady received, initializing rekap system");
         
-        // CEK AKSES UNTUK SISWA
         if (!isRekapAccessible()) {
-            console.log("🚫 Siswa tidak memiliki akses ke fitur rekap");
+            const roleDisplay = getRoleDisplayName(currentUser?.role);
+            console.log(`🚫 ${roleDisplay} tidak memiliki akses ke fitur rekap`);
             showRekapBlockedMessage();
             return;
         }
@@ -111,9 +194,9 @@ function setupRekapUiReadyListener() {
     console.log("📡 Setting up uiReady event listener for rekap module");
 
     window.addEventListener('uiReady', () => {
-        // CEK AKSES UNTUK SISWA
         if (!isRekapAccessible()) {
-            console.log("🚫 Siswa tidak memiliki akses ke fitur rekap");
+            const roleDisplay = getRoleDisplayName(currentUser?.role);
+            console.log(`🚫 ${roleDisplay} tidak memiliki akses ke fitur rekap`);
             showRekapBlockedMessage();
             return;
         }
@@ -132,9 +215,9 @@ function setupRekapUiReadyListener() {
 function initRekap() {
     if (rekapInitDone) return;
     
-    // CEK AKSES UNTUK SISWA
     if (!isRekapAccessible()) {
-        console.log("🚫 initRekap: Siswa tidak memiliki akses");
+        const roleDisplay = getRoleDisplayName(currentUser?.role);
+        console.log(`🚫 initRekap: ${roleDisplay} tidak memiliki akses`);
         showRekapBlockedMessage();
         return;
     }
@@ -189,16 +272,11 @@ function initRekap() {
     
     rekapInitDone = true;
     
-    // Setup observer untuk tabel rekap agar event listener tetap terpasang
     setupRekapTableObserver();
     
     setTimeout(() => loadRekap(), 100);
 }
 
-/**
- * Setup observer untuk mendeteksi perubahan pada tabel rekap
- * Agar event listener tetap terpasang setelah data berubah
- */
 function setupRekapTableObserver() {
     const observer = new MutationObserver(() => {
         attachRekapRowClickListeners();
@@ -273,7 +351,7 @@ function getCacheKey(period, startDate, endDate) {
     return `rekap_${period}_${startDate.toISOString().split('T')[0]}_${endDate.toISOString().split('T')[0]}`;
 }
 
-// ======================= HITUNG TOTAL HARI SEKOLAH (KURANGI HARI LIBUR) =======================
+// ======================= HITUNG TOTAL HARI SEKOLAH =======================
 
 function countSchoolDays(startDate, endDate) {
     let count = 0;
@@ -292,7 +370,8 @@ function countSchoolDays(startDate, endDate) {
     return count > 0 ? count : 1;
 }
 
-// ======================= AMBIL DATA MANUAL STATUS DALAM RENTANG (HANYA TANGGAL BUKAN LIBUR) =======================
+// ======================= AMBIL DATA MANUAL STATUS =======================
+
 async function fetchManualStatusForRange(startDate, endDate) {
     const manualData = {};
     const currentDate = new Date(startDate);
@@ -326,14 +405,9 @@ async function fetchManualStatusForRange(startDate, endDate) {
 
 // ======================= HITUNG REKAP PER SISWA =======================
 
-/**
- * Mendapatkan daftar siswa yang valid (hanya yang memiliki nama)
- * @returns {Array} Daftar siswa valid
- */
 function getValidStudentsList() {
     if (!dbData.users || dbData.users.length === 0) return [];
     
-    // Filter siswa yang memiliki nama dan nama bukan 'Tidak Diketahui'
     const validStudents = dbData.users.filter(student => 
         student && 
         student.id && 
@@ -363,7 +437,6 @@ async function calculateStudentRekap(attendanceData, studentsData, startDate, en
     console.log(`📊 Total data absensi fisik setelah filter libur: ${filteredAttendance.length}`);
     console.log(`📊 Total data manual status: ${Object.keys(manualStatusMap).length} tanggal`);
     
-    // Hanya gunakan siswa yang valid (punya nama)
     const validStudents = studentsData.filter(student => 
         student && 
         student.id && 
@@ -437,12 +510,11 @@ async function calculateStudentRekap(attendanceData, studentsData, startDate, en
     return results;
 }
 
-// ======================= RENDER REKAP TABLE (DENGAN KLIK BARIS) =======================
+// ======================= RENDER REKAP TABLE =======================
 
 function renderRekapTable(data) {
-    // CEK AKSES UNTUK SISWA
     if (!isRekapAccessible()) {
-        console.log("🚫 renderRekapTable: Siswa tidak memiliki akses");
+        console.log("🚫 renderRekapTable: User tidak memiliki akses");
         showRekapBlockedMessage();
         return;
     }
@@ -480,7 +552,6 @@ function renderRekapTable(data) {
         }
     }
 
-    // Filter data yang valid (hanya yang memiliki nama)
     let validData = [];
     if (data && data.length > 0) {
         validData = data.filter(item => item && item.nama && item.nama !== 'Tidak Diketahui' && item.nama.trim() !== '');
@@ -506,7 +577,6 @@ function renderRekapTable(data) {
         if (item.percentage < 40) persenColor = '#f44336';
         const tooltip = `${item.hadir} hadir dari ${item.totalDays} hari sekolah (setelah dikurangi libur)`;
         
-        // Tambahkan class dan atribut untuk click handler
         tbody.innerHTML += `
             <tr class="rekap-row-clickable" 
                 data-student-id="${item.id}" 
@@ -530,8 +600,6 @@ function renderRekapTable(data) {
         `;
     });
     updateRekapSummary(validData);
-    
-    // Attach click listeners ke baris yang baru dibuat
     attachRekapRowClickListeners();
 }
 
@@ -589,23 +657,16 @@ function updateRekapSummary(data) {
     `;
 }
 
-// ======================= FUNGSI KLIK BARIS (INTEGRASI MODAL) =======================
+// ======================= FUNGSI KLIK BARIS =======================
 
-/**
- * Attach click event listeners to rekap table rows
- * Ketika baris diklik, akan membuka modal detail rekap per siswa
- */
 function attachRekapRowClickListeners() {
     const rows = document.querySelectorAll('#rekapTbody .rekap-row-clickable');
     console.log(`🔍 Attaching click listeners to ${rows.length} rekap rows`);
     
     rows.forEach(row => {
-        // Hapus listener lama jika ada (untuk menghindari duplicate)
         row.removeEventListener('click', handleRekapRowClick);
-        // Tambah listener baru
         row.addEventListener('click', handleRekapRowClick);
         
-        // Tambah efek hover
         row.addEventListener('mouseenter', () => {
             row.style.backgroundColor = 'var(--bg-hover)';
         });
@@ -613,23 +674,16 @@ function attachRekapRowClickListeners() {
             row.style.backgroundColor = '';
         });
         
-        // Tambah title tooltip
         row.setAttribute('title', 'Klik untuk melihat detail rekap per siswa');
     });
 }
 
-/**
- * Handle click on rekap table row
- * Membuka modal rekap per siswa
- * @param {Event} event - Click event
- */
 async function handleRekapRowClick(event) {
-    // Stop propagation agar tidak konflik dengan event lain
     event.stopPropagation();
     
-    // CEK AKSES UNTUK SISWA
     if (!isRekapAccessible()) {
-        showToast("🔒 Akses ditolak! Fitur ini hanya untuk Admin, Guru, dan Developer.", "error");
+        const roleDisplay = getRoleDisplayName(currentUser?.role);
+        showToast(`🔒 Akses ditolak! ${getAccessDeniedMessage()}`, "error");
         return;
     }
     
@@ -644,12 +698,10 @@ async function handleRekapRowClick(event) {
     
     console.log(`🖱️ Rekap row clicked: ${studentName} (ID: ${studentId})`);
     
-    // Tampilkan loading indicator
     if (typeof showToast === 'function') {
         showToast(`📊 Membuka detail rekap untuk ${studentName}...`, "info");
     }
     
-    // Panggil fungsi modal dari rekap-per-siswa.js
     if (typeof openRekapPerSiswaModal === 'function') {
         await openRekapPerSiswaModal(studentId, studentName);
     } else {
@@ -660,15 +712,9 @@ async function handleRekapRowClick(event) {
     }
 }
 
-/**
- * Fungsi untuk membuka rekap per siswa langsung dari ID siswa (panggilan eksternal)
- * @param {string|number} studentId - ID siswa
- * @param {string} studentName - Nama siswa (opsional)
- */
 async function openRekapPerSiswa(studentId, studentName) {
-    // CEK AKSES UNTUK SISWA
     if (!isRekapAccessible()) {
-        showToast("🔒 Akses ditolak! Fitur ini hanya untuk Admin, Guru, dan Developer.", "error");
+        showToast(`🔒 Akses ditolak! ${getAccessDeniedMessage()}`, "error");
         return;
     }
     
@@ -763,15 +809,14 @@ function renderRekapCharts(data, startDate, endDate) {
     }
 }
 
-// ======================= LOAD REKAP (DENGAN CACHING) =======================
+// ======================= LOAD REKAP =======================
 
 async function loadRekap(retryCount = 0, forceRefresh = false) {
     const MAX_RETRY = 5;
     const RETRY_DELAY = 1000;
 
-    // CEK AKSES UNTUK SISWA
     if (!isRekapAccessible()) {
-        console.log("🚫 loadRekap: Siswa tidak memiliki akses");
+        console.log("🚫 loadRekap: User tidak memiliki akses");
         showRekapBlockedMessage();
         return;
     }
@@ -788,14 +833,13 @@ async function loadRekap(retryCount = 0, forceRefresh = false) {
         } else {
             const tbody = document.getElementById('rekapTbody');
             if (tbody) {
-                tbody.innerHTML = `<td><td colspan="12" style="text-align:center; padding:40px;">❌ Gagal memuat data rekap (database tidak siap).<\/td><\/tr>`;
+                tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; padding:40px;">❌ Gagal memuat data rekap (database tidak siap).<\/td><\/tr>`;
             }
             if (typeof showToast === 'function') showToast("❌ Gagal memuat data rekap (database tidak siap)", "error");
         }
         return;
     }
 
-    // Gunakan fungsi getValidStudentsList untuk mendapatkan siswa yang valid
     const validStudents = getValidStudentsList();
     if (validStudents.length === 0) {
         console.warn(`⚠️ loadRekap: Tidak ada siswa valid (total: ${dbData.users.length})`);
@@ -873,7 +917,6 @@ async function loadRekap(retryCount = 0, forceRefresh = false) {
     }
 
     try {
-        // Gunakan validStudents yang sudah difilter
         currentRekapData = await calculateStudentRekap(dbData.attendance, validStudents, startDate, endDate);
         
         try {
@@ -899,12 +942,16 @@ async function loadRekap(retryCount = 0, forceRefresh = false) {
     }
 }
 
-// ======================= EXPORT FUNCTIONS (DENGAN LOG) =======================
+// ======================= EXPORT FUNCTIONS =======================
 
 function exportRekapToExcel() {
-    // CEK AKSES UNTUK SISWA
     if (!isRekapAccessible()) {
-        showToast("🔒 Akses ditolak! Fitur ini hanya untuk Admin, Guru, dan Developer.", "error");
+        showToast(`🔒 Akses ditolak! ${getAccessDeniedMessage()}`, "error");
+        return;
+    }
+    
+    if (!canExportRekap()) {
+        showToast("🔒 Akses ditolak! Hanya Guru, Wakil Kepala Sekolah, Kepala Sekolah, dan Developer yang dapat mengekspor data.", "error");
         return;
     }
     
@@ -912,13 +959,21 @@ function exportRekapToExcel() {
         if (typeof showToast === 'function') showToast("❌ Tidak ada data untuk diekspor!", "error");
         return;
     }
+    
     const periodSelect = document.getElementById('rekapPeriod');
     const periodText = periodSelect ? periodSelect.options[periodSelect.selectedIndex]?.text : 'Rekap';
     const schoolName = document.getElementById('schoolNameDisplay')?.innerText || 'Sistem Absensi';
     const dateNow = new Date().toLocaleDateString('id-ID');
+    const roleDisplay = getRoleDisplayName(currentUser.role);
+    
     let csv = "\uFEFF";
-    csv += `"LAPORAN REKAP ABSENSI SISWA"\n"${schoolName}"\n"Periode: ${periodText}"\n"Tanggal cetak: ${dateNow}"\n\n`;
+    csv += `"LAPORAN REKAP ABSENSI SISWA"\n`;
+    csv += `"${schoolName}"\n`;
+    csv += `"Periode: ${periodText}"\n`;
+    csv += `"Dicetak oleh: ${currentUser.nama || currentUser.email} (${roleDisplay})"\n`;
+    csv += `"Tanggal cetak: ${dateNow}"\n\n`;
     csv += `No,ID FP,Nama Siswa,Kelas,Jurusan,Total Hari,Hadir,Sakit,Izin,Alpha,Persentase,Status\n`;
+    
     let no = 1;
     let exportedCount = 0;
     currentRekapData.forEach(item => {
@@ -928,6 +983,7 @@ function exportRekapToExcel() {
             exportedCount++;
         }
     });
+    
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
@@ -937,17 +993,22 @@ function exportRekapToExcel() {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+    
     if (typeof showToast === 'function') showToast("📥 Rekap berhasil diekspor ke Excel!", "success");
     
     if (typeof logActivity === 'function') {
-        logActivity('export_rekap_excel', `Ekspor rekap absensi ke Excel: ${exportedCount} siswa, periode ${periodText}`);
+        logActivity('export_rekap_excel', `Ekspor rekap absensi ke Excel: ${exportedCount} siswa, periode ${periodText} oleh ${roleDisplay}`);
     }
 }
 
 function exportRekapToPDF() {
-    // CEK AKSES UNTUK SISWA
     if (!isRekapAccessible()) {
-        showToast("🔒 Akses ditolak! Fitur ini hanya untuk Admin, Guru, dan Developer.", "error");
+        showToast(`🔒 Akses ditolak! ${getAccessDeniedMessage()}`, "error");
+        return;
+    }
+    
+    if (!canExportRekap()) {
+        showToast("🔒 Akses ditolak! Hanya Guru, Wakil Kepala Sekolah, Kepala Sekolah, dan Developer yang dapat mengekspor data.", "error");
         return;
     }
     
@@ -955,12 +1016,15 @@ function exportRekapToPDF() {
         if (typeof showToast === 'function') showToast("❌ Tidak ada data untuk diekspor!", "error");
         return;
     }
+    
     const periodSelect = document.getElementById('rekapPeriod');
     const periodText = periodSelect ? periodSelect.options[periodSelect.selectedIndex]?.text : 'Rekap';
     const schoolName = document.getElementById('schoolNameDisplay')?.innerText || 'Sistem Absensi';
     const dateNow = new Date().toLocaleDateString('id-ID');
     const timeNow = new Date().toLocaleTimeString('id-ID');
+    const roleDisplay = getRoleDisplayName(currentUser.role);
     const validData = currentRekapData.filter(item => item.nama && item.nama !== 'Tidak Diketahui');
+    
     const printWindow = window.open('', '_blank');
     printWindow.document.write(`
         <!DOCTYPE html>
@@ -987,9 +1051,23 @@ function exportRekapToPDF() {
         </head>
         <body>
             <div class="header"><h1>${escapeHtml(schoolName)}</h1><h3>LAPORAN REKAP ABSENSI SISWA</h3><p>Periode: ${escapeHtml(periodText)}</p></div>
-            <div class="info"><strong>📅 Tanggal Cetak:</strong> ${dateNow} | ${timeNow}<br><strong>👥 Total Siswa:</strong> ${validData.length} orang<br><strong>📊 Rata-rata Kehadiran:</strong> ${(validData.reduce((sum, s) => sum + parseFloat(s.percentage), 0) / validData.length || 0).toFixed(1)}%</div>
-            <table><thead><tr><th>No</th><th>ID FP</th><th>Nama Siswa</th><th>Kelas</th><th>Jurusan</th><th>Total Hari</th><th>Hadir</th><th>Sakit</th><th>Izin</th><th>Alpha</th><th>Persentase</th><th>Status</th></tr></thead><tbody>
+            <div class="info">
+                <strong>📅 Tanggal Cetak:</strong> ${dateNow} | ${timeNow}<br>
+                <strong>👥 Total Siswa:</strong> ${validData.length} orang<br>
+                <strong>📊 Rata-rata Kehadiran:</strong> ${(validData.reduce((sum, s) => sum + parseFloat(s.percentage), 0) / validData.length || 0).toFixed(1)}%<br>
+                <strong>👤 Dicetak oleh:</strong> ${escapeHtml(currentUser?.nama || currentUser?.email)} (${roleDisplay})
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>No</th><th>ID FP</th><th>Nama Siswa</th><th>Kelas</th><th>Jurusan</th>
+                        <th>Total Hari</th><th>Hadir</th><th>Sakit</th><th>Izin</th><th>Alpha</th>
+                        <th>Persentase</th><th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
     `);
+    
     let no = 1;
     validData.forEach(item => {
         let badgeClass = '';
@@ -998,6 +1076,7 @@ function exportRekapToPDF() {
         else if (item.status === 'Cukup') badgeClass = 'badge-cukup';
         else if (item.status === 'Kurang') badgeClass = 'badge-kurang';
         else badgeClass = 'badge-buruk';
+        
         printWindow.document.write(`
             <tr>
                 <td>${no}<\/td>
@@ -1016,20 +1095,27 @@ function exportRekapToPDF() {
         `);
         no++;
     });
+    
     printWindow.document.write(`
-            </tbody>
-        <\/table>
-        <div class="footer"><p>Dicetak oleh: ${escapeHtml(currentUser?.nama || 'Admin')} | Sistem Absensi Terintegrasi - ESP32 Fingerprint</p><p>* Laporan ini dihasilkan secara otomatis oleh sistem</p></div>
-        <div class="no-print" style="text-align:center; margin-top:20px;"><button onclick="window.print()" style="padding:10px 20px; background:#00bcd4; color:white; border:none; border-radius:5px; cursor:pointer;">🖨️ Cetak / Simpan PDF</button><button onclick="window.close()" style="padding:10px 20px; background:#666; color:white; border:none; border-radius:5px; cursor:pointer; margin-left:10px;">✖ Tutup</button></div>
-        <script>console.log("PDF siap dicetak");<\/script>
+                </tbody>
+            <\/table>
+            <div class="footer">
+                <p>Sistem Absensi Terintegrasi - ESP32 Fingerprint</p>
+                <p>* Laporan ini dihasilkan secara otomatis oleh sistem</p>
+            </div>
+            <div class="no-print" style="text-align:center; margin-top:20px;">
+                <button onclick="window.print()" style="padding:10px 20px; background:#00bcd4; color:white; border:none; border-radius:5px; cursor:pointer;">🖨️ Cetak / Simpan PDF</button>
+                <button onclick="window.close()" style="padding:10px 20px; background:#666; color:white; border:none; border-radius:5px; cursor:pointer; margin-left:10px;">✖ Tutup</button>
+            </div>
         </body>
         </html>
     `);
     printWindow.document.close();
+    
     if (typeof showToast === 'function') showToast("📄 Membuka halaman print...", "info");
     
     if (typeof logActivity === 'function') {
-        logActivity('export_rekap_pdf', `Ekspor rekap absensi ke PDF: ${validData.length} siswa, periode ${periodText}`);
+        logActivity('export_rekap_pdf', `Ekspor rekap absensi ke PDF: ${validData.length} siswa, periode ${periodText} oleh ${roleDisplay}`);
     }
 }
 
@@ -1084,5 +1170,9 @@ window.openRekapPerSiswa = openRekapPerSiswa;
 window.getValidStudentsList = getValidStudentsList;
 window.isRekapAccessible = isRekapAccessible;
 window.showRekapBlockedMessage = showRekapBlockedMessage;
+window.getRoleDisplayName = getRoleDisplayName;
+window.getRoleIcon = getRoleIcon;
+window.canExportRekap = canExportRekap;
+window.getAllowedRolesList = getAllowedRolesList;
 
-console.log("✅ rekap.js V3.9 loaded - Rekap dinonaktifkan untuk role siswa");
+console.log("✅ rekap.js V4.0 loaded - Rekap dengan role: Developer, Kepala Sekolah, Wakil Kepala Sekolah, Staff TU (baca), Guru");

@@ -1,7 +1,7 @@
-// init.js - VERSION 5.1 (SUPABASE INTEGRATION + WHATSAPP + IZIN ONLINE)
+// init.js - VERSION 5.2 (SUPABASE INTEGRATION + WHATSAPP + IZIN ONLINE + STAFF)
 // INISIALISASI DATA DENGAN FLAG SYSTEM + EVENT DATA READY
 // DENGAN DUKUNGAN SUPABASE AUTO-DELETE UNTUK STATUS EXPIRED
-// PERUBAHAN V5.1: Menambahkan inisialisasi WhatsApp Gateway dan Izin Online
+// PERUBAHAN V5.2: Menambahkan inisialisasi Staff System dan Staff Attendance
 // ============================================================================
 
 let appInitialized = false;
@@ -15,7 +15,8 @@ let dataReady = {
     attendance: false,
     codes: false,
     schoolConfig: false,
-    globalDelay: false
+    globalDelay: false,
+    staff: false      // Tambahan flag untuk data staff
 };
 
 // Callback ketika semua data siap
@@ -207,6 +208,36 @@ function renderAllData() {
         }, 1000);
     }
     
+    // 10. Inisialisasi Staff System (Manajemen Guru/Karyawan)
+    if (typeof initStaffSystem === 'function') {
+        console.log("👥 Initializing Staff System...");
+        try {
+            initStaffSystem();
+        } catch(e) { console.warn("initStaffSystem error:", e); }
+    } else {
+        console.log("⚠️ staff.js not loaded yet, will retry...");
+        setTimeout(() => {
+            if (typeof initStaffSystem === 'function') {
+                initStaffSystem();
+            }
+        }, 1000);
+    }
+    
+    // 11. Inisialisasi Staff Attendance (Absensi Guru/Karyawan)
+    if (typeof initStaffAttendance === 'function') {
+        console.log("📊 Initializing Staff Attendance System...");
+        try {
+            initStaffAttendance();
+        } catch(e) { console.warn("initStaffAttendance error:", e); }
+    } else {
+        console.log("⚠️ staff-attendance.js not loaded yet, will retry...");
+        setTimeout(() => {
+            if (typeof initStaffAttendance === 'function') {
+                initStaffAttendance();
+            }
+        }, 1000);
+    }
+    
     console.log("✅ renderAllData completed - All modules initialized!");
 }
 
@@ -347,7 +378,7 @@ function initDataListeners() {
         }
     });
     
-    // ========== 3. LISTENER DATA ABSENSI ==========
+    // ========== 3. LISTENER DATA ABSENSI SISWA ==========
     db.ref('absensi').on('value', (snapshot) => {
         const data = snapshot.val();
         const oldCount = dbData.attendance?.length || 0;
@@ -381,7 +412,7 @@ function initDataListeners() {
         
         const newCount = dbData.attendance.length;
         if (oldCount !== newCount) {
-            console.log(`📋 Attendance updated: ${oldCount} → ${newCount} records`);
+            console.log(`📋 Student Attendance updated: ${oldCount} → ${newCount} records`);
         }
         
         dataReady.attendance = true;
@@ -587,7 +618,7 @@ function initDataListeners() {
         }
     });
     
-    // ========== 8. LISTENER IZIN ONLINE (BARU) ==========
+    // ========== 8. LISTENER IZIN ONLINE ==========
     db.ref('izin').on('value', (snapshot) => {
         const data = snapshot.val();
         if (data) {
@@ -613,7 +644,43 @@ function initDataListeners() {
         }
     });
     
-    console.log("✅ All Firebase data listeners attached successfully");
+    // ========== 9. LISTENER DATA STAFF (Guru/Karyawan) - BARU ==========
+    db.ref('staff').on('value', (snapshot) => {
+        const data = snapshot.val();
+        console.log(`👥 Staff data updated: ${data ? Object.keys(data).length : 0} staff members`);
+        
+        dataReady.staff = true;
+        
+        // Render staff table jika tab aktif
+        if (document.getElementById('tab-staff')?.classList.contains('active')) {
+            if (typeof renderStaffTable === 'function') {
+                renderStaffTable();
+            }
+        }
+        if (document.getElementById('tab-staff-attendance')?.classList.contains('active')) {
+            if (typeof renderStaffAttendanceTable === 'function') {
+                renderStaffAttendanceTable();
+            }
+        }
+    });
+    
+    // ========== 10. LISTENER ABSENSI STAFF - BARU ==========
+    db.ref('staff_attendance').on('value', (snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+            const dateCount = Object.keys(data).length;
+            console.log(`📋 Staff Attendance updated: ${dateCount} dates with records`);
+        }
+        
+        // Render staff attendance table jika tab aktif
+        if (document.getElementById('tab-staff-attendance')?.classList.contains('active')) {
+            if (typeof renderStaffAttendanceTable === 'function') {
+                renderStaffAttendanceTable();
+            }
+        }
+    });
+    
+    console.log("✅ All Firebase data listeners attached successfully (including Staff and Staff Attendance)");
 }
 
 // ======================== CLEANUP FUNCTION ========================
@@ -628,7 +695,9 @@ function cleanupInitListeners() {
         db.ref('settings/delayOut').off();
         db.ref('codes').off();
         db.ref('system_config/schoolName').off();
-        db.ref('izin').off(); // Tambahan cleanup untuk izin
+        db.ref('izin').off();           // Cleanup izin
+        db.ref('staff').off();          // Cleanup staff
+        db.ref('staff_attendance').off(); // Cleanup staff attendance
         
         // Stop auto-delete for expired statuses
         stopSupabaseAutoDelete();
@@ -644,7 +713,8 @@ function cleanupInitListeners() {
             attendance: false,
             codes: false,
             schoolConfig: false,
-            globalDelay: false
+            globalDelay: false,
+            staff: false
         };
         
         console.log("✅ Init listeners cleaned up");
@@ -682,4 +752,4 @@ window.syncSchoolConfigToAll = syncSchoolConfigToAll;
 window.initSupabaseAutoDelete = initSupabaseAutoDelete;
 window.stopSupabaseAutoDelete = stopSupabaseAutoDelete;
 
-console.log("✅ init.js V5.1 loaded - Supabase integration + WhatsApp Gateway + Izin Online");
+console.log("✅ init.js V5.2 loaded - Supabase integration + WhatsApp Gateway + Izin Online + Staff System + Staff Attendance");

@@ -1,12 +1,66 @@
-// dashboard.js - VERSION 1.0 (DASHBOARD KHUSUS SISWA & GURU)
+// dashboard.js - VERSION 2.0 (DENGAN ROLE BARU: WAKIL KEPALA SEKOLAH & STAFF TU)
 // Fitur Dashboard dengan filter berdasarkan role
+// Role yang didukung:
+// - Developer: akses penuh semua data
+// - Admin (Kepala Sekolah): akses penuh semua data
+// - Wakil Kepala Sekolah: akses penuh semua data
+// - Staff TU: akses baca semua data (tidak bisa edit)
+// - Guru: akses penuh semua data
 // - Siswa: hanya melihat data kelas dan jurusannya sendiri
-// - Guru: melihat semua data (admin/developer juga full akses)
 // ============================================================================
 
 let dashboardChart = null;
 let dashboardRefreshInterval = null;
 let dashboardInitialized = false;
+
+// ======================== ROLE HELPER FUNCTIONS ========================
+
+/**
+ * Mendapatkan display name role
+ */
+function getRoleDisplayName(role) {
+    const names = {
+        developer: 'Developer',
+        admin: 'Kepala Sekolah',
+        wakil_kepala: 'Wakil Kepala Sekolah',
+        staff_tu: 'Staff TU',
+        guru: 'Guru',
+        siswa: 'Siswa'
+    };
+    return names[role] || role.toUpperCase();
+}
+
+/**
+ * Mendapatkan icon untuk role
+ */
+function getRoleIcon(role) {
+    const icons = {
+        developer: '👨‍💻',
+        admin: '👑',
+        wakil_kepala: '👔',
+        staff_tu: '📋',
+        guru: '👨‍🏫',
+        siswa: '👨‍🎓'
+    };
+    return icons[role] || '👤';
+}
+
+/**
+ * Cek apakah user memiliki akses membaca semua data
+ * - Semua role kecuali siswa memiliki akses baca semua data
+ */
+function hasReadAllAccess(role) {
+    const readAllRoles = ['developer', 'admin', 'wakil_kepala', 'staff_tu', 'guru'];
+    return readAllRoles.includes(role);
+}
+
+/**
+ * Cek apakah user memiliki akses penuh (dapat mengedit/menghapus)
+ */
+function hasFullAccess(role) {
+    const fullAccessRoles = ['developer', 'admin', 'wakil_kepala', 'guru'];
+    return fullAccessRoles.includes(role);
+}
 
 // ======================= INISIALISASI ========================
 
@@ -15,10 +69,8 @@ function initDashboard() {
     dashboardInitialized = true;
     console.log("📊 Initializing dashboard with role-based filtering...");
     
-    // Render dashboard pertama kali
     renderDashboard();
     
-    // Setup periodic refresh (setiap 30 detik)
     if (dashboardRefreshInterval) clearInterval(dashboardRefreshInterval);
     dashboardRefreshInterval = setInterval(() => {
         if (document.getElementById('tab-dashboard')?.classList.contains('active')) {
@@ -26,7 +78,6 @@ function initDashboard() {
         }
     }, 30000);
     
-    // Setup listener untuk dataReady event
     window.addEventListener('dataReady', () => {
         if (document.getElementById('tab-dashboard')?.classList.contains('active')) {
             renderDashboard();
@@ -38,16 +89,19 @@ function initDashboard() {
 
 /**
  * Mendapatkan daftar siswa yang sesuai dengan role pengguna
- * - Admin/Guru/Developer: semua siswa
+ * - Developer/Admin/Wakil Kepala Sekolah/Guru/Staff TU: semua siswa
  * - Siswa: hanya siswa dengan kelas & jurusan yang sama
  */
 function getFilteredStudents() {
     if (!dbData.users) return [];
     
-    // Admin, Guru, Developer melihat semua siswa
-    if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'guru' || currentUser.role === 'developer')) {
-        console.log("📊 Full access: menampilkan semua siswa");
-        return dbData.users.filter(s => s && s.nama && s.nama !== 'Tidak Diketahui');
+    const validStudents = dbData.users.filter(s => s && s.nama && s.nama !== 'Tidak Diketahui' && s.nama.trim() !== '');
+    
+    // Role dengan akses baca semua data
+    if (currentUser && hasReadAllAccess(currentUser.role)) {
+        const roleDisplay = getRoleDisplayName(currentUser.role);
+        console.log(`📊 Full access (${roleDisplay}): menampilkan semua siswa (${validStudents.length})`);
+        return validStudents;
     }
     
     // Siswa hanya melihat data kelas dan jurusannya sendiri
@@ -57,19 +111,17 @@ function getFilteredStudents() {
         
         console.log(`📊 Student access: filter by kelas=${userKelas}, jurusan=${userJurusan}`);
         
-        const filtered = dbData.users.filter(s => {
-            return s && 
-                   s.nama && 
-                   s.nama !== 'Tidak Diketahui' &&
-                   (!userKelas || s.kelas === userKelas) &&
-                   (!userJurusan || s.jurusan === userJurusan);
+        const filtered = validStudents.filter(s => {
+            const matchKelas = !userKelas || s.kelas === userKelas;
+            const matchJurusan = !userJurusan || s.jurusan === userJurusan;
+            return matchKelas && matchJurusan;
         });
         
-        console.log(`📊 Filtered students: ${filtered.length} dari ${dbData.users.length} total`);
+        console.log(`📊 Filtered students: ${filtered.length} dari ${validStudents.length} total`);
         return filtered;
     }
     
-    return dbData.users.filter(s => s && s.nama && s.nama !== 'Tidak Diketahui');
+    return validStudents;
 }
 
 /**
@@ -78,8 +130,8 @@ function getFilteredStudents() {
 function getFilteredAttendance() {
     if (!dbData.attendance) return [];
     
-    // Admin, Guru, Developer melihat semua absensi
-    if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'guru' || currentUser.role === 'developer')) {
+    // Role dengan akses baca semua data
+    if (currentUser && hasReadAllAccess(currentUser.role)) {
         return dbData.attendance;
     }
     
@@ -89,8 +141,9 @@ function getFilteredAttendance() {
         const userJurusan = currentUser.jurusan;
         
         return dbData.attendance.filter(a => {
-            return (!userKelas || a.kelas === userKelas) &&
-                   (!userJurusan || a.jurusan === userJurusan);
+            const matchKelas = !userKelas || a.kelas === userKelas;
+            const matchJurusan = !userJurusan || a.jurusan === userJurusan;
+            return matchKelas && matchJurusan;
         });
     }
     
@@ -108,20 +161,17 @@ function renderDashboard() {
         return;
     }
     
-    // Dapatkan data yang sudah difilter berdasarkan role
     const filteredStudents = getFilteredStudents();
     const filteredAttendance = getFilteredAttendance();
     
     const totalSiswa = filteredStudents.length;
     const today = new Date().toISOString().split('T')[0];
     
-    // Filter absensi hari ini
     let todayAttendance = filteredAttendance.filter(a => a.date === today);
     if (typeof filterAttendanceByHoliday === 'function') {
         todayAttendance = filterAttendanceByHoliday(todayAttendance);
     }
     
-    // Hitung statistik
     const hadirSet = new Set();
     const terlambatSet = new Set();
     let hadir = 0;
@@ -133,7 +183,6 @@ function renderDashboard() {
                 hadirSet.add(record.studentId);
                 hadir++;
             }
-            // Cek keterlambatan (jam masuk > 07:30)
             if (record.timeIn && record.timeIn > '07:30') {
                 terlambatSet.add(record.studentId);
             }
@@ -146,22 +195,13 @@ function renderDashboard() {
     const persenTidakHadir = totalSiswa > 0 ? ((tidakHadir / totalSiswa) * 100).toFixed(1) : 0;
     const persenTerlambat = totalSiswa > 0 ? ((terlambat / totalSiswa) * 100).toFixed(1) : 0;
     
-    // Update statistik cards
     updateDashboardStats(totalSiswa, hadir, tidakHadir, terlambat, persenHadir, persenTidakHadir, persenTerlambat);
-    
-    // Render kehadiran per kelas (hanya untuk admin/guru, atau siswa lihat kelasnya sendiri)
     renderClassAttendance(filteredStudents, filteredAttendance, today);
-    
-    // Render absensi terbaru
     renderRecentAttendance(filteredAttendance);
-    
-    // Update chart
     updateDashboardChart(filteredAttendance);
-    
-    // Tampilkan informasi role di dashboard
     updateDashboardRoleInfo();
     
-    console.log("✅ Dashboard rendered successfully");
+    console.log(`✅ Dashboard rendered successfully (${getRoleDisplayName(currentUser?.role)} view)`);
 }
 
 function updateDashboardStats(totalSiswa, hadir, tidakHadir, terlambat, persenHadir, persenTidakHadir, persenTerlambat) {
@@ -196,11 +236,10 @@ function renderClassAttendance(students, attendance, today) {
     const container = document.getElementById('classAttendanceList');
     if (!container) return;
     
-    // Untuk siswa, hanya tampilkan kelasnya sendiri
     let kelasData = new Map();
     
+    // Untuk siswa, hanya tampilkan kelasnya sendiri
     if (currentUser && currentUser.role === 'siswa') {
-        // Siswa hanya lihat kelasnya sendiri
         const userKelas = currentUser.kelas;
         const userJurusan = currentUser.jurusan;
         
@@ -220,11 +259,10 @@ function renderClassAttendance(students, attendance, today) {
             const total = siswaDiKelas.length;
             const hadir = hadirDiKelas.size;
             const persen = total > 0 ? (hadir / total) * 100 : 0;
-            
             kelasData.set(userKelas, { total, hadir, persen: persen.toFixed(1) });
         }
     } else {
-        // Admin/Guru/Developer: tampilkan semua kelas
+        // Admin/Guru/Developer/Wakil/Staff TU: tampilkan semua kelas
         students.forEach(s => {
             const kelas = s.kelas || 'Tanpa Kelas';
             if (!kelasData.has(kelas)) {
@@ -244,14 +282,12 @@ function renderClassAttendance(students, attendance, today) {
             }
         });
         
-        // Hitung persentase
         for (let [kelas, data] of kelasData) {
             const persen = data.total > 0 ? (data.hadir / data.total) * 100 : 0;
             kelasData.set(kelas, { ...data, persen: persen.toFixed(1) });
         }
     }
     
-    // Urutkan berdasarkan persentase
     const sortedKelas = Array.from(kelasData.entries())
         .sort((a, b) => parseFloat(b[1].persen) - parseFloat(a[1].persen));
     
@@ -313,7 +349,6 @@ function updateDashboardChart(attendance) {
     const year = now.getFullYear();
     const month = now.getMonth();
     
-    // Hitung data per minggu
     const weeks = [[], [], [], [], []];
     const daysInMonth = new Date(year, month + 1, 0).getDate();
     for (let d = 1; d <= daysInMonth; d++) {
@@ -398,22 +433,26 @@ function updateDashboardRoleInfo() {
     
     const infoContainer = document.getElementById('dashboardRoleInfo');
     if (!infoContainer) {
-        // Create info container if not exists
         const statsGrid = document.querySelector('.stats-grid');
         if (statsGrid && !document.getElementById('dashboardRoleInfo')) {
             const infoDiv = document.createElement('div');
             infoDiv.id = 'dashboardRoleInfo';
             infoDiv.style.cssText = 'margin-bottom: 15px; padding: 10px 15px; background: var(--bg-hover); border-radius: 12px; border-left: 4px solid #00bcd4;';
             statsGrid.parentNode.insertBefore(infoDiv, statsGrid);
+        } else {
+            return;
         }
     }
     
+    const roleIcon = getRoleIcon(currentUser.role);
+    const roleDisplay = getRoleDisplayName(currentUser.role);
     const infoEl = document.getElementById('dashboardRoleInfo');
+    
     if (infoEl) {
         if (currentUser.role === 'siswa') {
             infoEl.innerHTML = `
                 <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-                    <span>👨‍🎓 <strong>Mode Siswa</strong></span>
+                    <span>${roleIcon} <strong>Mode ${roleDisplay}</strong></span>
                     <span style="color: var(--text-muted);">|</span>
                     <span>📚 Kelas: <strong>${currentUser.kelas || '-'}</strong></span>
                     <span>🎓 Jurusan: <strong>${currentUser.jurusan || '-'}</strong></span>
@@ -423,23 +462,41 @@ function updateDashboardRoleInfo() {
         } else if (currentUser.role === 'guru') {
             infoEl.innerHTML = `
                 <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-                    <span>👨‍🏫 <strong>Mode Guru</strong></span>
+                    <span>${roleIcon} <strong>Mode ${roleDisplay}</strong></span>
                     <span style="color: var(--text-muted);">|</span>
                     <span>📚 Mata Pelajaran: <strong>${currentUser.subject || '-'}</strong></span>
+                    <span style="color: #00bcd4; font-size: 12px;">ℹ️ Dashboard menampilkan semua data siswa</span>
+                </div>
+            `;
+        } else if (currentUser.role === 'wakil_kepala') {
+            infoEl.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                    <span>${roleIcon} <strong>Mode ${roleDisplay}</strong></span>
+                    <span style="color: var(--text-muted);">|</span>
+                    <span>📋 Bidang: <strong>${currentUser.bidang || '-'}</strong></span>
+                    <span style="color: #00bcd4; font-size: 12px;">ℹ️ Dashboard menampilkan semua data siswa</span>
+                </div>
+            `;
+        } else if (currentUser.role === 'staff_tu') {
+            infoEl.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                    <span>${roleIcon} <strong>Mode ${roleDisplay}</strong></span>
+                    <span style="color: var(--text-muted);">|</span>
+                    <span>📋 Departemen: <strong>${currentUser.departemen || '-'}</strong></span>
                     <span style="color: #00bcd4; font-size: 12px;">ℹ️ Dashboard menampilkan semua data siswa</span>
                 </div>
             `;
         } else if (currentUser.role === 'admin') {
             infoEl.innerHTML = `
                 <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-                    <span>👑 <strong>Mode Administrator</strong></span>
+                    <span>${roleIcon} <strong>Mode ${roleDisplay}</strong></span>
                     <span style="color: #00bcd4; font-size: 12px;">ℹ️ Dashboard menampilkan semua data siswa</span>
                 </div>
             `;
         } else if (currentUser.role === 'developer') {
             infoEl.innerHTML = `
                 <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-                    <span>👨‍💻 <strong>Mode Developer</strong></span>
+                    <span>${roleIcon} <strong>Mode ${roleDisplay}</strong></span>
                     <span style="color: #00bcd4; font-size: 12px;">ℹ️ Dashboard menampilkan semua data siswa</span>
                 </div>
             `;
@@ -472,5 +529,9 @@ window.getFilteredStudents = getFilteredStudents;
 window.getFilteredAttendance = getFilteredAttendance;
 window.cleanupDashboard = cleanupDashboard;
 window.updateDashboardChart = updateDashboardChart;
+window.getRoleDisplayName = getRoleDisplayName;
+window.getRoleIcon = getRoleIcon;
+window.hasReadAllAccess = hasReadAllAccess;
+window.hasFullAccess = hasFullAccess;
 
-console.log("✅ dashboard.js V1.0 loaded - Role-based dashboard filtering");
+console.log("✅ dashboard.js V2.0 loaded - Role-based dashboard filtering (Developer, Kepala Sekolah, Wakil Kepala Sekolah, Staff TU, Guru, Siswa)");
