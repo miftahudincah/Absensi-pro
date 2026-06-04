@@ -1,4 +1,4 @@
-// izin-online.js - VERSION 3.1 (FIXED: FORCE CREATE DATA & DEBUG)
+// izin-online.js - VERSION 2.0 (DENGAN ROLE BARU: WAKIL KEPALA SEKOLAH & STAFF TU)
 // Fitur Izin Online: ajukan izin, upload surat, approve/reject
 // Role yang didukung:
 // - Developer: akses penuh (approve/reject semua)
@@ -11,13 +11,13 @@
 
 let izinInitialized = false;
 let currentIzinList = [];
-let currentIzinFilter = 'all';
-let izinRealtimeListener = null;
-let izinLoadRetryCount = 0;
-const MAX_IZIN_RETRY = 10;
+let currentIzinFilter = 'all'; // all, pending, approved, rejected
 
 // ======================= ROLE HELPER FUNCTIONS ========================
 
+/**
+ * Mendapatkan display name role
+ */
 function getRoleDisplayName(role) {
     const names = {
         developer: 'Developer',
@@ -30,6 +30,9 @@ function getRoleDisplayName(role) {
     return names[role] || role.toUpperCase();
 }
 
+/**
+ * Mendapatkan icon untuk role
+ */
 function getRoleIcon(role) {
     const icons = {
         developer: '👨‍💻',
@@ -42,16 +45,30 @@ function getRoleIcon(role) {
     return icons[role] || '👤';
 }
 
+/**
+ * Cek apakah user dapat menyetujui/menolak izin
+ * - Staff TU TIDAK bisa approve/reject (hanya baca)
+ * - Guru/Wakil/Admin/Developer bisa approve/reject
+ */
 function canApproveIzin(role) {
     const approveRoles = ['admin', 'developer', 'wakil_kepala', 'guru'];
     return approveRoles.includes(role);
 }
 
+/**
+ * Cek apakah user dapat melihat semua izin
+ * - Staff TU: dapat melihat semua izin (read-only)
+ * - Guru/Wakil/Admin/Developer: dapat melihat semua izin
+ * - Siswa: hanya izin sendiri
+ */
 function canViewAllIzin(role) {
     const allAccessRoles = ['admin', 'developer', 'wakil_kepala', 'staff_tu', 'guru'];
     return allAccessRoles.includes(role);
 }
 
+/**
+ * Mendapatkan pesan akses berdasarkan role
+ */
 function getIzinAccessMessage(role) {
     if (role === 'staff_tu') {
         return "Staff TU dapat melihat semua pengajuan izin namun tidak dapat menyetujui/menolak.";
@@ -65,30 +82,13 @@ function getIzinAccessMessage(role) {
 // ======================= TAMPILAN TAB IZIN =======================
 
 function renderIzinTab() {
-    console.log("🎨 renderIzinTab dipanggil - currentUser:", currentUser?.nama);
-    
     const tabContainer = document.getElementById('tab-izin');
-    if (!tabContainer) {
-        console.error("❌ tab-izin tidak ditemukan!");
-        return;
-    }
+    if (!tabContainer) return;
     
-    if (!currentUser) {
-        console.log("⏳ Belum ada user login");
-        tabContainer.innerHTML = `
-            <div class="izin-container">
-                <div class="izin-header">
-                    <h3>📝 Izin Online</h3>
-                    <p class="text-small">Silakan login terlebih dahulu untuk mengakses fitur izin online.</p>
-                </div>
-                <div style="text-align:center; padding:40px;">
-                    <button class="btn-action btn-primary" onclick="showAuthScreen()">🔐 Login</button>
-                </div>
-            </div>
-        `;
-        return;
-    }
-    
+    const canApprove = canApproveIzin(currentUser?.role);
+    const canViewAll = canViewAllIzin(currentUser?.role);
+    const isSiswa = currentUser && currentUser.role === 'siswa';
+    const roleDisplay = getRoleDisplayName(currentUser?.role);
     const accessMessage = getIzinAccessMessage(currentUser?.role);
     
     let html = `
@@ -101,175 +101,37 @@ function renderIzinTab() {
                 </div>` : ''}
             </div>
             
-            <div class="izin-actions" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; margin-bottom: 20px;">
-                <button class="btn-action btn-primary" onclick="openAjukanIzinModal()" style="padding: 10px 20px;">
+            <!-- Tombol Ajukan Izin (hanya untuk siswa dan guru yang bisa mengajukan) -->
+            <div class="izin-actions">
+                <button class="btn-action btn-primary" onclick="openAjukanIzinModal()">
                     ➕ Ajukan Izin Baru
                 </button>
-                <div class="izin-filter" style="display: flex; gap: 10px; flex-wrap: wrap;">
-                    <button class="filter-btn ${currentIzinFilter === 'all' ? 'active' : ''}" onclick="filterIzinList('all')" style="padding: 6px 14px; border-radius: 20px; cursor: pointer;">📋 Semua</button>
-                    <button class="filter-btn ${currentIzinFilter === 'pending' ? 'active' : ''}" onclick="filterIzinList('pending')" style="padding: 6px 14px; border-radius: 20px; cursor: pointer;">⏳ Menunggu</button>
-                    <button class="filter-btn ${currentIzinFilter === 'approved' ? 'active' : ''}" onclick="filterIzinList('approved')" style="padding: 6px 14px; border-radius: 20px; cursor: pointer;">✅ Disetujui</button>
-                    <button class="filter-btn ${currentIzinFilter === 'rejected' ? 'active' : ''}" onclick="filterIzinList('rejected')" style="padding: 6px 14px; border-radius: 20px; cursor: pointer;">❌ Ditolak</button>
+                <div class="izin-filter">
+                    <button class="filter-btn ${currentIzinFilter === 'all' ? 'active' : ''}" onclick="filterIzinList('all')">📋 Semua</button>
+                    <button class="filter-btn ${currentIzinFilter === 'pending' ? 'active' : ''}" onclick="filterIzinList('pending')">⏳ Menunggu</button>
+                    <button class="filter-btn ${currentIzinFilter === 'approved' ? 'active' : ''}" onclick="filterIzinList('approved')">✅ Disetujui</button>
+                    <button class="filter-btn ${currentIzinFilter === 'rejected' ? 'active' : ''}" onclick="filterIzinList('rejected')">❌ Ditolak</button>
                 </div>
             </div>
             
+            <!-- Daftar Izin -->
             <div id="izinListContainer" class="izin-list">
-                <div style="text-align: center; padding: 40px;">
-                    <div class="loading-spinner" style="width: 40px; height: 40px; border: 4px solid rgba(0,188,212,0.2); border-top-color: #00bcd4; border-radius: 50%; animation: spin 1s ease-in-out infinite; margin: 0 auto 15px;"></div>
-                    <p>⏳ Memuat data izin...</p>
-                </div>
+                <div class="loading-spinner-small" style="text-align: center; padding: 40px;">⏳ Memuat data izin...</div>
             </div>
         </div>
     `;
     
     tabContainer.innerHTML = html;
-    
-    // Reset retry counter
-    izinLoadRetryCount = 0;
-    
-    // Tunggu sebentar lalu load data
-    setTimeout(() => {
-        loadIzinList();
-    }, 100);
-    
-    // Juga coba inisialisasi data default jika kosong
-    setTimeout(() => {
-        initializeDefaultIzinData();
-    }, 2000);
-}
-
-// ======================= INISIALISASI DATA DEFAULT =======================
-
-async function initializeDefaultIzinData() {
-    console.log("🔍 Checking if izin data exists...");
-    
-    if (!currentUser) return;
-    if (typeof db === 'undefined' || !db) return;
-    
-    try {
-        const snapshot = await db.ref('izin').once('value');
-        const data = snapshot.val();
-        
-        if (!data || Object.keys(data).length === 0) {
-            console.log("📭 No izin data found, creating default data...");
-            
-            // Buat data default untuk testing
-            const today = new Date().toISOString().split('T')[0];
-            const tomorrow = new Date();
-            tomorrow.setDate(tomorrow.getDate() + 1);
-            const tomorrowStr = tomorrow.toISOString().split('T')[0];
-            
-            const defaultIzin = {
-                studentId: currentUser.fpId || currentUser.uid,
-                studentName: currentUser.nama,
-                kelas: currentUser.kelas || 'X',
-                jurusan: currentUser.jurusan || 'RPL',
-                type: 'sakit',
-                startDate: today,
-                endDate: tomorrowStr,
-                reason: 'Contoh pengajuan izin sakit. Ini adalah data default yang dibuat oleh sistem.',
-                status: 'pending',
-                submittedBy: currentUser.nama || currentUser.email,
-                submittedByRole: currentUser.role,
-                createdAt: firebase.database.ServerValue.TIMESTAMP,
-                updatedAt: firebase.database.ServerValue.TIMESTAMP
-            };
-            
-            await db.ref('izin').push(defaultIzin);
-            console.log("✅ Default izin data created!");
-            showToast("📝 Data contoh izin telah dibuat", "info");
-            
-            // Refresh data
-            loadIzinList();
-        }
-    } catch (error) {
-        console.error("Error checking/creating default izin data:", error);
-    }
-}
-
-// ======================= SETUP REALTIME LISTENER =======================
-
-function setupIzinRealtimeListener() {
-    if (izinRealtimeListener) {
-        try {
-            db.ref('izin').off('value', izinRealtimeListener);
-        } catch(e) {}
-    }
-    
-    izinRealtimeListener = db.ref('izin').on('value', (snapshot) => {
-        console.log("🔄 Realtime: Data izin berubah, refresh list...");
-        if (!currentUser) return;
-        
-        const data = snapshot.val();
-        currentIzinList = [];
-        if (data) {
-            Object.entries(data).forEach(([id, izin]) => {
-                currentIzinList.push({ id, ...izin });
-            });
-        }
-        
-        console.log(`📊 Total izin after change: ${currentIzinList.length}`);
-        refreshDisplayedIzinList();
-    }, (error) => {
-        console.error("❌ Realtime listener error:", error);
-    });
-}
-
-function refreshDisplayedIzinList() {
-    console.log("📋 refreshDisplayedIzinList dipanggil, total izin:", currentIzinList.length);
-    
-    let filteredList = [...currentIzinList];
-    
-    if (currentUser && currentUser.role === 'siswa') {
-        const studentId = currentUser.fpId || currentUser.uid;
-        filteredList = currentIzinList.filter(izin => izin.studentId == studentId);
-        console.log(`👨‍🎓 Filtered for student ${studentId}: ${filteredList.length} items`);
-    }
-    
-    if (currentIzinFilter !== 'all') {
-        filteredList = filteredList.filter(izin => izin.status === currentIzinFilter);
-        console.log(`🔍 Filtered by status ${currentIzinFilter}: ${filteredList.length} items`);
-    }
-    
-    filteredList.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-    
-    renderIzinList(filteredList);
+    loadIzinList();
 }
 
 // ======================= LOAD IZIN LIST =======================
 
 async function loadIzinList() {
-    console.log("📋 loadIzinList dipanggil - retry count:", izinLoadRetryCount);
-    
     const container = document.getElementById('izinListContainer');
-    if (!container) {
-        console.error("❌ izinListContainer tidak ditemukan!");
-        return;
-    }
-    
-    if (!currentUser) {
-        console.log("⏳ Belum ada user login");
-        container.innerHTML = '<div style="text-align:center; padding:40px;">🔒 Silakan login terlebih dahulu</div>';
-        return;
-    }
-    
-    if (typeof db === 'undefined' || !db) {
-        console.warn("⚠️ Firebase db belum siap");
-        if (izinLoadRetryCount < MAX_IZIN_RETRY) {
-            izinLoadRetryCount++;
-            setTimeout(() => loadIzinList(), 1000);
-        } else {
-            container.innerHTML = `<div style="text-align:center; padding:40px; color:#f44336;">
-                ❌ Gagal terhubung ke database. Silakan refresh halaman.
-                <br><br>
-                <button onclick="location.reload()" class="btn-action btn-primary" style="margin-top:10px;">🔄 Refresh Halaman</button>
-            </div>`;
-        }
-        return;
-    }
+    if (!container) return;
     
     try {
-        console.log("📡 Mengambil data izin dari Firebase...");
         const snapshot = await db.ref('izin').once('value');
         const data = snapshot.val();
         
@@ -280,97 +142,85 @@ async function loadIzinList() {
             });
         }
         
-        console.log(`📊 Total izin: ${currentIzinList.length}`);
+        // Filter berdasarkan role
+        let filteredList = currentIzinList;
         
-        // Setup realtime listener jika belum
-        if (!izinRealtimeListener) {
-            setupIzinRealtimeListener();
+        if (currentUser.role === 'siswa') {
+            // Siswa hanya lihat izin sendiri
+            filteredList = currentIzinList.filter(izin => izin.studentId == currentUser.fpId || izin.studentId == currentUser.uid);
+        }
+        // Staff TU, Guru, Wakil, Admin, Developer: lihat semua izin
+        
+        // Filter status
+        if (currentIzinFilter !== 'all') {
+            filteredList = filteredList.filter(izin => izin.status === currentIzinFilter);
         }
         
-        refreshDisplayedIzinList();
+        // Urutkan dari terbaru
+        filteredList.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+        
+        renderIzinList(filteredList);
         
     } catch (error) {
-        console.error('❌ Load izin error:', error);
-        container.innerHTML = `<div style="text-align:center; padding:40px; color:#f44336;">
-            ❌ Gagal memuat data izin: ${error.message}
-            <br><br>
-            <button onclick="loadIzinList()" class="btn-action btn-primary" style="margin-top:10px;">🔄 Coba Lagi</button>
-            <button onclick="createTestIzin()" class="btn-action btn-secondary" style="margin-top:10px; margin-left:10px;">➕ Tambah Data Test</button>
-        </div>`;
+        console.error('Load izin error:', error);
+        container.innerHTML = '<div style="text-align:center; padding:40px;">❌ Gagal memuat data izin</div>';
     }
 }
 
-// ======================= RENDER IZIN LIST =======================
-
 function renderIzinList(izinList) {
-    console.log("🎨 renderIzinList dipanggil dengan", izinList.length, "item");
-    
     const container = document.getElementById('izinListContainer');
     if (!container) return;
     
-    if (!izinList || izinList.length === 0) {
+    if (izinList.length === 0) {
         container.innerHTML = `
             <div class="izin-empty" style="text-align: center; padding: 60px 20px;">
                 <div style="font-size: 48px; margin-bottom: 16px;">📭</div>
                 <h4>Belum Ada Pengajuan Izin</h4>
                 <p class="text-small">Klik tombol "Ajukan Izin Baru" untuk mengajukan izin.</p>
-                <div style="margin-top: 20px;">
-                    <button onclick="createTestIzin()" class="btn-action btn-primary" style="margin-top: 0; padding: 8px 20px;">➕ Tambah Data Test</button>
-                </div>
             </div>
         `;
         return;
     }
     
     const canApprove = canApproveIzin(currentUser?.role);
+    const canViewAll = canViewAllIzin(currentUser?.role);
     const isStaffTU = currentUser?.role === 'staff_tu';
     
     let html = '<div class="izin-grid" style="display: flex; flex-direction: column; gap: 16px;">';
     
     for (const izin of izinList) {
+        const statusClass = izin.status === 'approved' ? 'status-approved' : 
+                           (izin.status === 'rejected' ? 'status-rejected' : 'status-pending');
         const statusText = izin.status === 'approved' ? '✅ Disetujui' :
                           (izin.status === 'rejected' ? '❌ Ditolak' : '⏳ Menunggu Persetujuan');
-        
-        let borderColor = '#ff9800';
-        let bgStatus = '#ff980020';
-        let textStatus = '#ff9800';
-        if (izin.status === 'approved') {
-            borderColor = '#4caf50';
-            bgStatus = '#4caf5020';
-            textStatus = '#4caf50';
-        }
-        if (izin.status === 'rejected') {
-            borderColor = '#f44336';
-            bgStatus = '#f4433620';
-            textStatus = '#f44336';
-        }
         
         const tanggalMulai = formatIndonesianDate(izin.startDate);
         const tanggalSelesai = formatIndonesianDate(izin.endDate);
         
         let attachmentHtml = '';
-        if (izin.attachmentUrl && izin.attachmentUrl !== 'null' && izin.attachmentUrl !== 'undefined') {
+        if (izin.attachmentUrl) {
             attachmentHtml = `
                 <div class="izin-attachment" style="margin-top: 8px;">
-                    <a href="${izin.attachmentUrl}" target="_blank" class="btn-link" style="color: #00bcd4; text-decoration: none; display: inline-flex; align-items: center; gap: 4px;">
-                        📎 Lihat Lampiran
+                    <a href="${izin.attachmentUrl}" target="_blank" class="btn-link" style="color: #00bcd4; text-decoration: none;">
+                        📎 Lihat Lampiran (Surat/Dokumen)
                     </a>
                 </div>
             `;
         }
         
+        // Action buttons - hanya untuk role yang bisa approve (Staff TU tidak bisa)
         let actionButtons = '';
         if (canApprove && izin.status === 'pending') {
             actionButtons = `
                 <div class="izin-actions-buttons" style="display: flex; gap: 10px; margin-top: 12px;">
-                    <button class="btn-action btn-success" onclick="approveIzin('${izin.id}', '${escapeHtml(izin.studentName)}')" style="padding: 6px 16px; border-radius: 20px; border: none; cursor: pointer; background: #4caf50; color: white;">✅ Setujui</button>
-                    <button class="btn-action btn-danger" onclick="rejectIzin('${izin.id}', '${escapeHtml(izin.studentName)}')" style="padding: 6px 16px; border-radius: 20px; border: none; cursor: pointer; background: #f44336; color: white;">❌ Tolak</button>
+                    <button class="btn-action btn-success" onclick="approveIzin('${izin.id}', '${escapeHtml(izin.studentName)}')" style="padding: 6px 16px;">✅ Setujui</button>
+                    <button class="btn-action btn-danger" onclick="rejectIzin('${izin.id}', '${escapeHtml(izin.studentName)}')" style="padding: 6px 16px;">❌ Tolak</button>
                 </div>
             `;
         } else if (isStaffTU && izin.status === 'pending') {
             actionButtons = `
                 <div class="izin-actions-buttons" style="margin-top: 12px;">
-                    <span class="badge" style="background: #607d8b; padding: 4px 12px; border-radius: 20px; font-size: 11px; color: white;">🔒 Staff TU tidak dapat approve/reject</span>
+                    <span class="badge" style="background: #607d8b; padding: 4px 12px; border-radius: 20px; font-size: 11px;">🔒 Staff TU tidak dapat approve/reject</span>
                 </div>
             `;
         }
@@ -383,22 +233,23 @@ function renderIzinList(izinList) {
         }
         
         let alasanPenolakan = '';
-        if (izin.status === 'rejected' && izin.rejectReason) {
-            alasanPenolakan = `<div class="izin-reject-reason" style="background: rgba(244, 67, 54, 0.1); padding: 8px; border-radius: 8px; margin-top: 8px;"><strong>Alasan Ditolak:</strong> ${escapeHtml(izin.rejectReason)}</div>`;
+        if (izin.status === 'rejected' && izin.reason) {
+            alasanPenolakan = `<div class="izin-reject-reason" style="background: rgba(244, 67, 54, 0.1); padding: 8px; border-radius: 8px; margin-top: 8px;"><strong>Alasan Ditolak:</strong> ${escapeHtml(izin.reason)}</div>`;
         }
         
+        // Role badge untuk pengaju
         const submittedByRole = izin.submittedByRole || 'siswa';
         const roleBadge = getRoleIcon(submittedByRole) + ' ' + getRoleDisplayName(submittedByRole);
         
         html += `
-            <div class="izin-card" style="background: var(--bg-card); border-radius: 16px; padding: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border-left: 4px solid ${borderColor}; margin-bottom: 8px;">
+            <div class="izin-card ${statusClass}" style="background: var(--bg-card); border-radius: 16px; padding: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
                 <div class="izin-card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 12px;">
                     <div class="izin-type">
                         <span style="font-weight: bold;">${izin.type === 'sakit' ? '🤒 Izin Sakit' : '📝 Izin Keperluan'}</span>
                         <span style="font-size: 11px; background: var(--bg-hover); padding: 2px 8px; border-radius: 12px; margin-left: 8px;">${roleBadge}</span>
                     </div>
-                    <div class="izin-status">
-                        <span style="padding: 4px 12px; border-radius: 20px; font-size: 12px; background: ${bgStatus}; color: ${textStatus};">${statusText}</span>
+                    <div class="izin-status ${statusClass}">
+                        <span class="badge ${statusClass}" style="padding: 4px 12px; border-radius: 20px; font-size: 12px;">${statusText}</span>
                     </div>
                 </div>
                 <div class="izin-card-body">
@@ -427,64 +278,6 @@ function renderIzinList(izinList) {
     
     html += '</div>';
     container.innerHTML = html;
-    console.log("✅ renderIzinList selesai");
-}
-
-// ======================= CREATE TEST IZIN =======================
-
-function createTestIzin() {
-    console.log("🧪 createTestIzin dipanggil");
-    
-    if (!currentUser) {
-        showToast("Anda harus login terlebih dahulu!", "error");
-        return;
-    }
-    
-    if (!db) {
-        showToast("Database belum siap!", "error");
-        return;
-    }
-    
-    const today = new Date().toISOString().split('T')[0];
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const tomorrowStr = tomorrow.toISOString().split('T')[0];
-    
-    const testIzin = {
-        studentId: currentUser.fpId || currentUser.uid,
-        studentName: currentUser.nama,
-        kelas: currentUser.kelas || 'X',
-        jurusan: currentUser.jurusan || 'RPL',
-        type: 'sakit',
-        startDate: today,
-        endDate: tomorrowStr,
-        reason: 'Ini adalah data test untuk debugging sistem izin online.',
-        status: 'pending',
-        submittedBy: currentUser.nama || currentUser.email,
-        submittedByRole: currentUser.role,
-        createdAt: firebase.database.ServerValue.TIMESTAMP,
-        updatedAt: firebase.database.ServerValue.TIMESTAMP
-    };
-    
-    showToast("⏳ Menambahkan data test...", "info");
-    
-    db.ref('izin').push(testIzin).then((result) => {
-        console.log("✅ Data test berhasil ditambahkan, key:", result.key);
-        showToast("✅ Data test berhasil ditambahkan!", "success");
-        
-        if (typeof logActivity === 'function') {
-            logActivity('create_test_izin', `Membuat data test izin oleh ${getRoleDisplayName(currentUser.role)}`);
-        }
-        
-        // Langsung refresh tampilan
-        setTimeout(() => {
-            loadIzinList();
-        }, 500);
-        
-    }).catch((err) => {
-        console.error("❌ Gagal menambah data test:", err);
-        showToast("❌ Gagal: " + err.message, "error");
-    });
 }
 
 // ======================= AJUKAN IZIN =======================
@@ -546,6 +339,7 @@ function openAjukanIzinModal() {
     if (existingModal) existingModal.remove();
     document.body.insertAdjacentHTML('beforeend', modalHtml);
     
+    // Set default dates
     const today = new Date().toISOString().split('T')[0];
     document.getElementById('izinStartDate').value = today;
     
@@ -553,26 +347,24 @@ function openAjukanIzinModal() {
     tomorrow.setDate(tomorrow.getDate() + 1);
     document.getElementById('izinEndDate').value = tomorrow.toISOString().split('T')[0];
     
+    // Attachment preview
     const fileInput = document.getElementById('izinAttachment');
-    if (fileInput) {
-        fileInput.addEventListener('change', function() {
-            const preview = document.getElementById('attachmentPreview');
-            const nameSpan = document.getElementById('attachmentName');
-            if (this.files && this.files[0]) {
-                nameSpan.textContent = `📎 ${this.files[0].name}`;
-                preview.style.display = 'block';
-            } else {
-                preview.style.display = 'none';
-            }
-        });
-    }
+    fileInput.addEventListener('change', function() {
+        const preview = document.getElementById('attachmentPreview');
+        const nameSpan = document.getElementById('attachmentName');
+        if (this.files && this.files[0]) {
+            nameSpan.textContent = `📎 ${this.files[0].name}`;
+            preview.style.display = 'block';
+        } else {
+            preview.style.display = 'none';
+        }
+    });
 }
 
 function clearAttachment() {
     const fileInput = document.getElementById('izinAttachment');
-    if (fileInput) fileInput.value = '';
-    const preview = document.getElementById('attachmentPreview');
-    if (preview) preview.style.display = 'none';
+    fileInput.value = '';
+    document.getElementById('attachmentPreview').style.display = 'none';
 }
 
 async function submitIzin(event) {
@@ -600,23 +392,20 @@ async function submitIzin(event) {
     }
     
     const btn = document.querySelector('#formAjukanIzin .btn-save');
-    const originalText = btn ? btn.innerHTML : 'Submit';
-    if (btn) {
-        btn.disabled = true;
-        btn.innerHTML = '⏳ Mengirim...';
-    }
+    const originalText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '⏳ Mengirim...';
     
     try {
         let attachmentUrl = null;
         
-        if (fileInput && fileInput.files && fileInput.files[0]) {
+        // Upload lampiran jika ada
+        if (fileInput.files && fileInput.files[0]) {
             const file = fileInput.files[0];
             if (file.size > 2 * 1024 * 1024) {
                 showToast('Ukuran file maksimal 2MB!', 'error');
-                if (btn) {
-                    btn.disabled = false;
-                    btn.innerHTML = originalText;
-                }
+                btn.disabled = false;
+                btn.innerHTML = originalText;
                 return;
             }
             
@@ -628,6 +417,7 @@ async function submitIzin(event) {
             }
         }
         
+        // Data siswa
         let studentId, studentName, kelas, jurusan;
         
         if (currentUser.role === 'siswa') {
@@ -636,6 +426,7 @@ async function submitIzin(event) {
             kelas = currentUser.kelas;
             jurusan = currentUser.jurusan;
         } else {
+            // Untuk guru/staff yang mengajukan atas nama (misalnya untuk siswa lain)
             studentId = currentUser.fpId || currentUser.uid;
             studentName = currentUser.nama;
             kelas = currentUser.kelas || '-';
@@ -668,20 +459,14 @@ async function submitIzin(event) {
         }
         
         closeModal('modal-ajukan-izin');
-        
-        // Refresh data
-        setTimeout(() => {
-            loadIzinList();
-        }, 500);
+        loadIzinList();
         
     } catch (error) {
         console.error('Submit izin error:', error);
         showToast('❌ Gagal mengajukan izin: ' + error.message, 'error');
     } finally {
-        if (btn) {
-            btn.disabled = false;
-            btn.innerHTML = originalText;
-        }
+        btn.disabled = false;
+        btn.innerHTML = originalText;
     }
 }
 
@@ -690,7 +475,7 @@ async function submitIzin(event) {
 async function approveIzin(izinId, studentName) {
     if (!canApproveIzin(currentUser?.role)) {
         const roleDisplay = getRoleDisplayName(currentUser?.role);
-        showToast(`⛔ ${roleDisplay} tidak dapat menyetujui izin!`, 'error');
+        showToast(`⛔ ${roleDisplay} tidak dapat menyetujui izin! Hanya Guru, Wakil Kepala Sekolah, Kepala Sekolah, dan Developer yang dapat menyetujui.`, 'error');
         return;
     }
     
@@ -707,11 +492,17 @@ async function approveIzin(izinId, studentName) {
         
         showToast(`✅ Izin ${studentName} disetujui!`, 'success');
         
+        // Kirim notifikasi WhatsApp
+        const izin = currentIzinList.find(i => i.id === izinId);
+        if (izin && typeof sendIzinApprovedNotification === 'function') {
+            await sendIzinApprovedNotification(izin.studentId, studentName, izin.type, izin.startDate);
+        }
+        
         if (typeof logActivity === 'function') {
             logActivity('approve_izin', `Menyetujui izin ${studentName} oleh ${getRoleDisplayName(currentUser.role)}`);
         }
         
-        // Refresh data (realtime listener akan update otomatis)
+        loadIzinList();
         
     } catch (error) {
         console.error('Approve izin error:', error);
@@ -722,7 +513,7 @@ async function approveIzin(izinId, studentName) {
 async function rejectIzin(izinId, studentName) {
     if (!canApproveIzin(currentUser?.role)) {
         const roleDisplay = getRoleDisplayName(currentUser?.role);
-        showToast(`⛔ ${roleDisplay} tidak dapat menolak izin!`, 'error');
+        showToast(`⛔ ${roleDisplay} tidak dapat menolak izin! Hanya Guru, Wakil Kepala Sekolah, Kepala Sekolah, dan Developer yang dapat menolak.`, 'error');
         return;
     }
     
@@ -749,7 +540,7 @@ async function rejectIzin(izinId, studentName) {
             logActivity('reject_izin', `Menolak izin ${studentName}: ${reason} oleh ${getRoleDisplayName(currentUser.role)}`);
         }
         
-        // Refresh data (realtime listener akan update otomatis)
+        loadIzinList();
         
     } catch (error) {
         console.error('Reject izin error:', error);
@@ -758,34 +549,19 @@ async function rejectIzin(izinId, studentName) {
 }
 
 function filterIzinList(status) {
-    console.log("🔍 filterIzinList dipanggil dengan status:", status);
     currentIzinFilter = status;
     
     // Update active class pada filter buttons
     document.querySelectorAll('.izin-filter .filter-btn').forEach(btn => {
         btn.classList.remove('active');
-        btn.style.background = 'var(--bg-hover)';
-        btn.style.color = 'var(--text-primary)';
-        btn.style.border = '1px solid var(--border)';
+        if (btn.textContent.includes(status === 'all' ? 'Semua' : 
+            (status === 'pending' ? 'Menunggu' : 
+             (status === 'approved' ? 'Disetujui' : 'Ditolak')))) {
+            btn.classList.add('active');
+        }
     });
     
-    const activeBtn = Array.from(document.querySelectorAll('.izin-filter .filter-btn')).find(btn => {
-        const btnText = btn.textContent;
-        if (status === 'all' && btnText.includes('Semua')) return true;
-        if (status === 'pending' && btnText.includes('Menunggu')) return true;
-        if (status === 'approved' && btnText.includes('Disetujui')) return true;
-        if (status === 'rejected' && btnText.includes('Ditolak')) return true;
-        return false;
-    });
-    
-    if (activeBtn) {
-        activeBtn.classList.add('active');
-        activeBtn.style.background = '#00bcd4';
-        activeBtn.style.color = 'white';
-        activeBtn.style.border = 'none';
-    }
-    
-    refreshDisplayedIzinList();
+    loadIzinList();
 }
 
 // ======================= UTILITY =======================
@@ -809,41 +585,20 @@ function escapeHtml(str) {
     return str.replace(/[&<>]/g, m => m === '&' ? '&amp;' : m === '<' ? '&lt;' : '&gt;');
 }
 
-// ======================= CLEANUP =======================
-
-function cleanupIzinSystem() {
-    if (izinRealtimeListener) {
-        try {
-            db.ref('izin').off('value', izinRealtimeListener);
-        } catch(e) {}
-        izinRealtimeListener = null;
-    }
-    izinInitialized = false;
-    console.log("🧹 Izin system cleaned up");
-}
-
 // ======================= INISIALISASI =======================
 
 function initIzinOnline() {
-    if (izinInitialized) {
-        console.log("📝 Izin Online already initialized");
-        return;
-    }
+    if (izinInitialized) return;
     izinInitialized = true;
     
     console.log('📝 Izin Online system initialized');
     addIzinTab();
-    
-    setTimeout(() => {
-        if (document.getElementById('tab-izin')?.classList.contains('active')) {
-            renderIzinTab();
-        }
-    }, 500);
 }
 
 function addIzinTab() {
     if (document.getElementById('tab-izin')) return;
     
+    // Tambahkan tab button ke dropdown menu
     const dropdownMainContent = document.getElementById('dropdownMainContent');
     if (dropdownMainContent) {
         const existingBtn = Array.from(dropdownMainContent.children).find(btn => btn.innerHTML === '📝 Izin Online');
@@ -852,6 +607,7 @@ function addIzinTab() {
             izinBtn.setAttribute('onclick', "switchTab('izin'); closeAllDropdowns()");
             izinBtn.innerHTML = '📝 Izin Online';
             
+            // Cari posisi setelah Absensi Staff atau sebelum Panduan
             const guideBtn = Array.from(dropdownMainContent.children).find(btn => btn.textContent.includes('Panduan'));
             if (guideBtn) {
                 dropdownMainContent.insertBefore(izinBtn, guideBtn);
@@ -862,6 +618,7 @@ function addIzinTab() {
         }
     }
     
+    // Tambahkan tab content
     const dashboardSection = document.getElementById('dashboard-section');
     if (dashboardSection && !document.getElementById('tab-izin')) {
         const izinContent = document.createElement('div');
@@ -873,54 +630,20 @@ function addIzinTab() {
 }
 
 // Override switchTab untuk render izin
-if (typeof window !== 'undefined') {
-    const originalSwitchTabForIzin = window.switchTab;
-    if (originalSwitchTabForIzin) {
-        window.switchTab = function(tabId) {
-            originalSwitchTabForIzin(tabId);
-            if (tabId === 'izin') {
-                setTimeout(() => {
-                    console.log("📝 Switching to izin tab, rendering...");
-                    renderIzinTab();
-                }, 100);
-            }
-        };
-    } else {
-        window.switchTab = function(tabId) {
-            if (tabId === 'izin') {
-                setTimeout(() => {
-                    console.log("📝 Switching to izin tab, rendering...");
-                    renderIzinTab();
-                }, 100);
-            }
-        };
-    }
-}
-
-// Tambahkan CSS untuk spinner dan filter button
-if (!document.querySelector('#izin-spinner-style')) {
-    const style = document.createElement('style');
-    style.id = 'izin-spinner-style';
-    style.textContent = `
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+const originalSwitchTabForIzin = window.switchTab;
+if (originalSwitchTabForIzin) {
+    window.switchTab = function(tabId) {
+        originalSwitchTabForIzin(tabId);
+        if (tabId === 'izin') {
+            setTimeout(() => renderIzinTab(), 100);
         }
-        .filter-btn {
-            transition: all 0.2s ease;
+    };
+} else {
+    window.switchTab = function(tabId) {
+        if (tabId === 'izin') {
+            setTimeout(() => renderIzinTab(), 100);
         }
-        .filter-btn:hover {
-            transform: translateY(-2px);
-        }
-        .izin-card {
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
-        .izin-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        }
-    `;
-    document.head.appendChild(style);
+    };
 }
 
 // ======================= EKSPOR KE GLOBAL =======================
@@ -933,11 +656,9 @@ window.approveIzin = approveIzin;
 window.rejectIzin = rejectIzin;
 window.filterIzinList = filterIzinList;
 window.clearAttachment = clearAttachment;
-window.createTestIzin = createTestIzin;
-window.cleanupIzinSystem = cleanupIzinSystem;
 window.getRoleDisplayName = getRoleDisplayName;
 window.getRoleIcon = getRoleIcon;
 window.canApproveIzin = canApproveIzin;
 window.canViewAllIzin = canViewAllIzin;
 
-console.log("✅ izin-online.js V3.1 loaded - Auto-create default data if empty");
+console.log("✅ izin-online.js V2.0 loaded - Izin Online dengan role: Developer, Kepala Sekolah, Wakil Kepala Sekolah, Staff TU (baca saja), Guru, Siswa");
