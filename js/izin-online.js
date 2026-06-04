@@ -1,5 +1,5 @@
-// izin-online.js - VERSION 1.0
-// Fitur Izin Online: ajukan izin, upload surat, approve/reject
+// izin-online.js - VERSION 1.2 (ADD DELETE FEATURE)
+// Fitur Izin Online: ajukan izin, upload surat, approve/reject, delete
 // ============================================================================
 
 let izinInitialized = false;
@@ -10,7 +10,10 @@ let currentIzinFilter = 'all'; // all, pending, approved, rejected
 
 function renderIzinTab() {
     const tabContainer = document.getElementById('tab-izin');
-    if (!tabContainer) return;
+    if (!tabContainer) {
+        console.log('⚠️ tab-izin container tidak ditemukan');
+        return;
+    }
     
     const isAdminOrGuru = currentUser && (currentUser.role === 'admin' || currentUser.role === 'guru' || currentUser.role === 'developer');
     const isSiswa = currentUser && currentUser.role === 'siswa';
@@ -43,6 +46,9 @@ function renderIzinTab() {
     `;
     
     tabContainer.innerHTML = html;
+    
+    // Panggil loadIzinList setelah render
+    console.log('📝 renderIzinTab selesai, memuat data izin...');
     loadIzinList();
 }
 
@@ -50,11 +56,31 @@ function renderIzinTab() {
 
 async function loadIzinList() {
     const container = document.getElementById('izinListContainer');
-    if (!container) return;
+    if (!container) {
+        console.log('⚠️ izinListContainer tidak ditemukan');
+        return;
+    }
+    
+    if (!currentUser) {
+        console.log('⚠️ currentUser belum tersedia');
+        container.innerHTML = '<div style="text-align:center; padding:40px;">🔐 Silakan login terlebih dahulu</div>';
+        return;
+    }
+    
+    console.log('📝 loadIzinList dipanggil, currentUser.role:', currentUser.role);
     
     try {
+        // Pastikan db tersedia
+        if (typeof db === 'undefined' || !db) {
+            console.error('❌ Database tidak tersedia');
+            container.innerHTML = '<div style="text-align:center; padding:40px;">❌ Koneksi database error</div>';
+            return;
+        }
+        
         const snapshot = await db.ref('izin').once('value');
         const data = snapshot.val();
+        
+        console.log('📝 Data izin dari database:', data ? Object.keys(data).length : 0, 'item');
         
         currentIzinList = [];
         if (data) {
@@ -64,20 +90,23 @@ async function loadIzinList() {
         }
         
         // Filter berdasarkan role
-        let filteredList = currentIzinList;
+        let filteredList = [...currentIzinList];
         
         if (currentUser.role === 'siswa') {
             // Siswa hanya lihat izin sendiri
             filteredList = currentIzinList.filter(izin => izin.studentId == currentUser.fpId);
+            console.log('📝 Filter siswa:', currentUser.fpId, 'menampilkan', filteredList.length, 'izin');
         } else if (currentUser.role === 'guru') {
-            // Guru lihat izin kelasnya (jika ada filter kelas nanti)
-            // Untuk sekarang lihat semua
-            filteredList = currentIzinList;
+            // Guru lihat semua izin
+            console.log('📝 Guru melihat semua izin');
+        } else if (currentUser.role === 'admin' || currentUser.role === 'developer') {
+            console.log('📝 Admin/Developer melihat semua izin');
         }
         
         // Filter status
         if (currentIzinFilter !== 'all') {
             filteredList = filteredList.filter(izin => izin.status === currentIzinFilter);
+            console.log('📝 Filter status:', currentIzinFilter, 'menampilkan', filteredList.length, 'izin');
         }
         
         // Urutkan dari terbaru
@@ -86,14 +115,16 @@ async function loadIzinList() {
         renderIzinList(filteredList);
         
     } catch (error) {
-        console.error('Load izin error:', error);
-        container.innerHTML = '<div style="text-align:center; padding:40px;">❌ Gagal memuat data izin</div>';
+        console.error('❌ Load izin error:', error);
+        container.innerHTML = '<div style="text-align:center; padding:40px;">❌ Gagal memuat data izin: ' + (error.message || 'Unknown error') + '</div>';
     }
 }
 
 function renderIzinList(izinList) {
     const container = document.getElementById('izinListContainer');
     if (!container) return;
+    
+    console.log('📝 renderIzinList, jumlah data:', izinList.length);
     
     if (izinList.length === 0) {
         container.innerHTML = `
@@ -107,6 +138,7 @@ function renderIzinList(izinList) {
     }
     
     const isAdminOrGuru = currentUser && (currentUser.role === 'admin' || currentUser.role === 'guru' || currentUser.role === 'developer');
+    const isSiswa = currentUser && currentUser.role === 'siswa';
     
     let html = '<div class="izin-grid">';
     
@@ -120,7 +152,7 @@ function renderIzinList(izinList) {
         const tanggalSelesai = formatIndonesianDate(izin.endDate);
         
         let attachmentHtml = '';
-        if (izin.attachmentUrl) {
+        if (izin.attachmentUrl && izin.attachmentUrl !== 'null' && izin.attachmentUrl !== 'undefined') {
             attachmentHtml = `
                 <div class="izin-attachment">
                     <a href="${izin.attachmentUrl}" target="_blank" class="btn-link">
@@ -130,19 +162,39 @@ function renderIzinList(izinList) {
             `;
         }
         
+        // Tombol aksi untuk Admin/Guru
         let actionButtons = '';
-        if (isAdminOrGuru && izin.status === 'pending') {
+        if (isAdminOrGuru) {
+            if (izin.status === 'pending') {
+                actionButtons = `
+                    <div class="izin-actions-buttons">
+                        <button class="btn-action btn-success" onclick="approveIzin('${izin.id}', '${escapeHtml(izin.studentName)}')">✅ Setujui</button>
+                        <button class="btn-action btn-danger" onclick="rejectIzin('${izin.id}', '${escapeHtml(izin.studentName)}')">❌ Tolak</button>
+                        <button class="btn-action btn-delete" onclick="deleteIzin('${izin.id}', '${escapeHtml(izin.studentName)}')">🗑️ Hapus</button>
+                    </div>
+                `;
+            } else {
+                actionButtons = `
+                    <div class="izin-actions-buttons">
+                        <button class="btn-action btn-delete" onclick="deleteIzin('${izin.id}', '${escapeHtml(izin.studentName)}')">🗑️ Hapus</button>
+                    </div>
+                `;
+            }
+        }
+        
+        // Tombol hapus untuk siswa (hanya izin miliknya sendiri yang status pending)
+        if (isSiswa && izin.status === 'pending' && izin.studentId == currentUser.fpId) {
             actionButtons = `
                 <div class="izin-actions-buttons">
-                    <button class="btn-action btn-success" onclick="approveIzin('${izin.id}', '${escapeHtml(izin.studentName)}')">✅ Setujui</button>
-                    <button class="btn-action btn-danger" onclick="rejectIzin('${izin.id}', '${escapeHtml(izin.studentName)}')">❌ Tolak</button>
+                    <button class="btn-action btn-delete" onclick="deleteIzin('${izin.id}', '${escapeHtml(izin.studentName)}')">🗑️ Hapus</button>
                 </div>
             `;
         }
         
         let alasanPenolakan = '';
-        if (izin.status === 'rejected' && izin.reason) {
-            alasanPenolakan = `<div class="izin-reject-reason"><strong>Alasan Ditolak:</strong> ${escapeHtml(izin.reason)}</div>`;
+        if (izin.status === 'rejected' && (izin.rejectReason || izin.reason)) {
+            const reasonText = izin.rejectReason || izin.reason;
+            alasanPenolakan = `<div class="izin-reject-reason"><strong>Alasan Ditolak:</strong> ${escapeHtml(reasonText)}</div>`;
         }
         
         html += `
@@ -187,6 +239,10 @@ function openAjukanIzinModal() {
         showToast('Anda harus login!', 'error');
         return;
     }
+    
+    // Hapus modal lama jika ada
+    const existingModal = document.getElementById('modal-ajukan-izin');
+    if (existingModal) existingModal.remove();
     
     let modalHtml = `
         <div id="modal-ajukan-izin" class="modal-overlay open">
@@ -235,36 +291,39 @@ function openAjukanIzinModal() {
         </div>
     `;
     
-    const existingModal = document.getElementById('modal-ajukan-izin');
-    if (existingModal) existingModal.remove();
     document.body.insertAdjacentHTML('beforeend', modalHtml);
     
     // Set default dates
     const today = new Date().toISOString().split('T')[0];
-    document.getElementById('izinStartDate').value = today;
+    const startDateInput = document.getElementById('izinStartDate');
+    if (startDateInput) startDateInput.value = today;
     
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
-    document.getElementById('izinEndDate').value = tomorrow.toISOString().split('T')[0];
+    const endDateInput = document.getElementById('izinEndDate');
+    if (endDateInput) endDateInput.value = tomorrow.toISOString().split('T')[0];
     
     // Attachment preview
     const fileInput = document.getElementById('izinAttachment');
-    fileInput.addEventListener('change', function() {
-        const preview = document.getElementById('attachmentPreview');
-        const nameSpan = document.getElementById('attachmentName');
-        if (this.files && this.files[0]) {
-            nameSpan.textContent = `📎 ${this.files[0].name}`;
-            preview.style.display = 'block';
-        } else {
-            preview.style.display = 'none';
-        }
-    });
+    if (fileInput) {
+        fileInput.addEventListener('change', function() {
+            const preview = document.getElementById('attachmentPreview');
+            const nameSpan = document.getElementById('attachmentName');
+            if (this.files && this.files[0]) {
+                if (nameSpan) nameSpan.textContent = `📎 ${this.files[0].name}`;
+                if (preview) preview.style.display = 'block';
+            } else {
+                if (preview) preview.style.display = 'none';
+            }
+        });
+    }
 }
 
 function clearAttachment() {
     const fileInput = document.getElementById('izinAttachment');
-    fileInput.value = '';
-    document.getElementById('attachmentPreview').style.display = 'none';
+    if (fileInput) fileInput.value = '';
+    const preview = document.getElementById('attachmentPreview');
+    if (preview) preview.style.display = 'none';
 }
 
 async function submitIzin(event) {
@@ -292,20 +351,24 @@ async function submitIzin(event) {
     }
     
     const btn = document.querySelector('#formAjukanIzin .btn-save');
-    const originalText = btn.innerHTML;
-    btn.disabled = true;
-    btn.innerHTML = '⏳ Mengirim...';
+    const originalText = btn ? btn.innerHTML : '📤 Ajukan Izin';
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '⏳ Mengirim...';
+    }
     
     try {
         let attachmentUrl = null;
         
         // Upload lampiran jika ada
-        if (fileInput.files && fileInput.files[0]) {
+        if (fileInput && fileInput.files && fileInput.files[0]) {
             const file = fileInput.files[0];
             if (file.size > 2 * 1024 * 1024) {
                 showToast('Ukuran file maksimal 2MB!', 'error');
-                btn.disabled = false;
-                btn.innerHTML = originalText;
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = originalText;
+                }
                 return;
             }
             
@@ -359,21 +422,26 @@ async function submitIzin(event) {
         }
         
         closeModal('modal-ajukan-izin');
+        
+        // Reset filter ke 'all' setelah submit
+        currentIzinFilter = 'all';
         loadIzinList();
         
     } catch (error) {
         console.error('Submit izin error:', error);
         showToast('❌ Gagal mengajukan izin: ' + error.message, 'error');
     } finally {
-        btn.disabled = false;
-        btn.innerHTML = originalText;
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+        }
     }
 }
 
 // ======================= APPROVE / REJECT IZIN =======================
 
 async function approveIzin(izinId, studentName) {
-    if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'guru')) {
+    if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'guru' && currentUser.role !== 'developer')) {
         showToast('⛔ Hanya Admin/Guru yang dapat menyetujui izin!', 'error');
         return;
     }
@@ -409,7 +477,7 @@ async function approveIzin(izinId, studentName) {
 }
 
 async function rejectIzin(izinId, studentName) {
-    if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'guru')) {
+    if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'guru' && currentUser.role !== 'developer')) {
         showToast('⛔ Hanya Admin/Guru yang dapat menolak izin!', 'error');
         return;
     }
@@ -424,7 +492,7 @@ async function rejectIzin(izinId, studentName) {
     try {
         await db.ref(`izin/${izinId}`).update({
             status: 'rejected',
-            reason: reason,
+            rejectReason: reason,
             rejectedBy: currentUser.nama || currentUser.email,
             rejectedAt: firebase.database.ServerValue.TIMESTAMP,
             updatedAt: firebase.database.ServerValue.TIMESTAMP
@@ -444,8 +512,70 @@ async function rejectIzin(izinId, studentName) {
     }
 }
 
+// ======================= DELETE IZIN =======================
+
+async function deleteIzin(izinId, studentName) {
+    // Cek permission
+    const canDelete = currentUser && (
+        currentUser.role === 'admin' || 
+        currentUser.role === 'developer' || 
+        currentUser.role === 'guru'
+    );
+    
+    // Cek apakah siswa yang punya izin (bisa hapus izin sendiri yang masih pending)
+    const izin = currentIzinList.find(i => i.id === izinId);
+    const isOwner = currentUser && currentUser.role === 'siswa' && izin && izin.studentId == currentUser.fpId && izin.status === 'pending';
+    
+    if (!canDelete && !isOwner) {
+        showToast('⛔ Anda tidak memiliki izin untuk menghapus data ini!', 'error');
+        return;
+    }
+    
+    let confirmMessage = `Hapus pengajuan izin untuk ${studentName}?`;
+    if (izin && izin.status !== 'pending') {
+        confirmMessage = `Hapus pengajuan izin ${studentName} yang sudah ${izin.status === 'approved' ? 'DISETUJUI' : 'DITOLAK'}?\n\nData ini akan dihapus permanen!`;
+    }
+    
+    if (!confirm(confirmMessage)) return;
+    
+    try {
+        // Hapus data izin
+        await db.ref(`izin/${izinId}`).remove();
+        
+        showToast(`🗑️ Izin ${studentName} berhasil dihapus!`, 'success');
+        
+        if (typeof logActivity === 'function') {
+            logActivity('delete_izin', `Menghapus izin ${studentName} (${izin?.status || 'unknown'})`);
+        }
+        
+        // Refresh daftar izin
+        loadIzinList();
+        
+    } catch (error) {
+        console.error('Delete izin error:', error);
+        showToast('❌ Gagal menghapus izin: ' + error.message, 'error');
+    }
+}
+
+// ======================= FILTER IZIN =======================
+
 function filterIzinList(status) {
+    console.log('📝 Filter izin:', status);
     currentIzinFilter = status;
+    
+    // Update tombol filter active state
+    const filterBtns = document.querySelectorAll('.izin-filter .filter-btn');
+    filterBtns.forEach(btn => {
+        btn.classList.remove('active');
+    });
+    
+    // Cari tombol yang sesuai dan tambahkan active
+    const activeBtn = Array.from(filterBtns).find(btn => {
+        const onclick = btn.getAttribute('onclick');
+        return onclick && onclick.includes(`'${status}'`);
+    });
+    if (activeBtn) activeBtn.classList.add('active');
+    
     loadIzinList();
 }
 
@@ -478,13 +608,16 @@ function initIzinOnline() {
     
     console.log('📝 Izin Online system initialized');
     
-    // Tambahkan tab izin
+    // Tambahkan tab izin jika diperlukan
     addIzinTab();
 }
 
 function addIzinTab() {
     // Cek apakah tab sudah ada
-    if (document.getElementById('tab-izin')) return;
+    if (document.getElementById('tab-izin')) {
+        console.log('📝 Tab izin sudah ada');
+        return;
+    }
     
     // Tambahkan tab button
     const tabsContainer = document.querySelector('.nav-tabs');
@@ -494,6 +627,7 @@ function addIzinTab() {
         izinTabBtn.setAttribute('onclick', 'switchTab("izin")');
         izinTabBtn.innerHTML = '📝 Izin Online';
         tabsContainer.appendChild(izinTabBtn);
+        console.log('📝 Tab button izin ditambahkan');
     }
     
     // Tambahkan tab content
@@ -503,19 +637,183 @@ function addIzinTab() {
         izinContent.id = 'tab-izin';
         izinContent.className = 'tab-content';
         dashboardSection.appendChild(izinContent);
+        console.log('📝 Tab content izin ditambahkan');
     }
 }
 
-// Override switchTab untuk render izin
-const originalSwitchTabForIzin = window.switchTab;
-if (originalSwitchTabForIzin) {
-    window.switchTab = function(tabId) {
-        originalSwitchTabForIzin(tabId);
-        if (tabId === 'izin') {
-            renderIzinTab();
+// Tambahkan CSS untuk filter button active state dan tombol hapus
+const style = document.createElement('style');
+style.textContent = `
+    .izin-filter .filter-btn.active {
+        background: #00bcd4;
+        color: white;
+        border-color: #00bcd4;
+    }
+    .izin-filter .filter-btn {
+        background: var(--bg-input);
+        border: 1px solid var(--border);
+        padding: 8px 16px;
+        border-radius: 30px;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    .izin-filter .filter-btn:hover {
+        background: var(--primary);
+        color: white;
+    }
+    .izin-card {
+        background: var(--bg-card);
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: var(--shadow);
+        transition: transform 0.2s;
+        border: 1px solid var(--border);
+    }
+    .izin-card:hover {
+        transform: translateY(-2px);
+    }
+    .izin-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+        gap: 20px;
+    }
+    .izin-card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 16px;
+        background: var(--bg-hover);
+        border-bottom: 1px solid var(--border);
+    }
+    .izin-card-body {
+        padding: 16px;
+    }
+    .izin-card-footer {
+        padding: 12px 16px;
+        background: var(--bg-hover);
+        border-top: 1px solid var(--border);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+    .izin-status {
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+    .status-pending {
+        background: #ff9800;
+        color: white;
+    }
+    .status-approved {
+        background: #4caf50;
+        color: white;
+    }
+    .status-rejected {
+        background: #f44336;
+        color: white;
+    }
+    .izin-actions-buttons {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+    .btn-action.btn-success {
+        background: #4caf50;
+        color: white;
+        border: none;
+        padding: 6px 12px;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    .btn-action.btn-success:hover {
+        background: #45a049;
+        transform: scale(1.02);
+    }
+    .btn-action.btn-danger {
+        background: #f44336;
+        color: white;
+        border: none;
+        padding: 6px 12px;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    .btn-action.btn-danger:hover {
+        background: #d32f2f;
+        transform: scale(1.02);
+    }
+    .btn-action.btn-delete {
+        background: #757575;
+        color: white;
+        border: none;
+        padding: 6px 12px;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    .btn-action.btn-delete:hover {
+        background: #616161;
+        transform: scale(1.02);
+    }
+    .izin-student {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        margin-bottom: 12px;
+    }
+    .izin-date {
+        margin-bottom: 12px;
+        font-size: 0.9rem;
+    }
+    .izin-reason {
+        margin-bottom: 12px;
+        line-height: 1.5;
+    }
+    .izin-attachment {
+        margin-top: 8px;
+    }
+    .izin-attachment .btn-link {
+        color: #00bcd4;
+        text-decoration: none;
+        font-size: 0.85rem;
+    }
+    .izin-attachment .btn-link:hover {
+        text-decoration: underline;
+    }
+    .izin-reject-reason {
+        margin-top: 12px;
+        padding: 8px 12px;
+        background: rgba(244, 67, 54, 0.1);
+        border-radius: 8px;
+        font-size: 0.85rem;
+        border-left: 3px solid #f44336;
+    }
+    .izin-empty {
+        text-align: center;
+        padding: 60px 20px;
+        background: var(--bg-card);
+        border-radius: 20px;
+        border: 1px solid var(--border);
+    }
+    @media (max-width: 768px) {
+        .izin-grid {
+            grid-template-columns: 1fr;
         }
-    };
-}
+        .izin-actions {
+            flex-direction: column;
+        }
+        .izin-filter {
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+    }
+`;
+document.head.appendChild(style);
 
 // Ekspor ke global
 window.initIzinOnline = initIzinOnline;
@@ -525,7 +823,8 @@ window.openAjukanIzinModal = openAjukanIzinModal;
 window.submitIzin = submitIzin;
 window.approveIzin = approveIzin;
 window.rejectIzin = rejectIzin;
+window.deleteIzin = deleteIzin;
 window.filterIzinList = filterIzinList;
 window.clearAttachment = clearAttachment;
 
-console.log('✅ izin-online.js loaded');
+console.log('✅ izin-online.js v1.2 loaded (with delete feature)');

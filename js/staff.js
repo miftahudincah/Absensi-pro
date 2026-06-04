@@ -1,12 +1,5 @@
-// staff.js - VERSION 3.0 (DENGAN ROLE BARU: WAKIL KEPALA SEKOLAH & STAFF TU)
-// Manajemen Data Guru/Karyawan - Terintegrasi dengan users_auth
-// Role yang didukung:
-// - Developer: akses penuh (tambah/edit/hapus)
-// - Admin (Kepala Sekolah): akses penuh
-// - Wakil Kepala Sekolah: akses penuh (tambah/edit/hapus)
-// - Staff TU: akses baca (dapat melihat data staff, TIDAK bisa edit/hapus)
-// - Guru: akses penuh (tambah/edit/hapus)
-// - Siswa: TIDAK memiliki akses
+// staff.js - VERSION 2.5 (FINAL - Fixed async/await in forEach error)
+// Manajemen Data Guru/Karyawan - Terintegrasi dengan users_auth (role guru)
 // ============================================================================
 
 let staffDataReadyListenerAdded = false;
@@ -20,82 +13,21 @@ const STAFF_MAX_RETRY = 5;
 // Cache untuk foto staff
 const staffPhotoCache = new Map();
 
-// ======================= ROLE HELPER FUNCTIONS ========================
-
-/**
- * Mendapatkan display name role
- */
-function getRoleDisplayName(role) {
-    const names = {
-        developer: 'Developer',
-        admin: 'Kepala Sekolah',
-        wakil_kepala: 'Wakil Kepala Sekolah',
-        staff_tu: 'Staff TU',
-        guru: 'Guru',
-        siswa: 'Siswa'
-    };
-    return names[role] || role.toUpperCase();
-}
-
-/**
- * Mendapatkan icon untuk role
- */
-function getRoleIcon(role) {
-    const icons = {
-        developer: '👨‍💻',
-        admin: '👑',
-        wakil_kepala: '👔',
-        staff_tu: '📋',
-        guru: '👨‍🏫',
-        siswa: '👨‍🎓'
-    };
-    return icons[role] || '👤';
-}
-
-/**
- * Cek apakah user dapat mengelola staff (tambah/edit/hapus)
- * - Staff TU: TIDAK bisa edit/hapus (hanya baca)
- * - Guru/Wakil/Admin/Developer: bisa
- */
+// ======================= CEK AKSES ========================
 function canManageStaff() {
     if (!currentUser) return false;
-    const manageRoles = ['admin', 'developer', 'wakil_kepala', 'guru'];
-    return manageRoles.includes(currentUser.role);
+    return (currentUser.role === 'admin' || currentUser.role === 'guru' || currentUser.role === 'developer');
 }
 
-/**
- * Cek apakah user dapat melihat menu staff
- * - Staff TU: dapat melihat (read-only)
- * - Guru/Wakil/Admin/Developer: dapat melihat
- * - Siswa: TIDAK dapat melihat
- */
+// ======================= CEK APAKAH MENU STAFF VISIBLE ========================
 function isStaffMenuVisible() {
     if (!currentUser) return false;
-    const visibleRoles = ['admin', 'developer', 'wakil_kepala', 'staff_tu', 'guru'];
-    return visibleRoles.includes(currentUser.role);
-}
-
-/**
- * Cek apakah user dapat menghapus staff
- * - Hanya Admin dan Developer yang dapat menghapus staff
- */
-function canDeleteStaff() {
-    if (!currentUser) return false;
-    const deleteRoles = ['admin', 'developer'];
-    return deleteRoles.includes(currentUser.role);
-}
-
-/**
- * Cek apakah user dapat membuat akun untuk staff
- */
-function canCreateStaffAccount() {
-    if (!currentUser) return false;
-    const createRoles = ['admin', 'developer', 'wakil_kepala', 'guru'];
-    return createRoles.includes(currentUser.role);
+    // Menu Staff hanya untuk Admin, Guru, dan Developer
+    // SISWA TIDAK BISA MELIHAT MENU STAFF
+    return (currentUser.role === 'admin' || currentUser.role === 'guru' || currentUser.role === 'developer');
 }
 
 // ======================= FUNGSI FOTO STAFF ========================
-
 function getStaffPhotoUrl(staffId, staffName) {
     if (!staffId) {
         const initial = staffName ? staffName.charAt(0).toUpperCase() : 'G';
@@ -127,7 +59,6 @@ function getStaffPhotoUrl(staffId, staffName) {
 }
 
 // ======================= AMBIL DATA STAFF ========================
-
 async function getStaffList(forceRefresh = false) {
     if (!forceRefresh && staffListLoaded && staffListCache.length > 0) {
         console.log("📋 Using cached staff list:", staffListCache.length);
@@ -149,26 +80,21 @@ async function getStaffList(forceRefresh = false) {
             console.log(`📁 Found ${Object.keys(staffData).length} staff from 'staff' node`);
         }
         
-        // 2. Ambil data dari users_auth dengan role guru/developer/wakil_kepala/staff_tu
+        // 2. Ambil data dari users_auth dengan role guru/developer
         const users = window.dbData?.users_auth || [];
-        const staffUsers = users.filter(u => ['guru', 'developer', 'wakil_kepala', 'staff_tu', 'admin'].includes(u.role));
+        const guruUsers = users.filter(u => u.role === 'guru' || u.role === 'developer');
         
-        console.log(`👥 Found ${staffUsers.length} users with staff roles`);
+        console.log(`👥 Found ${guruUsers.length} users with role guru/developer`);
         
-        for (const user of staffUsers) {
+        // PERBAIKAN: Gunakan for...of loop, BUKAN forEach (karena forEach tidak support await)
+        for (const user of guruUsers) {
             const existingStaff = staffMap.get(user.uid) || staffMap.get(user.staffId);
             
             if (!existingStaff) {
-                let jabatan = 'Guru';
-                if (user.role === 'developer') jabatan = 'Developer';
-                else if (user.role === 'admin') jabatan = 'Kepala Sekolah';
-                else if (user.role === 'wakil_kepala') jabatan = 'Wakil Kepala Sekolah';
-                else if (user.role === 'staff_tu') jabatan = 'Staff TU';
-                
                 staffMap.set(user.uid, {
                     id: user.uid,
                     nama: user.nama || user.email?.split('@')[0] || 'Unknown',
-                    jabatan: jabatan,
+                    jabatan: user.role === 'developer' ? 'Developer' : 'Guru',
                     departemen: user.departemen || '-',
                     noHp: user.noHp || '-',
                     email: user.email,
@@ -179,6 +105,8 @@ async function getStaffList(forceRefresh = false) {
             } else if (existingStaff.source === 'staff' && !existingStaff.userId) {
                 existingStaff.userId = user.uid;
                 existingStaff.email = existingStaff.email || user.email;
+                // Update ke database - tanpa await untuk menghindari blocking
+                // Gunakan firebase.database() langsung dan biarkan berjalan di background
                 firebase.database().ref(`staff/${existingStaff.id}/userId`).set(user.uid)
                     .catch(e => console.warn("Update staff userId failed:", e));
                 if (!existingStaff.email && user.email) {
@@ -208,22 +136,22 @@ async function getStaffList(forceRefresh = false) {
 }
 
 // ======================= RENDER TABEL STAFF ========================
-
 async function renderStaffTable() {
     console.log("👥 renderStaffTable dipanggil");
     
+    // Jika user adalah siswa, jangan tampilkan apa-apa
     if (!isStaffMenuVisible()) {
         console.log("🔒 Staff table hidden for role:", currentUser?.role);
         const tbody = document.getElementById('tbody-staff');
         if (tbody) {
-            const roleDisplay = getRoleDisplayName(currentUser?.role);
             tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:30px;">
-                🔒 ${roleDisplay} tidak memiliki akses ke halaman ini.
-            </td></tr>`;
+                🔒 Anda tidak memiliki akses ke halaman ini.
+            </td></table>`;
         }
         return;
     }
     
+    // Pastikan currentUser sudah ada
     if (!currentUser) {
         console.log("⏳ Menunggu currentUser...");
         if (staffRetryCount < STAFF_MAX_RETRY) {
@@ -235,10 +163,12 @@ async function renderStaffTable() {
     
     staffRetryCount = 0;
     
+    // Cari atau buat tbody
     let tbody = document.getElementById('tbody-staff');
     
     if (!tbody) {
         console.log("🔍 Mencari atau membuat tbody-staff...");
+        
         const tabStaff = document.getElementById('tab-staff');
         if (tabStaff) {
             const tableContainer = tabStaff.querySelector('.table-container');
@@ -259,7 +189,7 @@ async function renderStaffTable() {
                                 <th style="padding:12px;">No. HP</th>
                                 <th style="padding:12px;">Email</th>
                                 <th style="padding:12px;">Aksi</th>
-                            </table>
+                            </tr>
                         </thead>
                         <tbody id="tbody-staff"></tbody>
                     `;
@@ -281,30 +211,29 @@ async function renderStaffTable() {
         return;
     }
     
+    // Tampilkan loading
     tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:30px;">
         <div style="display:inline-block; width:30px; height:30px; border:3px solid var(--border); border-top-color:#00bcd4; border-radius:50%; animation: spin 1s linear infinite;"></div>
         <div style="margin-top:10px;">⏳ Memuat data staff...</div>
     </td></tr>`;
     
     try {
+        // Ambil data staff
         const staffList = await getStaffList(true);
-        const canEdit = canManageStaff();
-        const canDelete = canDeleteStaff();
-        const canCreateAcc = canCreateStaffAccount();
-        const isStaffTU = currentUser?.role === 'staff_tu';
         
         if (!staffList || staffList.length === 0) {
             tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:30px;">
                 📭 Belum ada data guru/karyawan.<br><br>
-                ${canEdit ? `<div style="margin-top:15px;">
+                <div style="margin-top:15px;">
                     <button onclick="openAddStaffForm()" style="padding:8px 20px; background:#00bcd4; border:none; border-radius:20px; color:white; cursor:pointer;">➕ Tambah Staff Baru</button>
-                </div>` : ''}
-                <small style="display:block; margin-top:15px;">💡 Tips: Tambah user dengan role yang sesuai di Manajemen User juga akan muncul di sini</small>
-             </td></tr>`;
+                </div>
+                <small style="display:block; margin-top:15px;">💡 Tips: Tambah user dengan role "Guru" di Manajemen User juga akan muncul di sini</small>
+            </td></tr>`;
             updateStaffStatistics(staffList || []);
             return;
         }
         
+        const canEdit = canManageStaff();
         tbody.innerHTML = '';
         
         for (const staff of staffList) {
@@ -313,6 +242,7 @@ async function renderStaffTable() {
             const safeId = escapeHtmlStaff(String(staff.id));
             const safeNama = escapeHtmlStaff(staff.nama);
             
+            // Cek apakah staff memiliki akun user
             let hasAccount = false;
             if (window.dbData && window.dbData.users_auth) {
                 hasAccount = !!(staff.userId || staff.fromUserAuth || 
@@ -328,25 +258,21 @@ async function renderStaffTable() {
                 const isFromUserAuth = staff.source === 'user_auth' || staff.fromUserAuth;
                 
                 if (!isFromUserAuth) {
-                    let editButtons = `
-                        <button onclick="editStaff('${safeId}')" title="Edit" style="background:#2196f3; border:none; border-radius:8px; padding:5px 10px; margin:0 2px; cursor:pointer; color:white;">✏️</button>
+                    actionButtons = `
+                        <td style="white-space: nowrap; padding:8px;">
+                            <button onclick="editStaff('${safeId}')" title="Edit" style="background:#2196f3; border:none; border-radius:8px; padding:5px 10px; margin:0 2px; cursor:pointer; color:white;">✏️</button>
+                            <button onclick="deleteStaff('${safeId}', '${safeNama}')" title="Hapus" style="background:#f44336; border:none; border-radius:8px; padding:5px 10px; margin:0 2px; cursor:pointer; color:white;">🗑️</button>
+                            ${!hasAccount ? `<button onclick="createStaffUserAccount('${safeId}', '${safeNama}', '${escapeHtmlStaff(staff.email || '')}')" title="Buat Akun User" style="background:#4caf50; border:none; border-radius:8px; padding:5px 10px; margin:0 2px; cursor:pointer; color:white;">👤</button>` : ''}
+                        </td>
                     `;
-                    if (canDelete) {
-                        editButtons += `<button onclick="deleteStaff('${safeId}', '${safeNama}')" title="Hapus" style="background:#f44336; border:none; border-radius:8px; padding:5px 10px; margin:0 2px; cursor:pointer; color:white;">🗑️</button>`;
-                    }
-                    if (canCreateAcc && !hasAccount) {
-                        editButtons += `<button onclick="createStaffUserAccount('${safeId}', '${safeNama}', '${escapeHtmlStaff(staff.email || '')}')" title="Buat Akun User" style="background:#4caf50; border:none; border-radius:8px; padding:5px 10px; margin:0 2px; cursor:pointer; color:white;">👤</button>`;
-                    }
-                    actionButtons = `<td style="white-space: nowrap; padding:8px;">${editButtons}</td>`;
                 } else {
-                    let viewButtons = `<button onclick="viewUserAccount('${safeId}')" title="Lihat Akun" style="background:#00bcd4; border:none; border-radius:8px; padding:5px 10px; margin:0 2px; cursor:pointer; color:white;">👁️</button>`;
-                    if (canDelete) {
-                        viewButtons += `<button onclick="deleteUserAccount('${safeId}', '${safeNama}')" title="Hapus Akun" style="background:#f44336; border:none; border-radius:8px; padding:5px 10px; margin:0 2px; cursor:pointer; color:white;">🗑️</button>`;
-                    }
-                    actionButtons = `<td style="white-space: nowrap; padding:8px;">${viewButtons}</td>`;
+                    actionButtons = `
+                        <td style="white-space: nowrap; padding:8px;">
+                            <button onclick="viewUserAccount('${safeId}')" title="Lihat Akun" style="background:#00bcd4; border:none; border-radius:8px; padding:5px 10px; margin:0 2px; cursor:pointer; color:white;">👁️</button>
+                            <button onclick="deleteUserAccount('${safeId}', '${safeNama}')" title="Hapus Akun" style="background:#f44336; border:none; border-radius:8px; padding:5px 10px; margin:0 2px; cursor:pointer; color:white;">🗑️</button>
+                        </td>
+                    `;
                 }
-            } else if (isStaffTU) {
-                actionButtons = '<td style="padding:8px;"><span style="color:#888;">🔒 Read only</span></td>';
             } else {
                 actionButtons = '<td style="padding:8px;">-</td>';
             }
@@ -362,7 +288,7 @@ async function renderStaffTable() {
                              style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; cursor: pointer;"
                              onerror="this.src='https://ui-avatars.com/api/?name=${initial}&background=ff9800&color=fff&size=100&bold=true'"
                              onclick="showStaffPhotoModal('${safeId}', '${safeNama}', this.src)">
-                     </td>
+                    </td>
                     <td style="padding:8px;"><strong>${safeId}</strong>${sourceBadge}</td>
                     <td style="padding:8px;">${safeNama} ${accountBadge}</td>
                     <td style="padding:8px;">${escapeHtmlStaff(staff.jabatan || '-')}</td>
@@ -370,7 +296,7 @@ async function renderStaffTable() {
                     <td style="padding:8px;">${escapeHtmlStaff(staff.noHp || '-')}</td>
                     <td style="padding:8px;">${escapeHtmlStaff(staff.email || '-')}</td>
                     ${actionButtons}
-                 </tr>
+                </tr>
             `;
         }
         
@@ -382,11 +308,12 @@ async function renderStaffTable() {
         tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:30px; color:#f44336;">
             ❌ Gagal memuat data: ${err.message}<br>
             <button onclick="renderStaffTable()" style="margin-top:10px; padding:8px 20px; border-radius:20px; border:none; background:#00bcd4; color:white; cursor:pointer;">🔄 Coba Lagi</button>
-         </td></tr>`;
+        </td></tr>`;
     }
 }
 
 function updateStaffStatistics(staffList) {
+    // Hanya tampilkan statistik jika user berhak
     if (!isStaffMenuVisible()) return;
     
     let statsContainer = document.getElementById('staffStats');
@@ -416,7 +343,7 @@ function updateStaffStatistics(staffList) {
     
     statsContainer.innerHTML = `
         <div style="display:flex; gap:15px; flex-wrap:wrap; padding:12px; background:var(--bg-hover); border-radius:12px;">
-            <div>👥 <strong>Total Staff:</strong> ${total}</div>
+            <div>👥 <strong>Total:</strong> ${total}</div>
             <div>✅ <strong style="color:#4caf50;">Berakun:</strong> ${withAccount}</div>
             <div>❌ <strong style="color:#f44336;">Belum Berakun:</strong> ${withoutAccount}</div>
             <div>📋 <strong>Dari User:</strong> ${fromUserAuth}</div>
@@ -426,10 +353,9 @@ function updateStaffStatistics(staffList) {
 }
 
 // ======================= CRUD STAFF ========================
-
 function openAddStaffForm() {
-    if (!canManageStaff()) {
-        showToast("⛔ Anda tidak memiliki akses untuk menambah staff!", "error");
+    if (!isStaffMenuVisible()) {
+        showToast("⛔ Anda tidak memiliki akses!", "error");
         return;
     }
     resetStaffForm();
@@ -485,7 +411,7 @@ function saveStaff() {
         }).then(() => {
             showToast("✅ Guru/Karyawan berhasil ditambahkan!");
             if (typeof logActivity === 'function') {
-                logActivity('add_staff', `Tambah staff: ${nama} (ID: ${id}) oleh ${getRoleDisplayName(currentUser.role)}`);
+                logActivity('add_staff', `Tambah staff: ${nama} (ID: ${id})`);
             }
             resetStaffForm();
             staffListLoaded = false;
@@ -499,7 +425,7 @@ function saveStaff() {
         firebase.database().ref(`staff/${id}`).update(staffData).then(() => {
             showToast("✅ Data guru/karyawan berhasil diupdate!");
             if (typeof logActivity === 'function') {
-                logActivity('edit_staff', `Edit staff: ${nama} (ID: ${id}) oleh ${getRoleDisplayName(currentUser.role)}`);
+                logActivity('edit_staff', `Edit staff: ${nama} (ID: ${id})`);
             }
             resetStaffForm();
             staffListLoaded = false;
@@ -514,7 +440,7 @@ function saveStaff() {
 
 function editStaff(id) {
     if (!canManageStaff()) {
-        showToast("⛔ Anda tidak memiliki akses untuk mengedit staff!", "error");
+        showToast("⛔ Anda tidak memiliki akses!", "error");
         return;
     }
     
@@ -577,8 +503,8 @@ function resetStaffForm() {
 }
 
 async function deleteStaff(id, nama) {
-    if (!canDeleteStaff()) {
-        showToast("⛔ Hanya Kepala Sekolah dan Developer yang dapat menghapus staff!", "error");
+    if (!canManageStaff()) {
+        showToast("⛔ Anda tidak memiliki akses!", "error");
         return;
     }
     
@@ -600,7 +526,7 @@ async function deleteStaff(id, nama) {
         if (userAccount) {
             await firebase.database().ref(`users_auth/${userAccount.uid}`).remove();
             if (typeof logActivity === 'function') {
-                logActivity('delete_user', `Hapus akun user ${userAccount.nama} karena staff dihapus oleh ${getRoleDisplayName(currentUser.role)}`);
+                logActivity('delete_user', `Hapus akun user ${userAccount.nama} karena staff dihapus`);
             }
         }
         await firebase.database().ref(`staff/${id}`).remove();
@@ -610,7 +536,7 @@ async function deleteStaff(id, nama) {
         showToast(`✅ ${nama} berhasil dihapus!`, "success");
         
         if (typeof logActivity === 'function') {
-            logActivity('delete_staff', `Hapus staff: ${nama} (ID: ${id}) oleh ${getRoleDisplayName(currentUser.role)}`);
+            logActivity('delete_staff', `Hapus staff: ${nama} (ID: ${id})`);
         }
         
         renderStaffTable();
@@ -623,10 +549,9 @@ async function deleteStaff(id, nama) {
 }
 
 // ======================= MANAJEMEN AKUN USER ========================
-
 async function createStaffUserAccount(staffId, staffName, staffEmail) {
-    if (!canCreateStaffAccount()) {
-        showToast("⛔ Anda tidak memiliki akses untuk membuat akun staff!", "error");
+    if (!canManageStaff()) {
+        showToast("⛔ Anda tidak memiliki akses!", "error");
         return;
     }
     
@@ -667,7 +592,7 @@ async function createStaffUserAccount(staffId, staffName, staffEmail) {
         showToast(`✅ Akun berhasil dibuat!`, "success");
         
         if (typeof logActivity === 'function') {
-            logActivity('create_staff_account', `Buat akun user untuk staff ${staffName} oleh ${getRoleDisplayName(currentUser.role)}`);
+            logActivity('create_staff_account', `Buat akun user untuk staff ${staffName}`);
         }
         
         staffListLoaded = false;
@@ -705,8 +630,8 @@ function viewUserAccount(userId) {
 }
 
 async function deleteUserAccount(userId, userName) {
-    if (!canDeleteStaff()) {
-        showToast("⛔ Hanya Kepala Sekolah dan Developer yang dapat menghapus akun user!", "error");
+    if (!canManageStaff()) {
+        showToast("⛔ Anda tidak memiliki akses!", "error");
         return;
     }
     
@@ -734,7 +659,7 @@ async function deleteUserAccount(userId, userName) {
         showToast(`✅ Akun ${userName} berhasil dihapus!`, "success");
         
         if (typeof logActivity === 'function') {
-            logActivity('delete_user_account', `Hapus akun user ${userName} oleh ${getRoleDisplayName(currentUser.role)}`);
+            logActivity('delete_user_account', `Hapus akun user ${userName}`);
         }
         
         staffListLoaded = false;
@@ -748,7 +673,6 @@ async function deleteUserAccount(userId, userName) {
 }
 
 // ======================= MODAL FOTO ========================
-
 function showStaffPhotoModal(staffId, staffName, photoUrl) {
     const modalHtml = `
         <div id="modal-staff-photo" class="modal-overlay open" style="display:flex; align-items:center; justify-content:center; z-index:10000;">
@@ -776,7 +700,6 @@ function showStaffPhotoModal(staffId, staffName, photoUrl) {
 }
 
 // ======================= INITIALIZATION ========================
-
 function initStaffSystem() {
     if (staffInitialized) {
         console.log("👥 Staff system already initialized");
@@ -785,16 +708,20 @@ function initStaffSystem() {
     
     console.log("👥 Initializing Staff system...");
     
+    // Tunggu currentUser
     if (!currentUser) {
         console.log("⏳ Waiting for currentUser...");
         setTimeout(initStaffSystem, 500);
         return;
     }
     
+    // Hanya inisialisasi jika user berhak melihat menu staff
     if (!isStaffMenuVisible()) {
         console.log("🔒 Staff system: No access for role:", currentUser?.role);
+        // Sembunyikan tab staff jika ada
         const staffTab = document.getElementById('tab-staff');
         if (staffTab) staffTab.style.display = 'none';
+        // Sembunyikan button staff di dropdown
         const staffBtn = document.querySelector('#dropdownMainContent button[onclick*="staff"]');
         if (staffBtn) staffBtn.style.display = 'none';
         return;
@@ -803,6 +730,7 @@ function initStaffSystem() {
     addStaffTab();
     setupStaffListeners();
     
+    // Render pertama kali
     setTimeout(() => {
         if (document.getElementById('tab-staff')?.classList.contains('active')) {
             renderStaffTable();
@@ -813,6 +741,7 @@ function initStaffSystem() {
 }
 
 function addStaffTab() {
+    // Hanya tambah tab jika user berhak melihat
     if (!isStaffMenuVisible()) {
         console.log("🔒 Staff tab not added - user role:", currentUser?.role);
         return;
@@ -820,6 +749,7 @@ function addStaffTab() {
     
     if (document.getElementById('tab-staff')) return;
     
+    // Tambahkan button ke dropdown Menu Utama
     const dropdownMainContent = document.getElementById('dropdownMainContent');
     if (dropdownMainContent) {
         const existingBtn = Array.from(dropdownMainContent.children).find(btn => btn.innerHTML === '👥 Data Staff');
@@ -827,7 +757,7 @@ function addStaffTab() {
             const staffBtn = document.createElement('button');
             staffBtn.setAttribute('onclick', "switchTab('staff'); closeAllDropdowns()");
             staffBtn.innerHTML = '👥 Data Staff';
-            staffBtn.className = 'role-admin role-guru role-developer role-wakil role-staff-tu';
+            staffBtn.className = 'role-admin role-guru role-developer';
             
             const guideBtn = Array.from(dropdownMainContent.children).find(btn => btn.textContent.includes('Panduan'));
             if (guideBtn) {
@@ -839,17 +769,18 @@ function addStaffTab() {
         }
     }
     
+    // Tambahkan tab content
     const dashboardSection = document.getElementById('dashboard-section');
     if (dashboardSection && !document.getElementById('tab-staff')) {
         const staffTabHtml = `
-            <div id="tab-staff" class="tab-content role-admin role-guru role-developer role-wakil role-staff-tu">
+            <div id="tab-staff" class="tab-content role-admin role-guru role-developer">
                 <div class="info-banner" style="background: var(--bg-hover); padding: 12px 16px; border-radius: 12px; margin-bottom: 15px; border-left: 4px solid #00bcd4;">
                     <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
                         <span style="font-size: 24px;">💡</span>
                         <div>
                             <strong>Info:</strong> Data staff diambil dari dua sumber:
                             <ul style="margin: 5px 0 0 20px; font-size: 12px;">
-                                <li>👥 <strong>Manajemen User</strong> - User dengan role Guru, Wakil Kepala Sekolah, Staff TU, Admin akan otomatis muncul</li>
+                                <li>👥 <strong>Manajemen User</strong> - User dengan role <strong>Guru</strong> akan otomatis muncul</li>
                                 <li>📁 <strong>Data Staff</strong> - Data yang ditambahkan manual melalui form di bawah</li>
                             </ul>
                         </div>
@@ -864,8 +795,8 @@ function addStaffTab() {
                             <select id="staffJabatan" style="padding:8px; border-radius:8px; border:1px solid var(--border);">
                                 <option value="guru">👨‍🏫 Guru</option>
                                 <option value="kepala_sekolah">👑 Kepala Sekolah</option>
-                                <option value="wakil_kepala">👔 Wakil Kepala Sekolah</option>
-                                <option value="staff_tu">📋 Staff TU</option>
+                                <option value="wakil_kepala">📋 Wakil Kepala</option>
+                                <option value="staff_tu">📁 Staff TU</option>
                                 <option value="pustakawan">📚 Pustakawan</option>
                                 <option value="laboran">🔬 Laboran</option>
                                 <option value="security">🛡️ Security</option>
@@ -915,6 +846,7 @@ function addStaffTab() {
 }
 
 function setupStaffListeners() {
+    // Listener untuk perubahan data staff
     firebase.database().ref('staff').on('value', () => {
         console.log("🔄 Staff data changed, refreshing...");
         staffListLoaded = false;
@@ -923,6 +855,7 @@ function setupStaffListeners() {
         }
     });
     
+    // Listener untuk perubahan users_auth
     firebase.database().ref('users_auth').on('value', () => {
         console.log("🔄 Users auth changed, refreshing staff...");
         staffListLoaded = false;
@@ -956,6 +889,7 @@ function escapeHtmlStaff(str) {
     return String(str).replace(/[&<>]/g, m => m === '&' ? '&amp;' : m === '<' ? '&lt;' : '&gt;');
 }
 
+// Tambahkan CSS animation untuk spinner jika belum ada
 if (!document.querySelector('#staff-spinner-style')) {
     const style = document.createElement('style');
     style.id = 'staff-spinner-style';
@@ -983,12 +917,8 @@ window.showStaffPhotoModal = showStaffPhotoModal;
 window.canManageStaff = canManageStaff;
 window.getStaffList = getStaffList;
 window.isStaffMenuVisible = isStaffMenuVisible;
-window.getRoleDisplayName = getRoleDisplayName;
-window.getRoleIcon = getRoleIcon;
-window.canDeleteStaff = canDeleteStaff;
-window.canCreateStaffAccount = canCreateStaffAccount;
 
-console.log("✅ staff.js V3.0 loaded - Dengan role: Developer, Kepala Sekolah, Wakil Kepala Sekolah, Staff TU (read-only), Guru");
+console.log("✅ staff.js V2.5 loaded - Fixed async/await error (no await inside forEach)");
 
 // Auto-initialize when DOM ready
 if (document.readyState === 'loading') {
