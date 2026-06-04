@@ -1,83 +1,10 @@
-// izin-online.js - VERSION 2.0 (DENGAN ROLE BARU: WAKIL KEPALA SEKOLAH & STAFF TU)
+// izin-online.js - VERSION 1.0
 // Fitur Izin Online: ajukan izin, upload surat, approve/reject
-// Role yang didukung:
-// - Developer: akses penuh (approve/reject semua)
-// - Admin (Kepala Sekolah): akses penuh (approve/reject semua)
-// - Wakil Kepala Sekolah: akses penuh (approve/reject semua)
-// - Staff TU: akses baca (dapat melihat semua izin, TIDAK bisa approve/reject)
-// - Guru: akses penuh (approve/reject semua)
-// - Siswa: hanya dapat mengajukan dan melihat izin sendiri
 // ============================================================================
 
 let izinInitialized = false;
 let currentIzinList = [];
 let currentIzinFilter = 'all'; // all, pending, approved, rejected
-
-// ======================= ROLE HELPER FUNCTIONS ========================
-
-/**
- * Mendapatkan display name role
- */
-function getRoleDisplayName(role) {
-    const names = {
-        developer: 'Developer',
-        admin: 'Kepala Sekolah',
-        wakil_kepala: 'Wakil Kepala Sekolah',
-        staff_tu: 'Staff TU',
-        guru: 'Guru',
-        siswa: 'Siswa'
-    };
-    return names[role] || role.toUpperCase();
-}
-
-/**
- * Mendapatkan icon untuk role
- */
-function getRoleIcon(role) {
-    const icons = {
-        developer: '👨‍💻',
-        admin: '👑',
-        wakil_kepala: '👔',
-        staff_tu: '📋',
-        guru: '👨‍🏫',
-        siswa: '👨‍🎓'
-    };
-    return icons[role] || '👤';
-}
-
-/**
- * Cek apakah user dapat menyetujui/menolak izin
- * - Staff TU TIDAK bisa approve/reject (hanya baca)
- * - Guru/Wakil/Admin/Developer bisa approve/reject
- */
-function canApproveIzin(role) {
-    const approveRoles = ['admin', 'developer', 'wakil_kepala', 'guru'];
-    return approveRoles.includes(role);
-}
-
-/**
- * Cek apakah user dapat melihat semua izin
- * - Staff TU: dapat melihat semua izin (read-only)
- * - Guru/Wakil/Admin/Developer: dapat melihat semua izin
- * - Siswa: hanya izin sendiri
- */
-function canViewAllIzin(role) {
-    const allAccessRoles = ['admin', 'developer', 'wakil_kepala', 'staff_tu', 'guru'];
-    return allAccessRoles.includes(role);
-}
-
-/**
- * Mendapatkan pesan akses berdasarkan role
- */
-function getIzinAccessMessage(role) {
-    if (role === 'staff_tu') {
-        return "Staff TU dapat melihat semua pengajuan izin namun tidak dapat menyetujui/menolak.";
-    }
-    if (role === 'siswa') {
-        return "Siswa hanya dapat melihat dan mengajukan izin sendiri.";
-    }
-    return "";
-}
 
 // ======================= TAMPILAN TAB IZIN =======================
 
@@ -85,29 +12,23 @@ function renderIzinTab() {
     const tabContainer = document.getElementById('tab-izin');
     if (!tabContainer) return;
     
-    const canApprove = canApproveIzin(currentUser?.role);
-    const canViewAll = canViewAllIzin(currentUser?.role);
+    const isAdminOrGuru = currentUser && (currentUser.role === 'admin' || currentUser.role === 'guru' || currentUser.role === 'developer');
     const isSiswa = currentUser && currentUser.role === 'siswa';
-    const roleDisplay = getRoleDisplayName(currentUser?.role);
-    const accessMessage = getIzinAccessMessage(currentUser?.role);
     
     let html = `
         <div class="izin-container">
             <div class="izin-header">
                 <h3>📝 Izin Online</h3>
                 <p class="text-small">Ajukan izin sakit/keperluan keluarga secara online</p>
-                ${accessMessage ? `<div class="info-banner" style="background: var(--bg-hover); padding: 8px 12px; border-radius: 8px; margin-top: 8px; font-size: 12px; border-left: 3px solid #00bcd4;">
-                    <span>ℹ️ ${accessMessage}</span>
-                </div>` : ''}
             </div>
             
-            <!-- Tombol Ajukan Izin (hanya untuk siswa dan guru yang bisa mengajukan) -->
+            <!-- Tombol Ajukan Izin -->
             <div class="izin-actions">
                 <button class="btn-action btn-primary" onclick="openAjukanIzinModal()">
                     ➕ Ajukan Izin Baru
                 </button>
                 <div class="izin-filter">
-                    <button class="filter-btn ${currentIzinFilter === 'all' ? 'active' : ''}" onclick="filterIzinList('all')">📋 Semua</button>
+                    <button class="filter-btn ${currentIzinFilter === 'all' ? 'active' : ''}" onclick="filterIzinList('all')">Semua</button>
                     <button class="filter-btn ${currentIzinFilter === 'pending' ? 'active' : ''}" onclick="filterIzinList('pending')">⏳ Menunggu</button>
                     <button class="filter-btn ${currentIzinFilter === 'approved' ? 'active' : ''}" onclick="filterIzinList('approved')">✅ Disetujui</button>
                     <button class="filter-btn ${currentIzinFilter === 'rejected' ? 'active' : ''}" onclick="filterIzinList('rejected')">❌ Ditolak</button>
@@ -147,9 +68,12 @@ async function loadIzinList() {
         
         if (currentUser.role === 'siswa') {
             // Siswa hanya lihat izin sendiri
-            filteredList = currentIzinList.filter(izin => izin.studentId == currentUser.fpId || izin.studentId == currentUser.uid);
+            filteredList = currentIzinList.filter(izin => izin.studentId == currentUser.fpId);
+        } else if (currentUser.role === 'guru') {
+            // Guru lihat izin kelasnya (jika ada filter kelas nanti)
+            // Untuk sekarang lihat semua
+            filteredList = currentIzinList;
         }
-        // Staff TU, Guru, Wakil, Admin, Developer: lihat semua izin
         
         // Filter status
         if (currentIzinFilter !== 'all') {
@@ -173,7 +97,7 @@ function renderIzinList(izinList) {
     
     if (izinList.length === 0) {
         container.innerHTML = `
-            <div class="izin-empty" style="text-align: center; padding: 60px 20px;">
+            <div class="izin-empty">
                 <div style="font-size: 48px; margin-bottom: 16px;">📭</div>
                 <h4>Belum Ada Pengajuan Izin</h4>
                 <p class="text-small">Klik tombol "Ajukan Izin Baru" untuk mengajukan izin.</p>
@@ -182,11 +106,9 @@ function renderIzinList(izinList) {
         return;
     }
     
-    const canApprove = canApproveIzin(currentUser?.role);
-    const canViewAll = canViewAllIzin(currentUser?.role);
-    const isStaffTU = currentUser?.role === 'staff_tu';
+    const isAdminOrGuru = currentUser && (currentUser.role === 'admin' || currentUser.role === 'guru' || currentUser.role === 'developer');
     
-    let html = '<div class="izin-grid" style="display: flex; flex-direction: column; gap: 16px;">';
+    let html = '<div class="izin-grid">';
     
     for (const izin of izinList) {
         const statusClass = izin.status === 'approved' ? 'status-approved' : 
@@ -200,76 +122,54 @@ function renderIzinList(izinList) {
         let attachmentHtml = '';
         if (izin.attachmentUrl) {
             attachmentHtml = `
-                <div class="izin-attachment" style="margin-top: 8px;">
-                    <a href="${izin.attachmentUrl}" target="_blank" class="btn-link" style="color: #00bcd4; text-decoration: none;">
+                <div class="izin-attachment">
+                    <a href="${izin.attachmentUrl}" target="_blank" class="btn-link">
                         📎 Lihat Lampiran (Surat/Dokumen)
                     </a>
                 </div>
             `;
         }
         
-        // Action buttons - hanya untuk role yang bisa approve (Staff TU tidak bisa)
         let actionButtons = '';
-        if (canApprove && izin.status === 'pending') {
+        if (isAdminOrGuru && izin.status === 'pending') {
             actionButtons = `
-                <div class="izin-actions-buttons" style="display: flex; gap: 10px; margin-top: 12px;">
-                    <button class="btn-action btn-success" onclick="approveIzin('${izin.id}', '${escapeHtml(izin.studentName)}')" style="padding: 6px 16px;">✅ Setujui</button>
-                    <button class="btn-action btn-danger" onclick="rejectIzin('${izin.id}', '${escapeHtml(izin.studentName)}')" style="padding: 6px 16px;">❌ Tolak</button>
+                <div class="izin-actions-buttons">
+                    <button class="btn-action btn-success" onclick="approveIzin('${izin.id}', '${escapeHtml(izin.studentName)}')">✅ Setujui</button>
+                    <button class="btn-action btn-danger" onclick="rejectIzin('${izin.id}', '${escapeHtml(izin.studentName)}')">❌ Tolak</button>
                 </div>
             `;
-        } else if (isStaffTU && izin.status === 'pending') {
-            actionButtons = `
-                <div class="izin-actions-buttons" style="margin-top: 12px;">
-                    <span class="badge" style="background: #607d8b; padding: 4px 12px; border-radius: 20px; font-size: 11px;">🔒 Staff TU tidak dapat approve/reject</span>
-                </div>
-            `;
-        }
-        
-        let approvalInfo = '';
-        if (izin.status === 'approved' && izin.approvedBy) {
-            approvalInfo = `<div class="izin-approval-info" style="font-size: 11px; color: #4caf50; margin-top: 8px;">✅ Disetujui oleh: ${escapeHtml(izin.approvedBy)}</div>`;
-        } else if (izin.status === 'rejected' && izin.rejectedBy) {
-            approvalInfo = `<div class="izin-approval-info" style="font-size: 11px; color: #f44336; margin-top: 8px;">❌ Ditolak oleh: ${escapeHtml(izin.rejectedBy)}</div>`;
         }
         
         let alasanPenolakan = '';
         if (izin.status === 'rejected' && izin.reason) {
-            alasanPenolakan = `<div class="izin-reject-reason" style="background: rgba(244, 67, 54, 0.1); padding: 8px; border-radius: 8px; margin-top: 8px;"><strong>Alasan Ditolak:</strong> ${escapeHtml(izin.reason)}</div>`;
+            alasanPenolakan = `<div class="izin-reject-reason"><strong>Alasan Ditolak:</strong> ${escapeHtml(izin.reason)}</div>`;
         }
         
-        // Role badge untuk pengaju
-        const submittedByRole = izin.submittedByRole || 'siswa';
-        const roleBadge = getRoleIcon(submittedByRole) + ' ' + getRoleDisplayName(submittedByRole);
-        
         html += `
-            <div class="izin-card ${statusClass}" style="background: var(--bg-card); border-radius: 16px; padding: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-                <div class="izin-card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 12px;">
+            <div class="izin-card ${statusClass}">
+                <div class="izin-card-header">
                     <div class="izin-type">
-                        <span style="font-weight: bold;">${izin.type === 'sakit' ? '🤒 Izin Sakit' : '📝 Izin Keperluan'}</span>
-                        <span style="font-size: 11px; background: var(--bg-hover); padding: 2px 8px; border-radius: 12px; margin-left: 8px;">${roleBadge}</span>
+                        ${izin.type === 'sakit' ? '🤒 Izin Sakit' : '📝 Izin Keperluan'}
                     </div>
-                    <div class="izin-status ${statusClass}">
-                        <span class="badge ${statusClass}" style="padding: 4px 12px; border-radius: 20px; font-size: 12px;">${statusText}</span>
-                    </div>
+                    <div class="izin-status ${statusClass}">${statusText}</div>
                 </div>
                 <div class="izin-card-body">
-                    <div class="izin-student" style="margin-bottom: 8px;">
+                    <div class="izin-student">
                         <strong>👤 ${escapeHtml(izin.studentName)}</strong>
-                        <small style="display: block; color: var(--text-muted);">Kelas: ${izin.kelas || '-'} | Jurusan: ${izin.jurusan || '-'}</small>
+                        <small>Kelas: ${izin.kelas || '-'} | Jurusan: ${izin.jurusan || '-'}</small>
                     </div>
-                    <div class="izin-date" style="margin-bottom: 8px;">
+                    <div class="izin-date">
                         📅 ${tanggalMulai} - ${tanggalSelesai}
                     </div>
-                    <div class="izin-reason" style="margin-bottom: 8px;">
+                    <div class="izin-reason">
                         <strong>Alasan:</strong><br>
-                        <span style="white-space: pre-wrap;">${escapeHtml(izin.reason)}</span>
+                        ${escapeHtml(izin.reason)}
                     </div>
                     ${attachmentHtml}
                     ${alasanPenolakan}
-                    ${approvalInfo}
                 </div>
-                <div class="izin-card-footer" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border);">
-                    <small style="color: var(--text-muted);">Diajukan: ${formatDate(izin.createdAt)}</small>
+                <div class="izin-card-footer">
+                    <small>Diajukan: ${formatDate(izin.createdAt)}</small>
                     ${actionButtons}
                 </div>
             </div>
@@ -289,45 +189,45 @@ function openAjukanIzinModal() {
     }
     
     let modalHtml = `
-        <div id="modal-ajukan-izin" class="modal-overlay open" style="display: flex; align-items: center; justify-content: center; z-index: 10000;">
-            <div class="modal-box" style="max-width: 550px; background: var(--bg-card); border-radius: 20px; width: 90%;">
-                <div class="modal-title" style="display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; border-bottom: 1px solid var(--border);">
+        <div id="modal-ajukan-izin" class="modal-overlay open">
+            <div class="modal-box" style="max-width: 550px;">
+                <div class="modal-title">
                     <span>📝 Ajukan Izin</span>
-                    <span onclick="closeModal('modal-ajukan-izin')" style="cursor: pointer; font-size: 24px;">✖</span>
+                    <span onclick="closeModal('modal-ajukan-izin')">✖</span>
                 </div>
                 <div style="padding: 20px;">
                     <form id="formAjukanIzin" onsubmit="submitIzin(event)">
-                        <div class="form-group" style="margin-bottom: 15px;">
+                        <div class="form-group">
                             <label>📋 Jenis Izin</label>
-                            <select id="izinType" required style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-input); color: var(--text-primary);">
+                            <select id="izinType" required>
                                 <option value="sakit">🤒 Sakit</option>
                                 <option value="keperluan">📝 Keperluan Keluarga</option>
                             </select>
                         </div>
-                        <div class="form-group" style="margin-bottom: 15px;">
+                        <div class="form-group">
                             <label>📅 Tanggal Mulai</label>
-                            <input type="date" id="izinStartDate" required style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-input); color: var(--text-primary);">
+                            <input type="date" id="izinStartDate" required>
                         </div>
-                        <div class="form-group" style="margin-bottom: 15px;">
+                        <div class="form-group">
                             <label>📅 Tanggal Selesai</label>
-                            <input type="date" id="izinEndDate" required style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-input); color: var(--text-primary);">
+                            <input type="date" id="izinEndDate" required>
                         </div>
-                        <div class="form-group" style="margin-bottom: 15px;">
+                        <div class="form-group">
                             <label>📝 Alasan / Keterangan</label>
-                            <textarea id="izinReason" rows="4" placeholder="Jelaskan alasan izin..." required style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-input); color: var(--text-primary);"></textarea>
+                            <textarea id="izinReason" rows="4" placeholder="Jelaskan alasan izin..." required></textarea>
                         </div>
-                        <div class="form-group" style="margin-bottom: 15px;">
+                        <div class="form-group">
                             <label>📎 Lampiran (Opsional)</label>
-                            <input type="file" id="izinAttachment" accept=".pdf,.jpg,.jpeg,.png" style="width: 100%; padding: 8px;">
-                            <small class="text-small" style="color: var(--text-muted);">Format: PDF, JPG, PNG. Maksimal 2MB</small>
-                            <div id="attachmentPreview" style="display:none; margin-top:10px; padding: 8px; background: var(--bg-hover); border-radius: 8px;">
+                            <input type="file" id="izinAttachment" accept=".pdf,.jpg,.jpeg,.png">
+                            <small class="text-small">Format: PDF, JPG, PNG. Maksimal 2MB</small>
+                            <div id="attachmentPreview" style="display:none; margin-top:10px;">
                                 <span id="attachmentName"></span>
-                                <button type="button" class="btn-icon" onclick="clearAttachment()" style="background: transparent; border: none; cursor: pointer; margin-left: 8px;">✖</button>
+                                <button type="button" class="btn-icon" onclick="clearAttachment()">✖</button>
                             </div>
                         </div>
-                        <div class="modal-actions" style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; padding-top: 15px; border-top: 1px solid var(--border);">
-                            <button type="button" class="btn-cancel" onclick="closeModal('modal-ajukan-izin')" style="padding: 8px 20px; border-radius: 20px; border: 1px solid var(--border); background: transparent; cursor: pointer;">Batal</button>
-                            <button type="submit" class="btn-save" style="padding: 8px 20px; border-radius: 20px; background: #4caf50; border: none; color: white; cursor: pointer;">📤 Ajukan Izin</button>
+                        <div class="modal-actions">
+                            <button type="button" class="btn-cancel" onclick="closeModal('modal-ajukan-izin')">Batal</button>
+                            <button type="submit" class="btn-save">📤 Ajukan Izin</button>
                         </div>
                     </form>
                 </div>
@@ -426,7 +326,7 @@ async function submitIzin(event) {
             kelas = currentUser.kelas;
             jurusan = currentUser.jurusan;
         } else {
-            // Untuk guru/staff yang mengajukan atas nama (misalnya untuk siswa lain)
+            // Untuk guru/admin yang mengajukan atas nama siswa
             studentId = currentUser.fpId || currentUser.uid;
             studentName = currentUser.nama;
             kelas = currentUser.kelas || '-';
@@ -455,7 +355,7 @@ async function submitIzin(event) {
         showToast('✅ Izin berhasil diajukan! Menunggu persetujuan.', 'success');
         
         if (typeof logActivity === 'function') {
-            logActivity('submit_izin', `Ajukan izin ${type}: ${studentName} (${startDate} - ${endDate}) oleh ${getRoleDisplayName(currentUser.role)}`);
+            logActivity('submit_izin', `Ajukan izin ${type}: ${studentName} (${startDate} - ${endDate})`);
         }
         
         closeModal('modal-ajukan-izin');
@@ -473,19 +373,17 @@ async function submitIzin(event) {
 // ======================= APPROVE / REJECT IZIN =======================
 
 async function approveIzin(izinId, studentName) {
-    if (!canApproveIzin(currentUser?.role)) {
-        const roleDisplay = getRoleDisplayName(currentUser?.role);
-        showToast(`⛔ ${roleDisplay} tidak dapat menyetujui izin! Hanya Guru, Wakil Kepala Sekolah, Kepala Sekolah, dan Developer yang dapat menyetujui.`, 'error');
+    if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'guru')) {
+        showToast('⛔ Hanya Admin/Guru yang dapat menyetujui izin!', 'error');
         return;
     }
     
-    if (!confirm(`✅ Setujui izin untuk ${studentName}?`)) return;
+    if (!confirm(`Setujui izin untuk ${studentName}?`)) return;
     
     try {
         await db.ref(`izin/${izinId}`).update({
             status: 'approved',
             approvedBy: currentUser.nama || currentUser.email,
-            approvedByRole: currentUser.role,
             approvedAt: firebase.database.ServerValue.TIMESTAMP,
             updatedAt: firebase.database.ServerValue.TIMESTAMP
         });
@@ -499,7 +397,7 @@ async function approveIzin(izinId, studentName) {
         }
         
         if (typeof logActivity === 'function') {
-            logActivity('approve_izin', `Menyetujui izin ${studentName} oleh ${getRoleDisplayName(currentUser.role)}`);
+            logActivity('approve_izin', `Menyetujui izin ${studentName}`);
         }
         
         loadIzinList();
@@ -511,13 +409,12 @@ async function approveIzin(izinId, studentName) {
 }
 
 async function rejectIzin(izinId, studentName) {
-    if (!canApproveIzin(currentUser?.role)) {
-        const roleDisplay = getRoleDisplayName(currentUser?.role);
-        showToast(`⛔ ${roleDisplay} tidak dapat menolak izin! Hanya Guru, Wakil Kepala Sekolah, Kepala Sekolah, dan Developer yang dapat menolak.`, 'error');
+    if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'guru')) {
+        showToast('⛔ Hanya Admin/Guru yang dapat menolak izin!', 'error');
         return;
     }
     
-    const reason = prompt(`❌ Masukkan alasan penolakan izin untuk ${studentName}:`);
+    const reason = prompt(`Masukkan alasan penolakan izin untuk ${studentName}:`);
     if (reason === null) return;
     if (!reason.trim()) {
         showToast('Alasan penolakan wajib diisi!', 'error');
@@ -527,9 +424,8 @@ async function rejectIzin(izinId, studentName) {
     try {
         await db.ref(`izin/${izinId}`).update({
             status: 'rejected',
-            rejectReason: reason,
+            reason: reason,
             rejectedBy: currentUser.nama || currentUser.email,
-            rejectedByRole: currentUser.role,
             rejectedAt: firebase.database.ServerValue.TIMESTAMP,
             updatedAt: firebase.database.ServerValue.TIMESTAMP
         });
@@ -537,7 +433,7 @@ async function rejectIzin(izinId, studentName) {
         showToast(`❌ Izin ${studentName} ditolak.`, 'warning');
         
         if (typeof logActivity === 'function') {
-            logActivity('reject_izin', `Menolak izin ${studentName}: ${reason} oleh ${getRoleDisplayName(currentUser.role)}`);
+            logActivity('reject_izin', `Menolak izin ${studentName}: ${reason}`);
         }
         
         loadIzinList();
@@ -550,17 +446,6 @@ async function rejectIzin(izinId, studentName) {
 
 function filterIzinList(status) {
     currentIzinFilter = status;
-    
-    // Update active class pada filter buttons
-    document.querySelectorAll('.izin-filter .filter-btn').forEach(btn => {
-        btn.classList.remove('active');
-        if (btn.textContent.includes(status === 'all' ? 'Semua' : 
-            (status === 'pending' ? 'Menunggu' : 
-             (status === 'approved' ? 'Disetujui' : 'Ditolak')))) {
-            btn.classList.add('active');
-        }
-    });
-    
     loadIzinList();
 }
 
@@ -592,40 +477,32 @@ function initIzinOnline() {
     izinInitialized = true;
     
     console.log('📝 Izin Online system initialized');
+    
+    // Tambahkan tab izin
     addIzinTab();
 }
 
 function addIzinTab() {
+    // Cek apakah tab sudah ada
     if (document.getElementById('tab-izin')) return;
     
-    // Tambahkan tab button ke dropdown menu
-    const dropdownMainContent = document.getElementById('dropdownMainContent');
-    if (dropdownMainContent) {
-        const existingBtn = Array.from(dropdownMainContent.children).find(btn => btn.innerHTML === '📝 Izin Online');
-        if (!existingBtn) {
-            const izinBtn = document.createElement('button');
-            izinBtn.setAttribute('onclick', "switchTab('izin'); closeAllDropdowns()");
-            izinBtn.innerHTML = '📝 Izin Online';
-            
-            // Cari posisi setelah Absensi Staff atau sebelum Panduan
-            const guideBtn = Array.from(dropdownMainContent.children).find(btn => btn.textContent.includes('Panduan'));
-            if (guideBtn) {
-                dropdownMainContent.insertBefore(izinBtn, guideBtn);
-            } else {
-                dropdownMainContent.appendChild(izinBtn);
-            }
-            console.log("✅ Izin Online button added to dropdown");
-        }
+    // Tambahkan tab button
+    const tabsContainer = document.querySelector('.nav-tabs');
+    if (tabsContainer) {
+        const izinTabBtn = document.createElement('button');
+        izinTabBtn.className = 'tab-btn';
+        izinTabBtn.setAttribute('onclick', 'switchTab("izin")');
+        izinTabBtn.innerHTML = '📝 Izin Online';
+        tabsContainer.appendChild(izinTabBtn);
     }
     
     // Tambahkan tab content
     const dashboardSection = document.getElementById('dashboard-section');
-    if (dashboardSection && !document.getElementById('tab-izin')) {
+    if (dashboardSection) {
         const izinContent = document.createElement('div');
         izinContent.id = 'tab-izin';
         izinContent.className = 'tab-content';
         dashboardSection.appendChild(izinContent);
-        console.log("✅ Izin Online tab content added");
     }
 }
 
@@ -635,18 +512,12 @@ if (originalSwitchTabForIzin) {
     window.switchTab = function(tabId) {
         originalSwitchTabForIzin(tabId);
         if (tabId === 'izin') {
-            setTimeout(() => renderIzinTab(), 100);
-        }
-    };
-} else {
-    window.switchTab = function(tabId) {
-        if (tabId === 'izin') {
-            setTimeout(() => renderIzinTab(), 100);
+            renderIzinTab();
         }
     };
 }
 
-// ======================= EKSPOR KE GLOBAL =======================
+// Ekspor ke global
 window.initIzinOnline = initIzinOnline;
 window.renderIzinTab = renderIzinTab;
 window.loadIzinList = loadIzinList;
@@ -656,9 +527,5 @@ window.approveIzin = approveIzin;
 window.rejectIzin = rejectIzin;
 window.filterIzinList = filterIzinList;
 window.clearAttachment = clearAttachment;
-window.getRoleDisplayName = getRoleDisplayName;
-window.getRoleIcon = getRoleIcon;
-window.canApproveIzin = canApproveIzin;
-window.canViewAllIzin = canViewAllIzin;
 
-console.log("✅ izin-online.js V2.0 loaded - Izin Online dengan role: Developer, Kepala Sekolah, Wakil Kepala Sekolah, Staff TU (baca saja), Guru, Siswa");
+console.log('✅ izin-online.js loaded');
