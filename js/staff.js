@@ -1,4 +1,4 @@
-// staff.js - VERSION 2.5 (FINAL - Fixed async/await in forEach error)
+// staff.js - VERSION 2.8 (FIX: RENDER STAFF TABLE)
 // Manajemen Data Guru/Karyawan - Terintegrasi dengan users_auth (role guru)
 // ============================================================================
 
@@ -13,18 +13,20 @@ const STAFF_MAX_RETRY = 5;
 // Cache untuk foto staff
 const staffPhotoCache = new Map();
 
+// Variabel untuk filter
+let currentStaffFilter = 'all';
+let currentSearchTerm = '';
+
 // ======================= CEK AKSES ========================
 function canManageStaff() {
-    if (!currentUser) return false;
-    return (currentUser.role === 'admin' || currentUser.role === 'guru' || currentUser.role === 'developer');
+    if (!window.currentUser) return false;
+    return (window.currentUser.role === 'admin' || window.currentUser.role === 'guru' || window.currentUser.role === 'developer');
 }
 
 // ======================= CEK APAKAH MENU STAFF VISIBLE ========================
 function isStaffMenuVisible() {
-    if (!currentUser) return false;
-    // Menu Staff hanya untuk Admin, Guru, dan Developer
-    // SISWA TIDAK BISA MELIHAT MENU STAFF
-    return (currentUser.role === 'admin' || currentUser.role === 'guru' || currentUser.role === 'developer');
+    if (!window.currentUser) return false;
+    return (window.currentUser.role === 'admin' || window.currentUser.role === 'guru' || window.currentUser.role === 'developer');
 }
 
 // ======================= FUNGSI FOTO STAFF ========================
@@ -58,6 +60,102 @@ function getStaffPhotoUrl(staffId, staffName) {
     return photoUrl;
 }
 
+// ======================= FUNGSI FILTER ========================
+function filterStaffList(staffList) {
+    if (!staffList) return [];
+    
+    let filtered = [...staffList];
+    
+    // Filter berdasarkan tipe
+    if (currentStaffFilter !== 'all') {
+        switch(currentStaffFilter) {
+            case 'withAccount':
+                filtered = filtered.filter(s => {
+                    if (window.dbData && window.dbData.users_auth) {
+                        return s.userId || s.fromUserAuth || 
+                            window.dbData.users_auth.some(u => u.uid === s.id || u.staffId === s.id);
+                    }
+                    return false;
+                });
+                break;
+            case 'withoutAccount':
+                filtered = filtered.filter(s => {
+                    if (window.dbData && window.dbData.users_auth) {
+                        return !(s.userId || s.fromUserAuth || 
+                            window.dbData.users_auth.some(u => u.uid === s.id || u.staffId === s.id));
+                    }
+                    return true;
+                });
+                break;
+            case 'fromStaff':
+                filtered = filtered.filter(s => s.source === 'staff');
+                break;
+            case 'fromUser':
+                filtered = filtered.filter(s => s.source === 'user_auth' || s.fromUserAuth);
+                break;
+        }
+    }
+    
+    // Filter berdasarkan pencarian
+    if (currentSearchTerm.trim() !== '') {
+        const searchLower = currentSearchTerm.toLowerCase();
+        filtered = filtered.filter(s => 
+            (s.nama && s.nama.toLowerCase().includes(searchLower)) ||
+            (s.id && String(s.id).toLowerCase().includes(searchLower)) ||
+            (s.jabatan && s.jabatan.toLowerCase().includes(searchLower)) ||
+            (s.departemen && s.departemen.toLowerCase().includes(searchLower)) ||
+            (s.email && s.email.toLowerCase().includes(searchLower)) ||
+            (s.noHp && s.noHp.toLowerCase().includes(searchLower))
+        );
+    }
+    
+    return filtered;
+}
+
+function setStaffFilter(filterType) {
+    console.log("🎯 Set staff filter to:", filterType);
+    currentStaffFilter = filterType;
+    
+    // Update active state pada tombol
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.classList.remove('active');
+        btn.style.background = '#e0e0e0';
+        btn.style.color = '#333';
+    });
+    
+    const activeBtn = document.querySelector(`.filter-btn[data-filter="${filterType}"]`);
+    if (activeBtn) {
+        activeBtn.classList.add('active');
+        activeBtn.style.background = '#00bcd4';
+        activeBtn.style.color = 'white';
+    }
+    
+    renderStaffTable();
+}
+
+function searchStaff() {
+    const searchInput = document.getElementById('staffSearchInput');
+    if (searchInput) {
+        currentSearchTerm = searchInput.value;
+        console.log("🔍 Search staff for:", currentSearchTerm);
+        renderStaffTable();
+    }
+}
+
+function clearSearch() {
+    const searchInput = document.getElementById('staffSearchInput');
+    if (searchInput) {
+        searchInput.value = '';
+        currentSearchTerm = '';
+        renderStaffTable();
+    }
+}
+
+function resetStaffFilters() {
+    setStaffFilter('all');
+    clearSearch();
+}
+
 // ======================= AMBIL DATA STAFF ========================
 async function getStaffList(forceRefresh = false) {
     if (!forceRefresh && staffListLoaded && staffListCache.length > 0) {
@@ -68,9 +166,19 @@ async function getStaffList(forceRefresh = false) {
     console.log("📋 Fetching fresh staff data...");
     const staffMap = new Map();
     
+    // Pastikan firebase tersedia
+    if (!window.firebase || !window.firebase.database) {
+        console.log("⏳ Firebase not ready, waiting...");
+        await new Promise(resolve => setTimeout(resolve, 500));
+        if (!window.firebase || !window.firebase.database) {
+            console.error("❌ Firebase still not available");
+            return [];
+        }
+    }
+    
     try {
         // 1. Ambil data dari node 'staff'
-        const staffSnapshot = await firebase.database().ref('staff').once('value');
+        const staffSnapshot = await window.firebase.database().ref('staff').once('value');
         const staffData = staffSnapshot.val();
         
         if (staffData) {
@@ -86,7 +194,6 @@ async function getStaffList(forceRefresh = false) {
         
         console.log(`👥 Found ${guruUsers.length} users with role guru/developer`);
         
-        // PERBAIKAN: Gunakan for...of loop, BUKAN forEach (karena forEach tidak support await)
         for (const user of guruUsers) {
             const existingStaff = staffMap.get(user.uid) || staffMap.get(user.staffId);
             
@@ -105,12 +212,11 @@ async function getStaffList(forceRefresh = false) {
             } else if (existingStaff.source === 'staff' && !existingStaff.userId) {
                 existingStaff.userId = user.uid;
                 existingStaff.email = existingStaff.email || user.email;
-                // Update ke database - tanpa await untuk menghindari blocking
-                // Gunakan firebase.database() langsung dan biarkan berjalan di background
-                firebase.database().ref(`staff/${existingStaff.id}/userId`).set(user.uid)
+                // Update ke database di background
+                window.firebase.database().ref(`staff/${existingStaff.id}/userId`).set(user.uid)
                     .catch(e => console.warn("Update staff userId failed:", e));
                 if (!existingStaff.email && user.email) {
-                    firebase.database().ref(`staff/${existingStaff.id}/email`).set(user.email)
+                    window.firebase.database().ref(`staff/${existingStaff.id}/email`).set(user.email)
                         .catch(e => console.warn("Update staff email failed:", e));
                 }
             }
@@ -141,18 +247,18 @@ async function renderStaffTable() {
     
     // Jika user adalah siswa, jangan tampilkan apa-apa
     if (!isStaffMenuVisible()) {
-        console.log("🔒 Staff table hidden for role:", currentUser?.role);
+        console.log("🔒 Staff table hidden for role:", window.currentUser?.role);
         const tbody = document.getElementById('tbody-staff');
         if (tbody) {
             tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:30px;">
                 🔒 Anda tidak memiliki akses ke halaman ini.
-            </td></table>`;
+            <\/td><\/tr>`;
         }
         return;
     }
     
     // Pastikan currentUser sudah ada
-    if (!currentUser) {
+    if (!window.currentUser) {
         console.log("⏳ Menunggu currentUser...");
         if (staffRetryCount < STAFF_MAX_RETRY) {
             staffRetryCount++;
@@ -168,7 +274,6 @@ async function renderStaffTable() {
     
     if (!tbody) {
         console.log("🔍 Mencari atau membuat tbody-staff...");
-        
         const tabStaff = document.getElementById('tab-staff');
         if (tabStaff) {
             const tableContainer = tabStaff.querySelector('.table-container');
@@ -194,13 +299,9 @@ async function renderStaffTable() {
                         <tbody id="tbody-staff"></tbody>
                     `;
                     tableContainer.appendChild(table);
-                    console.log("✅ Created table dynamically");
+                    console.log("✅ Created staff table dynamically");
                 }
                 tbody = document.getElementById('tbody-staff');
-                if (!tbody && table) {
-                    tbody = table.querySelector('tbody');
-                    if (tbody) tbody.id = 'tbody-staff';
-                }
             }
         }
     }
@@ -215,7 +316,7 @@ async function renderStaffTable() {
     tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:30px;">
         <div style="display:inline-block; width:30px; height:30px; border:3px solid var(--border); border-top-color:#00bcd4; border-radius:50%; animation: spin 1s linear infinite;"></div>
         <div style="margin-top:10px;">⏳ Memuat data staff...</div>
-    </td></tr>`;
+    <\/td><\/tr>`;
     
     try {
         // Ambil data staff
@@ -228,15 +329,27 @@ async function renderStaffTable() {
                     <button onclick="openAddStaffForm()" style="padding:8px 20px; background:#00bcd4; border:none; border-radius:20px; color:white; cursor:pointer;">➕ Tambah Staff Baru</button>
                 </div>
                 <small style="display:block; margin-top:15px;">💡 Tips: Tambah user dengan role "Guru" di Manajemen User juga akan muncul di sini</small>
-            </td></tr>`;
+            <\/td><\/tr>`;
             updateStaffStatistics(staffList || []);
+            return;
+        }
+        
+        // Filter staff berdasarkan kriteria
+        const filteredStaff = filterStaffList(staffList);
+        
+        if (filteredStaff.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:30px;">
+                🔍 Tidak ada data yang sesuai dengan filter yang dipilih.<br><br>
+                <button onclick="resetStaffFilters()" style="padding:8px 20px; background:#00bcd4; border:none; border-radius:20px; color:white; cursor:pointer;">Reset Filter</button>
+            <\/td><\/tr>`;
+            updateStaffStatistics(staffList);
             return;
         }
         
         const canEdit = canManageStaff();
         tbody.innerHTML = '';
         
-        for (const staff of staffList) {
+        for (const staff of filteredStaff) {
             const photoUrl = getStaffPhotoUrl(staff.id, staff.nama);
             const initial = staff.nama ? staff.nama.charAt(0).toUpperCase() : 'G';
             const safeId = escapeHtmlStaff(String(staff.id));
@@ -263,18 +376,18 @@ async function renderStaffTable() {
                             <button onclick="editStaff('${safeId}')" title="Edit" style="background:#2196f3; border:none; border-radius:8px; padding:5px 10px; margin:0 2px; cursor:pointer; color:white;">✏️</button>
                             <button onclick="deleteStaff('${safeId}', '${safeNama}')" title="Hapus" style="background:#f44336; border:none; border-radius:8px; padding:5px 10px; margin:0 2px; cursor:pointer; color:white;">🗑️</button>
                             ${!hasAccount ? `<button onclick="createStaffUserAccount('${safeId}', '${safeNama}', '${escapeHtmlStaff(staff.email || '')}')" title="Buat Akun User" style="background:#4caf50; border:none; border-radius:8px; padding:5px 10px; margin:0 2px; cursor:pointer; color:white;">👤</button>` : ''}
-                        </td>
+                        <\/td>
                     `;
                 } else {
                     actionButtons = `
                         <td style="white-space: nowrap; padding:8px;">
                             <button onclick="viewUserAccount('${safeId}')" title="Lihat Akun" style="background:#00bcd4; border:none; border-radius:8px; padding:5px 10px; margin:0 2px; cursor:pointer; color:white;">👁️</button>
                             <button onclick="deleteUserAccount('${safeId}', '${safeNama}')" title="Hapus Akun" style="background:#f44336; border:none; border-radius:8px; padding:5px 10px; margin:0 2px; cursor:pointer; color:white;">🗑️</button>
-                        </td>
+                        <\/td>
                     `;
                 }
             } else {
-                actionButtons = '<td style="padding:8px;">-</td>';
+                actionButtons = '<td style="padding:8px;">-<\/td>';
             }
             
             const sourceBadge = staff.source === 'user_auth' 
@@ -288,31 +401,31 @@ async function renderStaffTable() {
                              style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; cursor: pointer;"
                              onerror="this.src='https://ui-avatars.com/api/?name=${initial}&background=ff9800&color=fff&size=100&bold=true'"
                              onclick="showStaffPhotoModal('${safeId}', '${safeNama}', this.src)">
-                    </td>
-                    <td style="padding:8px;"><strong>${safeId}</strong>${sourceBadge}</td>
-                    <td style="padding:8px;">${safeNama} ${accountBadge}</td>
-                    <td style="padding:8px;">${escapeHtmlStaff(staff.jabatan || '-')}</td>
-                    <td style="padding:8px;">${escapeHtmlStaff(staff.departemen || '-')}</td>
-                    <td style="padding:8px;">${escapeHtmlStaff(staff.noHp || '-')}</td>
-                    <td style="padding:8px;">${escapeHtmlStaff(staff.email || '-')}</td>
+                    <\/td>
+                    <td style="padding:8px;"><strong>${safeId}</strong>${sourceBadge}<\/td>
+                    <td style="padding:8px;">${safeNama} ${accountBadge}<\/td>
+                    <td style="padding:8px;">${escapeHtmlStaff(staff.jabatan || '-')}<\/td>
+                    <td style="padding:8px;">${escapeHtmlStaff(staff.departemen || '-')}<\/td>
+                    <td style="padding:8px;">${escapeHtmlStaff(staff.noHp || '-')}<\/td>
+                    <td style="padding:8px;">${escapeHtmlStaff(staff.email || '-')}<\/td>
                     ${actionButtons}
                 </tr>
             `;
         }
         
-        updateStaffStatistics(staffList);
-        console.log(`✅ renderStaffTable selesai, ${staffList.length} staff ditampilkan`);
+        updateStaffStatistics(staffList, filteredStaff.length);
+        console.log(`✅ renderStaffTable selesai, ${filteredStaff.length}/${staffList.length} staff ditampilkan`);
         
     } catch (err) {
         console.error("❌ Error in renderStaffTable:", err);
         tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:30px; color:#f44336;">
             ❌ Gagal memuat data: ${err.message}<br>
             <button onclick="renderStaffTable()" style="margin-top:10px; padding:8px 20px; border-radius:20px; border:none; background:#00bcd4; color:white; cursor:pointer;">🔄 Coba Lagi</button>
-        </td></tr>`;
+        <\/td><\/tr>`;
     }
 }
 
-function updateStaffStatistics(staffList) {
+function updateStaffStatistics(staffList, filteredCount = null) {
     // Hanya tampilkan statistik jika user berhak
     if (!isStaffMenuVisible()) return;
     
@@ -320,18 +433,20 @@ function updateStaffStatistics(staffList) {
     if (!statsContainer) {
         const tabStaff = document.getElementById('tab-staff');
         if (tabStaff) {
-            const controlsBar = tabStaff.querySelector('.controls-bar:first-child');
-            if (controlsBar) {
+            // Cari tempat untuk menempatkan statistik di dalam tab-staff
+            const filterButtons = tabStaff.querySelector('.filter-buttons');
+            if (filterButtons) {
                 statsContainer = document.createElement('div');
                 statsContainer.id = 'staffStats';
                 statsContainer.style.marginBottom = '15px';
-                controlsBar.insertAdjacentElement('afterend', statsContainer);
+                filterButtons.insertAdjacentElement('afterend', statsContainer);
             }
         }
         if (!statsContainer) return;
     }
     
     const total = staffList.length;
+    const displayCount = filteredCount !== null ? filteredCount : total;
     let withAccount = 0;
     if (window.dbData && window.dbData.users_auth) {
         withAccount = staffList.filter(s => s.userId || s.fromUserAuth || 
@@ -341,9 +456,11 @@ function updateStaffStatistics(staffList) {
     const fromUserAuth = staffList.filter(s => s.source === 'user_auth').length;
     const fromStaffNode = staffList.filter(s => s.source === 'staff').length;
     
+    const filterInfo = (displayCount !== total) ? `<span style="color:#00bcd4;"> (Menampilkan ${displayCount} dari ${total})</span>` : '';
+    
     statsContainer.innerHTML = `
         <div style="display:flex; gap:15px; flex-wrap:wrap; padding:12px; background:var(--bg-hover); border-radius:12px;">
-            <div>👥 <strong>Total:</strong> ${total}</div>
+            <div>👥 <strong>Total:</strong> ${total}${filterInfo}</div>
             <div>✅ <strong style="color:#4caf50;">Berakun:</strong> ${withAccount}</div>
             <div>❌ <strong style="color:#f44336;">Belum Berakun:</strong> ${withoutAccount}</div>
             <div>📋 <strong>Dari User:</strong> ${fromUserAuth}</div>
@@ -355,7 +472,7 @@ function updateStaffStatistics(staffList) {
 // ======================= CRUD STAFF ========================
 function openAddStaffForm() {
     if (!isStaffMenuVisible()) {
-        showToast("⛔ Anda tidak memiliki akses!", "error");
+        if (window.showToast) window.showToast("⛔ Anda tidak memiliki akses!", "error");
         return;
     }
     resetStaffForm();
@@ -364,7 +481,7 @@ function openAddStaffForm() {
 
 function saveStaff() {
     if (!canManageStaff()) {
-        showToast("⛔ Anda tidak memiliki akses!", "error");
+        if (window.showToast) window.showToast("⛔ Anda tidak memiliki akses!", "error");
         return;
     }
     
@@ -377,11 +494,11 @@ function saveStaff() {
     const mode = document.getElementById('staffEditMode')?.value;
     
     if (!nama || !id) {
-        showToast("⚠️ ID dan Nama wajib diisi!", "error");
+        if (window.showToast) window.showToast("⚠️ ID dan Nama wajib diisi!", "error");
         return;
     }
     if (!jabatan) {
-        showToast("⚠️ Pilih Jabatan!", "error");
+        if (window.showToast) window.showToast("⚠️ Pilih Jabatan!", "error");
         return;
     }
     
@@ -396,42 +513,43 @@ function saveStaff() {
         departemen: departemen || '-',
         noHp: noHp || '-',
         email: email || '',
-        updatedAt: firebase.database.ServerValue.TIMESTAMP
+        updatedAt: window.firebase.database.ServerValue.TIMESTAMP
     };
     
     if (mode === 'add') {
-        staffData.createdAt = firebase.database.ServerValue.TIMESTAMP;
-        firebase.database().ref(`staff/${id}`).once('value').then((snapshot) => {
+        staffData.createdAt = window.firebase.database.ServerValue.TIMESTAMP;
+        window.firebase.database().ref(`staff/${id}`).once('value').then((snapshot) => {
             if (snapshot.exists()) {
-                showToast("❌ ID sudah ada!", "error");
+                if (window.showToast) window.showToast("❌ ID sudah ada!", "error");
                 if (btn) { btn.disabled = false; btn.innerHTML = originalText; }
                 return;
             }
-            return firebase.database().ref(`staff/${id}`).set(staffData);
+            return window.firebase.database().ref(`staff/${id}`).set(staffData);
         }).then(() => {
-            showToast("✅ Guru/Karyawan berhasil ditambahkan!");
-            if (typeof logActivity === 'function') {
-                logActivity('add_staff', `Tambah staff: ${nama} (ID: ${id})`);
+            if (window.showToast) window.showToast("✅ Guru/Karyawan berhasil ditambahkan!");
+            if (typeof window.logActivity === 'function') {
+                window.logActivity('add_staff', `Tambah staff: ${nama} (ID: ${id})`);
             }
             resetStaffForm();
             staffListLoaded = false;
-            renderStaffTable();
+            // Refresh data dan render ulang
+            setTimeout(() => renderStaffTable(), 500);
         }).catch(err => {
-            showToast("❌ Gagal: " + err.message, "error");
+            if (window.showToast) window.showToast("❌ Gagal: " + err.message, "error");
         }).finally(() => {
             if (btn) { btn.disabled = false; btn.innerHTML = originalText; }
         });
     } else {
-        firebase.database().ref(`staff/${id}`).update(staffData).then(() => {
-            showToast("✅ Data guru/karyawan berhasil diupdate!");
-            if (typeof logActivity === 'function') {
-                logActivity('edit_staff', `Edit staff: ${nama} (ID: ${id})`);
+        window.firebase.database().ref(`staff/${id}`).update(staffData).then(() => {
+            if (window.showToast) window.showToast("✅ Data guru/karyawan berhasil diupdate!");
+            if (typeof window.logActivity === 'function') {
+                window.logActivity('edit_staff', `Edit staff: ${nama} (ID: ${id})`);
             }
             resetStaffForm();
             staffListLoaded = false;
-            renderStaffTable();
+            setTimeout(() => renderStaffTable(), 500);
         }).catch(err => {
-            showToast("❌ Gagal: " + err.message, "error");
+            if (window.showToast) window.showToast("❌ Gagal: " + err.message, "error");
         }).finally(() => {
             if (btn) { btn.disabled = false; btn.innerHTML = originalText; }
         });
@@ -440,14 +558,14 @@ function saveStaff() {
 
 function editStaff(id) {
     if (!canManageStaff()) {
-        showToast("⛔ Anda tidak memiliki akses!", "error");
+        if (window.showToast) window.showToast("⛔ Anda tidak memiliki akses!", "error");
         return;
     }
     
-    firebase.database().ref(`staff/${id}`).once('value', (snapshot) => {
+    window.firebase.database().ref(`staff/${id}`).once('value', (snapshot) => {
         const staff = snapshot.val();
         if (!staff) {
-            showToast("❌ Data tidak ditemukan!", "error");
+            if (window.showToast) window.showToast("❌ Data tidak ditemukan!", "error");
             return;
         }
         
@@ -468,7 +586,7 @@ function editStaff(id) {
         }
         if (btnCancel) btnCancel.classList.remove('hidden');
         
-        showToast(`✏️ Edit mode: ${staff.nama}`, "info");
+        if (window.showToast) window.showToast(`✏️ Edit mode: ${staff.nama}`, "info");
         document.getElementById('staffNama').focus();
     });
 }
@@ -504,7 +622,7 @@ function resetStaffForm() {
 
 async function deleteStaff(id, nama) {
     if (!canManageStaff()) {
-        showToast("⛔ Anda tidak memiliki akses!", "error");
+        if (window.showToast) window.showToast("⛔ Anda tidak memiliki akses!", "error");
         return;
     }
     
@@ -524,25 +642,25 @@ async function deleteStaff(id, nama) {
     
     try {
         if (userAccount) {
-            await firebase.database().ref(`users_auth/${userAccount.uid}`).remove();
-            if (typeof logActivity === 'function') {
-                logActivity('delete_user', `Hapus akun user ${userAccount.nama} karena staff dihapus`);
+            await window.firebase.database().ref(`users_auth/${userAccount.uid}`).remove();
+            if (typeof window.logActivity === 'function') {
+                window.logActivity('delete_user', `Hapus akun user ${userAccount.nama} karena staff dihapus`);
             }
         }
-        await firebase.database().ref(`staff/${id}`).remove();
+        await window.firebase.database().ref(`staff/${id}`).remove();
         staffPhotoCache.delete(id);
         staffListLoaded = false;
         
-        showToast(`✅ ${nama} berhasil dihapus!`, "success");
+        if (window.showToast) window.showToast(`✅ ${nama} berhasil dihapus!`, "success");
         
-        if (typeof logActivity === 'function') {
-            logActivity('delete_staff', `Hapus staff: ${nama} (ID: ${id})`);
+        if (typeof window.logActivity === 'function') {
+            window.logActivity('delete_staff', `Hapus staff: ${nama} (ID: ${id})`);
         }
         
-        renderStaffTable();
-        if (typeof renderUsersTable === 'function') renderUsersTable();
+        setTimeout(() => renderStaffTable(), 500);
+        if (typeof window.renderUsersTable === 'function') window.renderUsersTable();
     } catch (err) {
-        showToast("❌ Gagal: " + err.message, "error");
+        if (window.showToast) window.showToast("❌ Gagal: " + err.message, "error");
     } finally {
         if (btn) btn.disabled = false;
     }
@@ -551,19 +669,19 @@ async function deleteStaff(id, nama) {
 // ======================= MANAJEMEN AKUN USER ========================
 async function createStaffUserAccount(staffId, staffName, staffEmail) {
     if (!canManageStaff()) {
-        showToast("⛔ Anda tidak memiliki akses!", "error");
+        if (window.showToast) window.showToast("⛔ Anda tidak memiliki akses!", "error");
         return;
     }
     
     if (!staffEmail) {
-        showToast("❌ Staff tidak memiliki email! Edit data dan isi email terlebih dahulu.", "error");
+        if (window.showToast) window.showToast("❌ Staff tidak memiliki email! Edit data dan isi email terlebih dahulu.", "error");
         return;
     }
     
     if (window.dbData && window.dbData.users_auth) {
         const existingUser = window.dbData.users_auth.find(u => u.email === staffEmail);
         if (existingUser) {
-            showToast(`❌ Email ${staffEmail} sudah terdaftar!`, "error");
+            if (window.showToast) window.showToast(`❌ Email ${staffEmail} sudah terdaftar!`, "error");
             return;
         }
     }
@@ -574,7 +692,7 @@ async function createStaffUserAccount(staffId, staffName, staffEmail) {
     if (btn) btn.disabled = true;
     
     try {
-        const userCredential = await firebase.auth().createUserWithEmailAndPassword(staffEmail, defaultPassword);
+        const userCredential = await window.firebase.auth().createUserWithEmailAndPassword(staffEmail, defaultPassword);
         const user = userCredential.user;
         
         const userData = {
@@ -583,21 +701,21 @@ async function createStaffUserAccount(staffId, staffName, staffEmail) {
             nama: staffName,
             role: 'guru',
             staffId: staffId,
-            registeredAt: firebase.database.ServerValue.TIMESTAMP
+            registeredAt: window.firebase.database.ServerValue.TIMESTAMP
         };
         
-        await firebase.database().ref(`users_auth/${user.uid}`).set(userData);
-        await firebase.database().ref(`staff/${staffId}/userId`).set(user.uid);
+        await window.firebase.database().ref(`users_auth/${user.uid}`).set(userData);
+        await window.firebase.database().ref(`staff/${staffId}/userId`).set(user.uid);
         
-        showToast(`✅ Akun berhasil dibuat!`, "success");
+        if (window.showToast) window.showToast(`✅ Akun berhasil dibuat!`, "success");
         
-        if (typeof logActivity === 'function') {
-            logActivity('create_staff_account', `Buat akun user untuk staff ${staffName}`);
+        if (typeof window.logActivity === 'function') {
+            window.logActivity('create_staff_account', `Buat akun user untuk staff ${staffName}`);
         }
         
         staffListLoaded = false;
-        renderStaffTable();
-        if (typeof renderUsersTable === 'function') renderUsersTable();
+        setTimeout(() => renderStaffTable(), 500);
+        if (typeof window.renderUsersTable === 'function') window.renderUsersTable();
         
         alert(`Akun berhasil dibuat!\n\nEmail: ${staffEmail}\nPassword: ${defaultPassword}\n\nHarap berikan password ini kepada staff.`);
         
@@ -605,7 +723,7 @@ async function createStaffUserAccount(staffId, staffName, staffEmail) {
         console.error("Create staff account error:", err);
         let msg = err.message;
         if (msg.includes('email-already-in-use')) msg = "Email sudah terdaftar!";
-        showToast("❌ Gagal: " + msg, "error");
+        if (window.showToast) window.showToast("❌ Gagal: " + msg, "error");
     } finally {
         if (btn) btn.disabled = false;
     }
@@ -615,23 +733,23 @@ function viewUserAccount(userId) {
     if (window.dbData && window.dbData.users_auth) {
         const user = window.dbData.users_auth.find(u => u.uid === userId);
         if (user) {
-            if (typeof switchTab === 'function') {
-                switchTab('users');
+            if (typeof window.switchTab === 'function') {
+                window.switchTab('users');
                 setTimeout(() => {
-                    showToast(`👤 Akun: ${user.nama} (${user.email})`, "info");
+                    if (window.showToast) window.showToast(`👤 Akun: ${user.nama} (${user.email})`, "info");
                 }, 500);
             } else {
-                showToast(`👤 Akun: ${user.nama} (${user.email})`, "info");
+                if (window.showToast) window.showToast(`👤 Akun: ${user.nama} (${user.email})`, "info");
             }
         } else {
-            showToast("❌ Akun user tidak ditemukan!", "error");
+            if (window.showToast) window.showToast("❌ Akun user tidak ditemukan!", "error");
         }
     }
 }
 
 async function deleteUserAccount(userId, userName) {
     if (!canManageStaff()) {
-        showToast("⛔ Anda tidak memiliki akses!", "error");
+        if (window.showToast) window.showToast("⛔ Anda tidak memiliki akses!", "error");
         return;
     }
     
@@ -643,32 +761,32 @@ async function deleteUserAccount(userId, userName) {
     }
     
     if (!user) {
-        showToast("❌ Akun user tidak ditemukan!", "error");
+        if (window.showToast) window.showToast("❌ Akun user tidak ditemukan!", "error");
         return;
     }
     
     try {
-        await firebase.database().ref(`users_auth/${userId}`).remove();
+        await window.firebase.database().ref(`users_auth/${userId}`).remove();
         
-        const staff = await firebase.database().ref('staff').orderByChild('userId').equalTo(userId).once('value');
+        const staff = await window.firebase.database().ref('staff').orderByChild('userId').equalTo(userId).once('value');
         if (staff.exists()) {
             const staffKey = Object.keys(staff.val())[0];
-            await firebase.database().ref(`staff/${staffKey}/userId`).remove();
+            await window.firebase.database().ref(`staff/${staffKey}/userId`).remove();
         }
         
-        showToast(`✅ Akun ${userName} berhasil dihapus!`, "success");
+        if (window.showToast) window.showToast(`✅ Akun ${userName} berhasil dihapus!`, "success");
         
-        if (typeof logActivity === 'function') {
-            logActivity('delete_user_account', `Hapus akun user ${userName}`);
+        if (typeof window.logActivity === 'function') {
+            window.logActivity('delete_user_account', `Hapus akun user ${userName}`);
         }
         
         staffListLoaded = false;
-        renderStaffTable();
-        if (typeof renderUsersTable === 'function') renderUsersTable();
+        setTimeout(() => renderStaffTable(), 500);
+        if (typeof window.renderUsersTable === 'function') window.renderUsersTable();
         
     } catch (err) {
         console.error("Delete user account error:", err);
-        showToast("❌ Gagal: " + err.message, "error");
+        if (window.showToast) window.showToast("❌ Gagal: " + err.message, "error");
     }
 }
 
@@ -679,7 +797,7 @@ function showStaffPhotoModal(staffId, staffName, photoUrl) {
             <div class="modal-box" style="max-width: 500px; text-align: center; background:var(--bg-card); border-radius:20px;">
                 <div class="modal-title" style="display:flex; justify-content:space-between; align-items:center; padding:15px 20px; border-bottom:1px solid var(--border);">
                     <span>📸 Foto ${escapeHtmlStaff(staffName)}</span>
-                    <span onclick="closeModal('modal-staff-photo')" style="cursor:pointer; font-size:24px;">✖</span>
+                    <span onclick="window.closeModal('modal-staff-photo')" style="cursor:pointer; font-size:24px;">✖</span>
                 </div>
                 <div style="padding: 20px;">
                     <img src="${photoUrl}" style="max-width: 100%; max-height: 60vh; border-radius: 20px; object-fit: contain;">
@@ -689,7 +807,7 @@ function showStaffPhotoModal(staffId, staffName, photoUrl) {
                     </p>
                 </div>
                 <div class="modal-actions" style="padding:15px 20px; border-top:1px solid var(--border);">
-                    <button class="btn-cancel" onclick="closeModal('modal-staff-photo')" style="padding:8px 20px; border-radius:20px; border:none; cursor:pointer;">Tutup</button>
+                    <button class="btn-cancel" onclick="window.closeModal('modal-staff-photo')" style="padding:8px 20px; border-radius:20px; border:none; cursor:pointer;">Tutup</button>
                 </div>
             </div>
         </div>
@@ -709,19 +827,24 @@ function initStaffSystem() {
     console.log("👥 Initializing Staff system...");
     
     // Tunggu currentUser
-    if (!currentUser) {
+    if (!window.currentUser) {
         console.log("⏳ Waiting for currentUser...");
+        setTimeout(initStaffSystem, 500);
+        return;
+    }
+    
+    // Tunggu firebase
+    if (!window.firebase || !window.firebase.database) {
+        console.log("⏳ Waiting for Firebase...");
         setTimeout(initStaffSystem, 500);
         return;
     }
     
     // Hanya inisialisasi jika user berhak melihat menu staff
     if (!isStaffMenuVisible()) {
-        console.log("🔒 Staff system: No access for role:", currentUser?.role);
-        // Sembunyikan tab staff jika ada
+        console.log("🔒 Staff system: No access for role:", window.currentUser?.role);
         const staffTab = document.getElementById('tab-staff');
         if (staffTab) staffTab.style.display = 'none';
-        // Sembunyikan button staff di dropdown
         const staffBtn = document.querySelector('#dropdownMainContent button[onclick*="staff"]');
         if (staffBtn) staffBtn.style.display = 'none';
         return;
@@ -730,12 +853,11 @@ function initStaffSystem() {
     addStaffTab();
     setupStaffListeners();
     
-    // Render pertama kali
+    // Render pertama kali - panggil langsung
     setTimeout(() => {
-        if (document.getElementById('tab-staff')?.classList.contains('active')) {
-            renderStaffTable();
-        }
-    }, 500);
+        console.log("📊 First render of staff table");
+        renderStaffTable();
+    }, 1000);
     
     staffInitialized = true;
 }
@@ -743,7 +865,7 @@ function initStaffSystem() {
 function addStaffTab() {
     // Hanya tambah tab jika user berhak melihat
     if (!isStaffMenuVisible()) {
-        console.log("🔒 Staff tab not added - user role:", currentUser?.role);
+        console.log("🔒 Staff tab not added - user role:", window.currentUser?.role);
         return;
     }
     
@@ -755,7 +877,7 @@ function addStaffTab() {
         const existingBtn = Array.from(dropdownMainContent.children).find(btn => btn.innerHTML === '👥 Data Staff');
         if (!existingBtn) {
             const staffBtn = document.createElement('button');
-            staffBtn.setAttribute('onclick', "switchTab('staff'); closeAllDropdowns()");
+            staffBtn.setAttribute('onclick', "window.switchTab('staff'); window.closeAllDropdowns()");
             staffBtn.innerHTML = '👥 Data Staff';
             staffBtn.className = 'role-admin role-guru role-developer';
             
@@ -769,7 +891,7 @@ function addStaffTab() {
         }
     }
     
-    // Tambahkan tab content
+    // Tambahkan tab content jika belum ada
     const dashboardSection = document.getElementById('dashboard-section');
     if (dashboardSection && !document.getElementById('tab-staff')) {
         const staffTabHtml = `
@@ -786,6 +908,30 @@ function addStaffTab() {
                         </div>
                     </div>
                 </div>
+                
+                <!-- Tombol Filter -->
+                <div class="filter-buttons">
+                    <button class="filter-btn active" data-filter="all" onclick="window.setStaffFilter('all')">📋 Semua Data</button>
+                    <button class="filter-btn" data-filter="withAccount" onclick="window.setStaffFilter('withAccount')">✅ Sudah Berakun</button>
+                    <button class="filter-btn" data-filter="withoutAccount" onclick="window.setStaffFilter('withoutAccount')">❌ Belum Berakun</button>
+                    <button class="filter-btn" data-filter="fromStaff" onclick="window.setStaffFilter('fromStaff')">📁 Dari Data Staff</button>
+                    <button class="filter-btn" data-filter="fromUser" onclick="window.setStaffFilter('fromUser')">👥 Dari Akun User</button>
+                </div>
+                
+                <!-- Search Bar -->
+                <div class="search-bar">
+                    <div class="search-input-wrapper">
+                        <input type="text" id="staffSearchInput" class="search-input" placeholder="🔍 Cari staff..." onkeyup="if(event.key === 'Enter') window.searchStaff()">
+                        <button class="search-clear-btn" onclick="window.clearSearch()">✖</button>
+                    </div>
+                    <button class="search-btn" onclick="window.searchStaff()">Cari</button>
+                    <button class="reset-btn" onclick="window.resetStaffFilters()">Reset</button>
+                </div>
+                
+                <!-- Statistik akan ditampilkan di sini -->
+                <div id="staffStats"></div>
+                
+                <!-- Form Tambah/Edit Staff -->
                 <div class="controls-bar">
                     <div style="display:flex; gap:10px; flex-wrap:wrap; width:100%;">
                         <input type="hidden" id="staffEditMode" value="add">
@@ -815,10 +961,12 @@ function addStaffTab() {
                         </div>
                         <div class="filter-group"><label>No. HP:</label><input type="tel" id="staffNoHp" placeholder="No. HP" style="width:120px; padding:8px; border-radius:8px; border:1px solid var(--border);"></div>
                         <div class="filter-group"><label>Email:</label><input type="email" id="staffEmail" placeholder="Email" style="width:180px; padding:8px; border-radius:8px; border:1px solid var(--border);"></div>
-                        <button id="btnSaveStaff" onclick="saveStaff()" style="background:#00bcd4; border:none; border-radius:8px; padding:8px 20px; color:white; cursor:pointer;">➕ Simpan</button>
-                        <button id="btnCancelStaff" onclick="resetStaffForm()" style="display:none; background:#f44336; border:none; border-radius:8px; padding:8px 20px; color:white; cursor:pointer;">Batal</button>
+                        <button class="btn-action role-guru role-admin" id="btnSaveStaff" onclick="window.saveStaff()" style="background:#00bcd4; border:none; border-radius:8px; padding:8px 20px; color:white; cursor:pointer;">➕ Simpan</button>
+                        <button class="btn-action btn-danger hidden" id="btnCancelStaff" onclick="window.resetStaffForm()" style="display:none; background:#f44336; border:none; border-radius:8px; padding:8px 20px; color:white; cursor:pointer;">Batal</button>
                     </div>
                 </div>
+                
+                <!-- Tabel Data Staff -->
                 <div class="table-container" style="overflow-x:auto;">
                     <table style="width:100%; border-collapse:collapse;">
                         <thead>
@@ -846,8 +994,10 @@ function addStaffTab() {
 }
 
 function setupStaffListeners() {
+    if (!window.firebase) return;
+    
     // Listener untuk perubahan data staff
-    firebase.database().ref('staff').on('value', () => {
+    window.firebase.database().ref('staff').on('value', () => {
         console.log("🔄 Staff data changed, refreshing...");
         staffListLoaded = false;
         if (document.getElementById('tab-staff')?.classList.contains('active') && isStaffMenuVisible()) {
@@ -856,32 +1006,13 @@ function setupStaffListeners() {
     });
     
     // Listener untuk perubahan users_auth
-    firebase.database().ref('users_auth').on('value', () => {
+    window.firebase.database().ref('users_auth').on('value', () => {
         console.log("🔄 Users auth changed, refreshing staff...");
         staffListLoaded = false;
         if (document.getElementById('tab-staff')?.classList.contains('active') && isStaffMenuVisible()) {
             renderStaffTable();
         }
     });
-}
-
-// Override switchTab
-if (typeof window.switchTab === 'function') {
-    const originalSwitchTabForStaff = window.switchTab;
-    window.switchTab = function(tabId) {
-        originalSwitchTabForStaff(tabId);
-        if (tabId === 'staff' && isStaffMenuVisible()) {
-            staffListLoaded = false;
-            setTimeout(() => renderStaffTable(), 200);
-        }
-    };
-} else {
-    window.switchTab = function(tabId) {
-        if (tabId === 'staff' && isStaffMenuVisible()) {
-            staffListLoaded = false;
-            setTimeout(() => renderStaffTable(), 200);
-        }
-    };
 }
 
 function escapeHtmlStaff(str) {
@@ -897,6 +1028,70 @@ if (!document.querySelector('#staff-spinner-style')) {
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
+        }
+        
+        .filter-btn {
+            transition: all 0.3s ease;
+            padding: 8px 16px;
+            margin: 0 4px;
+            border-radius: 20px;
+            cursor: pointer;
+            border: none;
+        }
+        
+        .filter-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        
+        .search-bar {
+            display: flex;
+            gap: 10px;
+            margin: 15px 0;
+            flex-wrap: wrap;
+        }
+        
+        .search-input-wrapper {
+            flex: 1;
+            position: relative;
+        }
+        
+        .search-input {
+            width: 100%;
+            padding: 10px 35px 10px 15px;
+            border-radius: 30px;
+            border: 1px solid var(--border);
+            background: var(--bg-input);
+            color: var(--text-primary);
+        }
+        
+        .search-clear-btn {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+            color: #888;
+        }
+        
+        .search-btn, .reset-btn {
+            padding: 8px 20px;
+            border-radius: 30px;
+            border: none;
+            cursor: pointer;
+        }
+        
+        .search-btn {
+            background: #00bcd4;
+            color: white;
+        }
+        
+        .reset-btn {
+            background: #f44336;
+            color: white;
         }
     `;
     document.head.appendChild(style);
@@ -917,8 +1112,12 @@ window.showStaffPhotoModal = showStaffPhotoModal;
 window.canManageStaff = canManageStaff;
 window.getStaffList = getStaffList;
 window.isStaffMenuVisible = isStaffMenuVisible;
+window.setStaffFilter = setStaffFilter;
+window.searchStaff = searchStaff;
+window.clearSearch = clearSearch;
+window.resetStaffFilters = resetStaffFilters;
 
-console.log("✅ staff.js V2.5 loaded - Fixed async/await error (no await inside forEach)");
+console.log("✅ staff.js V2.8 loaded - Fixed render issue");
 
 // Auto-initialize when DOM ready
 if (document.readyState === 'loading') {
