@@ -1,4 +1,4 @@
-// staff-attendance.js - VERSION 2.3 (MENGGUNAKAN MODAL YANG SUDAH ADA DI HTML)
+// staff-attendance.js - VERSION 2.4 (HANYA MENAMPILKAN JAM ABSEN, TANPA STATUS TERLAMBAT)
 // Absensi Guru/Karyawan
 // ============================================================================
 
@@ -438,15 +438,14 @@ window.renderStaffAttendanceTable = function() {
         for (const row of attendanceList) {
             const photoUrl = getStaffPhotoUrl(row.staffId, row.nama);
             const initial = row.nama ? row.nama.charAt(0).toUpperCase() : 'G';
-            const isLate = row.timeIn && row.timeIn > '07:30';
             
+            // Format status - HANYA TAMPILKAN JAM, TANPA STATUS TERLAMBAT
             let statusHtml = '';
             if (row.status === 'pulang') {
                 statusHtml = `<span style="color:#f44336;">🏠 Pulang (${row.timeOut || '-'})</span>`;
-            } else if (isLate) {
-                statusHtml = `<span style="color:#ff9800;">⏰ Terlambat (${row.timeIn})</span>`;
             } else {
-                statusHtml = `<span style="color:#4caf50;">✅ Hadir (${row.timeIn})</span>`;
+                // Untuk staff, hanya tampilkan jam masuk tanpa label terlambat
+                statusHtml = `<span style="color:#4caf50;">✅ ${row.timeIn || '-'}</span>`;
             }
             
             let actionButtons = '';
@@ -553,6 +552,13 @@ function initStaffAttendance() {
         return;
     }
     
+    // Tunggu Firebase siap
+    if (!window.firebase || !window.firebase.database) {
+        console.log("⏳ Menunggu Firebase...");
+        setTimeout(initStaffAttendance, 500);
+        return;
+    }
+    
     // Setup search input listeners
     const searchInputIn = document.getElementById('simulateStaffSearchInput');
     if (searchInputIn && !searchInputIn._listenerAdded) {
@@ -599,7 +605,7 @@ window.isStaffAttendanceVisible = isStaffAttendanceVisible;
 window.canManageStaffAttendance = canManageStaffAttendance;
 window.getRoleDisplayName = getRoleDisplayName;
 
-console.log("✅ staff-attendance.js V2.3 loaded - Menggunakan modal yang sudah ada di HTML");
+console.log("✅ staff-attendance.js V2.4 loaded - Hanya menampilkan jam absen staff (tanpa status terlambat)");
 
 // Auto-initialize
 setTimeout(initStaffAttendance, 500);
