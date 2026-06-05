@@ -1,5 +1,5 @@
-// staff-attendance.js - VERSION 2.4 (HANYA MENAMPILKAN JAM ABSEN, TANPA STATUS TERLAMBAT)
-// Absensi Guru/Karyawan
+// staff-attendance.js - VERSION 2.5 (DENGAN NOTIFIKASI WHATSAPP UNTUK STAFF)
+// Absensi Guru/Karyawan dengan Notifikasi WhatsApp
 // ============================================================================
 
 let staffAttendanceDonutChart = null;
@@ -56,6 +56,292 @@ function isStaffAttendanceVisible() {
     if (!window.currentUser) return false;
     const visibleRoles = ['admin', 'developer', 'wakil_kepala', 'staff_tu', 'guru'];
     return visibleRoles.includes(window.currentUser.role);
+}
+
+// ======================= NOTIFIKASI WHATSAPP UNTUK STAFF ========================
+
+/**
+ * Kirim notifikasi WhatsApp ke staff (Guru/Karyawan)
+ * @param {string} staffId - ID staff
+ * @param {string} staffName - Nama staff
+ * @param {string} type - Jenis notifikasi ('check_in', 'check_out')
+ * @param {string} time - Waktu kejadian
+ * @param {string} date - Tanggal (opsional)
+ */
+async function sendStaffWhatsAppNotification(staffId, staffName, type, time, date = null) {
+    // Cek apakah fitur WhatsApp diaktifkan
+    if (typeof window.WHATSAPP_CONFIG === 'undefined' || !window.WHATSAPP_CONFIG.enabled) {
+        console.log('📱 WhatsApp notification disabled for staff');
+        return;
+    }
+    
+    // Cek notifikasi berdasarkan jenis
+    if (type === 'check_in' && !window.WHATSAPP_CONFIG.sendOnCheckIn) return;
+    if (type === 'check_out' && !window.WHATSAPP_CONFIG.sendOnCheckOut) return;
+    
+    try {
+        // Ambil nomor WhatsApp staff dari database
+        let phoneNumber = null;
+        
+        // Cari dari staff_contacts
+        const staffContactSnapshot = await db.ref(`staff_contacts/${staffId}`).once('value');
+        const staffContactData = staffContactSnapshot.val();
+        
+        if (staffContactData && staffContactData.phoneNumber) {
+            phoneNumber = staffContactData.phoneNumber;
+        } else {
+            // Cari dari data staff node
+            const staffSnapshot = await db.ref(`staff/${staffId}`).once('value');
+            const staffData = staffSnapshot.val();
+            if (staffData && staffData.noHp) {
+                phoneNumber = staffData.noHp;
+            }
+        }
+        
+        // Cari dari users_auth
+        if (!phoneNumber && window.dbData && window.dbData.users_auth) {
+            const userAuth = window.dbData.users_auth.find(u => u.uid === staffId || u.staffId === staffId);
+            if (userAuth && userAuth.noHp) {
+                phoneNumber = userAuth.noHp;
+            }
+        }
+        
+        if (!phoneNumber) {
+            console.log(`📱 No WhatsApp number for staff ${staffName} (ID: ${staffId})`);
+            return;
+        }
+        
+        // Format nomor
+        let formattedNumber = phoneNumber.replace(/[^0-9]/g, '');
+        if (formattedNumber.startsWith('0')) formattedNumber = '62' + formattedNumber.substring(1);
+        if (!formattedNumber.startsWith('62')) formattedNumber = '62' + formattedNumber;
+        
+        // Format tanggal
+        const today = date || new Date().toISOString().split('T')[0];
+        const formattedDate = formatIndonesianDate(today);
+        
+        // Buat pesan sesuai jenis
+        let title = '';
+        let message = '';
+        
+        switch(type) {
+            case 'check_in':
+                title = '✅ Absen Masuk Staff';
+                message = `*${staffName}* telah absen masuk pada pukul *${time}*.\n\n📅 Tanggal: ${formattedDate}\n\nSelamat bekerja! 👨‍🏫✨`;
+                break;
+            case 'check_out':
+                title = '🏠 Absen Pulang Staff';
+                message = `*${staffName}* telah absen pulang pada pukul *${time}*.\n\n📅 Tanggal: ${formattedDate}\n\nSemoga sampai rumah dengan selamat. 🏡`;
+                break;
+        }
+        
+        // Kirim notifikasi via Fonnte jika fungsi tersedia
+        if (typeof sendViaFonnte === 'function') {
+            const fullMessage = `*📢 SISTEM ABSENSI SEKOLAH*\n\n*${title}*\n\n${message}\n\n---\n📱 Sistem Absensi IoT - Real-time`;
+            const result = await sendViaFonnte(formattedNumber, fullMessage);
+            if (result) {
+                console.log(`📱 WhatsApp sent to staff ${staffName}: ${type}`);
+                
+                // Simpan log notifikasi
+                await db.ref(`staff_notifications_log/${staffId}/${Date.now()}`).set({
+                    type: type,
+                    phoneNumber: formattedNumber,
+                    time: time,
+                    date: today,
+                    sentAt: firebase.database.ServerValue.TIMESTAMP
+                });
+            }
+        }
+        
+    } catch (error) {
+        console.error('Send staff notification error:', error);
+    }
+}
+
+/**
+ * Format tanggal Indonesia
+ */
+function formatIndonesianDate(dateStr) {
+    if (!dateStr) return '';
+    const parts = dateStr.split('-');
+    if (parts.length !== 3) return dateStr;
+    const bulan = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+    return `${parts[2]} ${bulan[parseInt(parts[1]) - 1]} ${parts[0]}`;
+}
+
+/**
+ * Simpan kontak WhatsApp staff
+ */
+async function saveStaffContact(staffId, staffName, phoneNumber, relation = 'staff') {
+    if (!window.currentUser || (window.currentUser.role !== 'admin' && window.currentUser.role !== 'developer')) {
+        if (window.showToast) window.showToast('⛔ Hanya Admin dan Developer yang dapat mengedit kontak staff!', 'error');
+        return false;
+    }
+    
+    // Format nomor
+    let formattedNumber = phoneNumber.replace(/[^0-9]/g, '');
+    if (formattedNumber.startsWith('0')) formattedNumber = '62' + formattedNumber.substring(1);
+    if (!formattedNumber.startsWith('62')) formattedNumber = '62' + formattedNumber;
+    
+    try {
+        await db.ref(`staff_contacts/${staffId}`).set({
+            staffId: staffId,
+            staffName: staffName,
+            phoneNumber: formattedNumber,
+            rawNumber: phoneNumber,
+            relation: relation,
+            updatedBy: window.currentUser.nama || window.currentUser.email,
+            updatedAt: firebase.database.ServerValue.TIMESTAMP
+        });
+        
+        // Update juga di data staff node
+        await db.ref(`staff/${staffId}/noHp`).set(formattedNumber);
+        
+        if (window.showToast) window.showToast(`✅ Nomor WhatsApp ${staffName} berhasil disimpan!`, 'success');
+        
+        if (typeof window.logActivity === 'function') {
+            window.logActivity('save_staff_contact', `Simpan kontak staff ${staffName} (ID: ${staffId}) - ${formattedNumber}`);
+        }
+        
+        return true;
+    } catch (error) {
+        console.error('Save staff contact error:', error);
+        if (window.showToast) window.showToast('❌ Gagal menyimpan nomor', 'error');
+        return false;
+    }
+}
+
+/**
+ * Buka modal kontak WhatsApp staff
+ */
+function openStaffContactModal(staffId, staffName) {
+    const modalId = 'modal-staff-contact';
+    let existingModal = document.getElementById(modalId);
+    if (existingModal) existingModal.remove();
+    
+    // Load existing data
+    let existingNumber = '';
+    let existingRelation = 'staff';
+    
+    db.ref(`staff_contacts/${staffId}`).once('value', (snapshot) => {
+        const contact = snapshot.val();
+        if (contact && contact.rawNumber) {
+            existingNumber = contact.rawNumber;
+            existingRelation = contact.relation || 'staff';
+        }
+        
+        const modalHtml = `
+            <div id="${modalId}" class="modal-overlay open" style="display:flex; align-items:center; justify-content:center; z-index:10000;">
+                <div class="modal-box" style="max-width: 450px; background:var(--bg-card); border-radius:20px;">
+                    <div class="modal-title" style="display:flex; justify-content:space-between; align-items:center; padding:15px 20px; border-bottom:1px solid var(--border);">
+                        <span>📱 WhatsApp Staff - ${escapeHtml(staffName)}</span>
+                        <span onclick="window.closeModal('${modalId}')" style="cursor:pointer; font-size:24px;">✖</span>
+                    </div>
+                    <div style="padding: 20px;">
+                        <div class="form-group">
+                            <label>👤 Staff</label>
+                            <input type="text" id="staffContactName" value="${escapeHtml(staffName)}" readonly style="background: var(--bg-hover); width:100%; padding:10px; border-radius:8px;">
+                        </div>
+                        <div class="form-group">
+                            <label>📱 Nomor WhatsApp</label>
+                            <input type="tel" id="staffContactPhone" placeholder="Contoh: 08123456789 atau 628123456789" value="${escapeHtml(existingNumber)}" style="width:100%; padding:10px; border-radius:8px; border:1px solid var(--border); background:var(--bg-input);">
+                            <small class="text-small" style="color: var(--text-muted);">Format: 08xxxxxxxxx atau 628xxxxxxxxx</small>
+                        </div>
+                        <div class="form-group">
+                            <label>👤 Hubungan</label>
+                            <select id="staffContactRelation" style="width:100%; padding:10px; border-radius:8px; border:1px solid var(--border); background:var(--bg-input);">
+                                <option value="staff" ${existingRelation === 'staff' ? 'selected' : ''}>Staff</option>
+                                <option value="guru" ${existingRelation === 'guru' ? 'selected' : ''}>Guru</option>
+                                <option value="karyawan" ${existingRelation === 'karyawan' ? 'selected' : ''}>Karyawan</option>
+                                <option value="pribadi" ${existingRelation === 'pribadi' ? 'selected' : ''}>Pribadi</option>
+                            </select>
+                        </div>
+                        <div class="modal-actions" style="display:flex; gap:10px; justify-content:flex-end; margin-top:20px;">
+                            <button class="btn-cancel" onclick="window.closeModal('${modalId}')" style="padding:8px 20px; border-radius:20px; border:none; cursor:pointer;">Batal</button>
+                            <button class="btn-save" onclick="saveStaffContactFromModal('${staffId}', '${escapeHtml(staffName)}')" style="padding:8px 20px; border-radius:20px; border:none; background:#4caf50; color:white; cursor:pointer;">💾 Simpan Nomor</button>
+                        </div>
+                        <div class="text-small" style="margin-top: 15px; text-align: center; color: var(--text-muted);">
+                            <hr>
+                            📱 <strong>Test Kirim Pesan</strong><br>
+                            <button class="btn-action btn-success" onclick="testSendStaffWhatsApp('${staffId}', '${escapeHtml(staffName)}')" style="margin-top: 8px; padding: 6px 12px; font-size: 0.75rem;">
+                                🔔 Kirim Test WhatsApp
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+    });
+}
+
+/**
+ * Simpan kontak staff dari modal
+ */
+async function saveStaffContactFromModal(staffId, staffName) {
+    const phoneNumber = document.getElementById('staffContactPhone')?.value.trim();
+    const relation = document.getElementById('staffContactRelation')?.value;
+    
+    if (!phoneNumber) {
+        if (window.showToast) window.showToast('Masukkan nomor WhatsApp!', 'error');
+        return;
+    }
+    
+    await saveStaffContact(staffId, staffName, phoneNumber, relation);
+    window.closeModal('modal-staff-contact');
+}
+
+/**
+ * Test kirim WhatsApp ke staff
+ */
+async function testSendStaffWhatsApp(staffId, staffName) {
+    // Ambil nomor dari database
+    let phoneNumber = null;
+    
+    const staffContactSnapshot = await db.ref(`staff_contacts/${staffId}`).once('value');
+    const staffContactData = staffContactSnapshot.val();
+    
+    if (staffContactData && staffContactData.phoneNumber) {
+        phoneNumber = staffContactData.phoneNumber;
+    }
+    
+    if (!phoneNumber) {
+        if (window.showToast) window.showToast(`❌ Nomor WhatsApp untuk ${staffName} belum diisi!`, 'error');
+        return;
+    }
+    
+    if (typeof sendViaFonnte !== 'function') {
+        if (window.showToast) window.showToast('❌ Fungsi WhatsApp tidak tersedia. Pastikan whatsapp-notif.js sudah dimuat.', 'error');
+        return;
+    }
+    
+    const testMessage = `🧪 *TEST NOTIFIKASI WHATSAPP - STAFF*
+
+Halo *${staffName}*, ini adalah pesan test dari **Sistem Absensi Sekolah**.
+
+*Staff:* ${staffName}
+*Waktu Test:* ${new Date().toLocaleString('id-ID')}
+
+Jika Anda menerima pesan ini, berarti notifikasi WhatsApp untuk staff berhasil terintegrasi! ✅
+
+---
+📱 Sistem Absensi IoT - Real-time`;
+    
+    if (window.showToast) window.showToast('📤 Mengirim pesan test...', 'info');
+    
+    const result = await sendViaFonnte(phoneNumber, testMessage);
+    
+    if (result) {
+        if (window.showToast) window.showToast(`✅ Pesan test berhasil dikirim ke ${phoneNumber}`, 'success');
+        if (typeof window.logActivity === 'function') {
+            window.logActivity('test_staff_whatsapp', `Test WhatsApp ke staff ${staffName} (${phoneNumber}) - BERHASIL`);
+        }
+    } else {
+        if (window.showToast) window.showToast(`❌ Gagal mengirim ke ${phoneNumber}. Cek API Key dan koneksi.`, 'error');
+        if (typeof window.logActivity === 'function') {
+            window.logActivity('test_staff_whatsapp', `Test WhatsApp ke staff ${staffName} (${phoneNumber}) - GAGAL`);
+        }
+    }
 }
 
 // ======================= FUNGSI UNTUK MODAL YANG SUDAH ADA ========================
@@ -195,7 +481,7 @@ function checkExistingStaffAttendance(staffId) {
     });
 }
 
-// Eksekusi absen masuk
+// Eksekusi absen masuk - DENGAN NOTIFIKASI WHATSAPP
 window.executeSimulateStaffIn = async function() {
     console.log("✅ executeSimulateStaffIn dipanggil");
     const staffId = document.getElementById('selectedStaffId')?.value;
@@ -235,6 +521,9 @@ window.executeSimulateStaffIn = async function() {
         if (typeof window.logActivity === 'function') {
             window.logActivity('simulate_staff_attendance_in', `Absen masuk staff: ${nama} (ID: ${staffId}) - Waktu: ${timeStr} oleh ${getRoleDisplayName(window.currentUser?.role)}`);
         }
+        
+        // ======================== KIRIM NOTIFIKASI WHATSAPP KE STAFF ========================
+        await sendStaffWhatsAppNotification(staffId, nama, 'check_in', timeStr, dateStr);
         
         window.closeModal('modal-simulate-staff-in');
         if (typeof window.renderStaffAttendanceTable === 'function') {
@@ -335,7 +624,7 @@ function renderStaffListForOutModal(filterText = '') {
     });
 }
 
-// Eksekusi absen pulang
+// Eksekusi absen pulang - DENGAN NOTIFIKASI WHATSAPP
 window.executeSimulateStaffOut = async function() {
     console.log("✅ executeSimulateStaffOut dipanggil");
     const staffId = document.getElementById('selectedStaffOutId')?.value;
@@ -373,6 +662,9 @@ window.executeSimulateStaffOut = async function() {
         if (typeof window.logActivity === 'function') {
             window.logActivity('simulate_staff_attendance_out', `Absen pulang staff: ${nama} (ID: ${staffId}) - Waktu: ${timeOutStr} oleh ${getRoleDisplayName(window.currentUser?.role)}`);
         }
+        
+        // ======================== KIRIM NOTIFIKASI WHATSAPP KE STAFF ========================
+        await sendStaffWhatsAppNotification(staffId, nama, 'check_out', timeOutStr, todayStr);
         
         window.closeModal('modal-simulate-staff-out');
         if (typeof window.renderStaffAttendanceTable === 'function') {
@@ -457,15 +749,21 @@ window.renderStaffAttendanceTable = function() {
                 actionButtons = '-';
             }
             
+            // Tombol WhatsApp untuk Admin/Developer
+            let waButton = '';
+            if (window.currentUser && (window.currentUser.role === 'admin' || window.currentUser.role === 'developer')) {
+                waButton = `<button onclick="openStaffContactModal('${row.staffId}', '${escapeHtml(row.nama)}')" style="background:#25D366; border:none; border-radius:8px; padding:5px 10px; margin-left:5px; cursor:pointer; color:white;" title="Set WhatsApp">📱</button>`;
+            }
+            
             tbody.innerHTML += `
                 <tr>
                     <td><img src="${photoUrl}" style="width:40px;height:40px;border-radius:50%;object-fit:cover;" onerror="this.src='https://ui-avatars.com/api/?name=${initial}&background=ff9800&color=fff'"></td>
                     <td>${escapeHtml(row.timeIn || '-')}<br><small>${row.date || targetDate}</small></td>
                     <td><strong>${escapeHtml(row.staffId)}</strong></td>
-                    <td>${escapeHtml(row.nama)}</td>
-                    <td>${escapeHtml(row.jabatan || '-')}</td>
-                    <td>${statusHtml}</td>
-                    <td>${actionButtons}</td>
+                    <td>${escapeHtml(row.nama)}</div>
+                    <td>${escapeHtml(row.jabatan || '-')}</div>
+                    <td>${statusHtml}</div>
+                    <td>${actionButtons}${waButton}</div>
                 </tr>
             `;
         }
@@ -604,8 +902,13 @@ window.initStaffAttendance = initStaffAttendance;
 window.isStaffAttendanceVisible = isStaffAttendanceVisible;
 window.canManageStaffAttendance = canManageStaffAttendance;
 window.getRoleDisplayName = getRoleDisplayName;
+window.sendStaffWhatsAppNotification = sendStaffWhatsAppNotification;
+window.saveStaffContact = saveStaffContact;
+window.openStaffContactModal = openStaffContactModal;
+window.saveStaffContactFromModal = saveStaffContactFromModal;
+window.testSendStaffWhatsApp = testSendStaffWhatsApp;
 
-console.log("✅ staff-attendance.js V2.4 loaded - Hanya menampilkan jam absen staff (tanpa status terlambat)");
+console.log("✅ staff-attendance.js V2.5 loaded - Dengan notifikasi WhatsApp untuk staff + tombol set WA di tabel absensi");
 
 // Auto-initialize
 setTimeout(initStaffAttendance, 500);
