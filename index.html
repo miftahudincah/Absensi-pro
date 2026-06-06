@@ -587,17 +587,12 @@
                     <div class="dropdown-content" id="dropdownMainContent">
                         <button onclick="switchTab('dashboard'); closeAllDropdowns()">📊 Dashboard</button>
                         <button onclick="switchTab('attendance'); closeAllDropdowns()">📋 Absensi Siswa</button>
-                        <!-- Menu untuk ABSENSI STAFF - HANYA untuk Admin/Guru/Developer -->
-                        <button class="role-admin role-guru role-developer" onclick="switchTab('staff-attendance'); closeAllDropdowns()">👥 Absensi Staff</button>
-                        <!-- Menu untuk DATA SISWA - HANYA untuk Admin/Guru/Developer -->
-                        <button class="role-admin role-guru role-developer" onclick="switchTab('students'); closeAllDropdowns()">👨‍🎓 Data Siswa</button>
-                        <!-- Menu untuk DATA STAFF - HANYA untuk Admin/Guru/Developer -->
-                        <button class="role-admin role-guru role-developer" onclick="switchTab('staff'); closeAllDropdowns()">👥 Data Staff</button>
+                        <button onclick="switchTab('staff-attendance'); closeAllDropdowns()">👥 Absensi Staff</button>
+                        <button onclick="switchTab('students'); closeAllDropdowns()">👨‍🎓 Data Siswa</button>
+                        <button onclick="switchTab('staff'); closeAllDropdowns()">👥 Data Staff</button>
                         <button onclick="switchTab('rekap'); closeAllDropdowns()">📊 Rekap Absensi</button>
-                        <!-- Menu untuk IZIN ONLINE - HANYA untuk Admin/Guru/Developer -->
-                        <button class="role-admin role-guru role-developer" onclick="goToIzinTab()">📝 Izin Online</button>
-                        <!-- Menu untuk PANDUAN - HANYA untuk Admin/Guru/Developer -->
-                        <button class="role-admin role-guru role-developer" onclick="switchTab('guide'); closeAllDropdowns()">📘 Panduan</button>
+                        <button onclick="goToIzinTab()">📝 Izin Online</button>
+                        <button onclick="switchTab('guide'); closeAllDropdowns()">📘 Panduan</button>
                     </div>
                 </div>
                 
@@ -722,11 +717,11 @@
                 </div>
             </div>
             <div class="chart-container" style="margin-bottom:20px;"><div style="background:var(--bg-card); border-radius:20px; padding:15px;"><h4 style="margin:0 0 10px 0;">📊 Ringkasan Hari Ini</h4><div style="max-width:250px; margin:0 auto;"><canvas id="attendanceDonutChart" style="max-height:200px;"></canvas></div><div id="todayStatsText" class="text-small text-center" style="margin-top:10px;"></div></div></div>
-            <div class="table-container"><table><thead><tr><th>Foto</th><th>Waktu</th><th>ID FP</th><th>Nama</th><th>Kelas</th><th>Jurusan</th><th>Status</th><th>Aksi</th></tr></thead><tbody id="tbody-attendance"><tr><td colspan="8">Memuat data...<\/td><\/tr></tbody></table></div>
+            <div class="table-container"></table><thead><tr><th>Foto</th><th>Waktu</th><th>ID FP</th><th>Nama</th><th>Kelas</th><th>Jurusan</th><th>Status</th><th>Aksi</th></tr></thead><tbody id="tbody-attendance"><tr><td colspan="8">Memuat data...</td></tr></tbody></table>
         </div>
 
         <!-- TAB STAFF ATTENDANCE (Absensi Staff) -->
-        <div id="tab-staff-attendance" class="tab-content role-admin role-guru role-developer">
+        <div id="tab-staff-attendance" class="tab-content">
             <div class="controls-bar">
                 <div class="filter-group">
                     <label>📅 Tanggal:</label>
@@ -754,21 +749,21 @@
                         </tr>
                     </thead>
                     <tbody id="tbody-staff-attendance">
-                        <tr><td colspan="7" style="text-align:center; padding:30px;">⏳ Memuat data...<\/td><\/tr>
+                        <tr><td colspan="7" style="text-align:center; padding:30px;">⏳ Memuat data...</td></tr>
                     </tbody>
                 </table>
             </div>
         </div>
 
         <!-- TAB STUDENTS (Data Siswa) -->
-        <div id="tab-students" class="tab-content role-admin role-guru role-developer">
+        <div id="tab-students" class="tab-content">
             <div class="controls-bar"><div style="display:flex; gap:10px; flex-wrap:wrap; width:100%;"><input type="hidden" id="editMode" value="add"><div class="filter-group"><label>ID FP:</label><input type="number" id="newId" placeholder="ID" style="width:80px;"></div><div class="filter-group"><label>Nama:</label><input type="text" id="newNama" placeholder="Nama Siswa" style="width:200px;"></div><div class="filter-group"><label>Kelas:</label><select id="newKelas"></select></div><div class="filter-group"><label>Jurusan:</label><select id="newJurusan"></select></div><div class="filter-group"><label>Delay:</label><select id="delayUnit"><option value="minutes">Menit</option><option value="hours">Jam</option></select></div><div class="filter-group" id="delayMinutesGroup"><input type="number" id="delayMinutesValue" value="60" style="width:70px;"><span>menit</span></div><div class="filter-group" id="delayHoursGroup" style="display:none;"><select id="delayHoursValue"></select><span>jam</span></div><input type="hidden" id="newDelay" value="60"><button class="btn-action role-guru role-admin" id="btnSaveStudent" onclick="saveStudent()">➕ Simpan Siswa</button><button class="btn-action btn-danger hidden role-guru role-admin" id="btnCancelStudent" onclick="resetStudentForm()">Batal</button></div></div>
             <div class="controls-bar"><div class="filter-group"><label>Kelas:</label><select id="filterStudentKelas" onchange="renderStudentsTable()"><option value="all">Semua</option></select></div><div class="filter-group"><label>Jurusan:</label><select id="filterStudentJurusan" onchange="renderStudentsTable()"><option value="all">Semua</option></select></div><div class="search-box"><input type="text" id="searchStudentName" placeholder="🔍 Cari nama siswa..." oninput="renderStudentsTable()"></div></div>
-            <div class="table-container"><table><thead><tr><th>Foto</th><th>ID FP</th><th>Nama</th><th>Kelas</th><th>Jurusan</th><th>Delay</th><th>Aksi</th></tr></thead><tbody id="tbody-students"><tr><td colspan="7">Memuat data...<\/td><\/tr></tbody></table></div>
+            <div class="table-container"><table><thead><tr><th>Foto</th><th>ID FP</th><th>Nama</th><th>Kelas</th><th>Jurusan</th><th>Delay</th><th>Aksi</th></tr></thead><tbody id="tbody-students"><tr><td colspan="7">Memuat data...</td></tr></tbody></table>
         </div>
 
         <!-- TAB STAFF (Data Staff) -->
-        <div id="tab-staff" class="tab-content role-admin role-guru role-developer">
+        <div id="tab-staff" class="tab-content">
             <div class="controls-bar">
                 <div style="display:flex; gap:10px; flex-wrap:wrap; width:100%;">
                     <input type="hidden" id="staffEditMode" value="add">
@@ -816,7 +811,7 @@
                         </tr>
                     </thead>
                     <tbody id="tbody-staff">
-                        <tr><td colspan="7" style="text-align:center; padding:30px;">⏳ Memuat data...<\/td><\/tr>
+                        <tr><td colspan="7" style="text-align:center; padding:30px;">⏳ Memuat data...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -864,7 +859,7 @@
                 </div>
             </div>
             <div class="table-container role-admin role-guru">
-                </table>
+                <table>
                     <thead>
                         <tr><th>Foto</th><th>Nama</th><th>Email</th><th>Role</th><th>Detail</th><th>Aksi</th></tr>
                     </thead>
@@ -874,7 +869,7 @@
         </div>
 
         <!-- TAB REKAP -->
-        <div id="tab-rekap" class="tab-content"><div class="controls-bar"><div class="filter-group"><label>📅 Periode:</label><select id="rekapPeriod" onchange="loadRekap()"><option value="minggu">Minggu Ini</option><option value="bulan">Bulan Ini</option><option value="semester">Semester Ini</option><option value="custom">Custom Range</option></select></div><div id="customRangeGroup" style="display:none; gap:10px;"><input type="date" id="rekapStartDate"><span>s/d</span><input type="date" id="rekapEndDate"></div><div style="margin-left:auto; display:flex; gap:10px;"><button class="btn-action btn-success" onclick="exportRekapToExcel()">📥 Excel</button><button class="btn-action btn-primary" onclick="exportRekapToPDF()">📄 PDF</button></div></div><div class="chart-container" style="margin-bottom:25px;"><div style="display:flex; flex-wrap:wrap; gap:20px;"><div style="flex:1; min-width:250px;"><canvas id="rekapPieChart" style="max-height:300px;"></canvas><p class="text-small text-center">Distribusi Status</p></div><div style="flex:2; min-width:300px;"><canvas id="rekapBarChart" style="max-height:300px;"></canvas><p class="text-small text-center">Absensi per Hari</p></div></div></div><div class="table-container"><table><thead><tr><th>No</th><th>ID FP</th><th>Nama</th><th>Kelas</th><th>Jurusan</th><th>Total Hari</th><th>Hadir</th><th>Sakit</th><th>Izin</th><th>Alpha</th><th>Persentase</th><th>Status</th></tr></thead><tbody id="rekapTbody"><tr><td colspan="12">Memuat data...<\/td><\/tr></tbody></table></div><div class="rekap-per-siswa-container" id="rekapPerSiswaContainer" style="margin-top:30px; display:none;"><div class="section-title" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:20px;"><span>📋 Detail Rekap Per Siswa</span><div style="display:flex; gap:10px;"><button class="btn-action btn-success" onclick="exportCurrentRekapPerSiswaToExcel()">📥 Export Excel</button><button class="btn-action btn-primary" onclick="exportCurrentRekapPerSiswaToPDF()">📄 Export PDF</button></div></div><div class="rekap-per-siswa-select-wrapper"><select id="rekapPerSiswaSelect"><option value="">-- Pilih Siswa --</option></select></div><div class="rekap-per-siswa-period-wrapper"><div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;"><label style="font-weight:500;">📅 Periode:</label><select id="rekapPerSiswaPeriod"><option value="minggu">📆 Minggu Ini</option><option value="bulan">📅 Bulan Ini</option><option value="semester">📚 Semester Ini</option><option value="tahun">🗓️ Tahun Ini</option><option value="pertama">⭐ Pertama Kali Absensi</option><option value="custom">📅 Custom Range</option></select><div id="rekapPerSiswaCustomRange" style="display:none; gap:10px; align-items:center; flex-wrap:wrap;"><input type="date" id="rekapPerSiswaStartDate"><span>s/d</span><input type="date" id="rekapPerSiswaEndDate"></div><button class="btn-action btn-primary" onclick="loadRekapPerSiswa()">🔍 Tampilkan Rekap</button></div></div><div id="rekapPerSiswaPeriodLabel" class="text-small" style="margin-bottom:15px; color:var(--text-muted); text-align:center;"></div><div id="rekapPerSiswaContent"><div style="text-align:center; padding:40px; color:var(--text-muted);">👈 Pilih siswa, pilih periode, lalu klik "Tampilkan Rekap" untuk melihat detail absensi per siswa</div></div></div></div>
+        <div id="tab-rekap" class="tab-content"><div class="controls-bar"><div class="filter-group"><label>📅 Periode:</label><select id="rekapPeriod" onchange="loadRekap()"><option value="minggu">Minggu Ini</option><option value="bulan">Bulan Ini</option><option value="semester">Semester Ini</option><option value="custom">Custom Range</option></select></div><div id="customRangeGroup" style="display:none; gap:10px;"><input type="date" id="rekapStartDate"><span>s/d</span><input type="date" id="rekapEndDate"></div><div style="margin-left:auto; display:flex; gap:10px;"><button class="btn-action btn-success" onclick="exportRekapToExcel()">📥 Excel</button><button class="btn-action btn-primary" onclick="exportRekapToPDF()">📄 PDF</button></div></div><div class="chart-container" style="margin-bottom:25px;"><div style="display:flex; flex-wrap:wrap; gap:20px;"><div style="flex:1; min-width:250px;"><canvas id="rekapPieChart" style="max-height:300px;"></canvas><p class="text-small text-center">Distribusi Status</p></div><div style="flex:2; min-width:300px;"><canvas id="rekapBarChart" style="max-height:300px;"></canvas><p class="text-small text-center">Absensi per Hari</p></div></div></div><div class="table-container"><table><thead><tr><th>No</th><th>ID FP</th><th>Nama</th><th>Kelas</th><th>Jurusan</th><th>Total Hari</th><th>Hadir</th><th>Sakit</th><th>Izin</th><th>Alpha</th><th>Persentase</th><th>Status</th></tr></thead><tbody id="rekapTbody"><tr><td colspan="12">Memuat data...</td></tr></tbody></table></div><div class="rekap-per-siswa-container" id="rekapPerSiswaContainer" style="margin-top:30px; display:none;"><div class="section-title" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:20px;"><span>📋 Detail Rekap Per Siswa</span><div style="display:flex; gap:10px;"><button class="btn-action btn-success" onclick="exportCurrentRekapPerSiswaToExcel()">📥 Export Excel</button><button class="btn-action btn-primary" onclick="exportCurrentRekapPerSiswaToPDF()">📄 Export PDF</button></div></div><div class="rekap-per-siswa-select-wrapper"><select id="rekapPerSiswaSelect"><option value="">-- Pilih Siswa --</option></select></div><div class="rekap-per-siswa-period-wrapper"><div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;"><label style="font-weight:500;">📅 Periode:</label><select id="rekapPerSiswaPeriod"><option value="minggu">📆 Minggu Ini</option><option value="bulan">📅 Bulan Ini</option><option value="semester">📚 Semester Ini</option><option value="tahun">🗓️ Tahun Ini</option><option value="pertama">⭐ Pertama Kali Absensi</option><option value="custom">📅 Custom Range</option></select><div id="rekapPerSiswaCustomRange" style="display:none; gap:10px; align-items:center; flex-wrap:wrap;"><input type="date" id="rekapPerSiswaStartDate"><span>s/d</span><input type="date" id="rekapPerSiswaEndDate"></div><button class="btn-action btn-primary" onclick="loadRekapPerSiswa()">🔍 Tampilkan Rekap</button></div></div><div id="rekapPerSiswaPeriodLabel" class="text-small" style="margin-bottom:15px; color:var(--text-muted); text-align:center;"></div><div id="rekapPerSiswaContent"><div style="text-align:center; padding:40px; color:var(--text-muted);">👈 Pilih siswa, pilih periode, lalu klik "Tampilkan Rekap" untuk melihat detail absensi per siswa</div></div></div></div>
 
         <!-- TAB FRIENDS -->
         <div id="tab-friends" class="tab-content">
@@ -922,7 +917,7 @@
             <div class="table-container">
                 <table id="logsTable">
                     <thead><tr><th>🕒 Waktu</th><th>👤 Pengguna</th><th>🎭 Role</th><th>📌 Aksi</th><th>📝 Detail</th><th>🌐 IP</th></tr></thead>
-                    <tbody id="logsTbody"><tr><td colspan="6" style="text-align:center; padding:40px;">⏳ Memuat log aktivitas...<\/td><\/tr></tbody>
+                    <tbody id="logsTbody"><tr><td colspan="6" style="text-align:center; padding:40px;">⏳ Memuat log aktivitas...</td></tr></tbody>
                 </table>
                 <div id="logsPagination" style="display:flex; justify-content:center; gap:10px; margin-top:20px;"></div>
             </div>
@@ -950,7 +945,7 @@
         </div>
 
         <!-- TAB GUIDE -->
-        <div id="tab-guide" class="tab-content role-admin role-guru role-developer">
+        <div id="tab-guide" class="tab-content">
             <div class="guide-container">
                 <h3>📘 Panduan Sistem Absensi Fingerprint</h3>
                 <p class="text-small">Sistem Absensi berbasis sidik jari dengan ESP32 dan real-time monitoring</p>
@@ -980,7 +975,7 @@
         </div>
         
         <!-- TAB IZIN ONLINE -->
-        <div id="tab-izin" class="tab-content role-admin role-guru role-developer">
+        <div id="tab-izin" class="tab-content">
             <div class="izin-container">
                 <div class="izin-header">
                     <h3>📝 Izin Online</h3>
@@ -1517,4 +1512,4 @@ document.addEventListener('DOMContentLoaded', function () {
 
     <div class="branding-footer"><img src="https://i.ibb.co.com/j9dVXQdc/Chat-GPT-Image-11-Mei-2026-10-31-44.png" alt="Logo" class="branding-logo"><span class="branding-text">Dikembangkan oleh CV Haka Jaya</span></div>
 </body>
-</html>
+</html>v
