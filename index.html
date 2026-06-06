@@ -587,12 +587,17 @@
                     <div class="dropdown-content" id="dropdownMainContent">
                         <button onclick="switchTab('dashboard'); closeAllDropdowns()">📊 Dashboard</button>
                         <button onclick="switchTab('attendance'); closeAllDropdowns()">📋 Absensi Siswa</button>
-                        <button onclick="switchTab('staff-attendance'); closeAllDropdowns()">👥 Absensi Staff</button>
-                        <button onclick="switchTab('students'); closeAllDropdowns()">👨‍🎓 Data Siswa</button>
-                        <button onclick="switchTab('staff'); closeAllDropdowns()">👥 Data Staff</button>
+                        <!-- Menu untuk ABSENSI STAFF - HANYA untuk Admin/Guru/Developer -->
+                        <button class="role-admin role-guru role-developer" onclick="switchTab('staff-attendance'); closeAllDropdowns()">👥 Absensi Staff</button>
+                        <!-- Menu untuk DATA SISWA - HANYA untuk Admin/Guru/Developer -->
+                        <button class="role-admin role-guru role-developer" onclick="switchTab('students'); closeAllDropdowns()">👨‍🎓 Data Siswa</button>
+                        <!-- Menu untuk DATA STAFF - HANYA untuk Admin/Guru/Developer -->
+                        <button class="role-admin role-guru role-developer" onclick="switchTab('staff'); closeAllDropdowns()">👥 Data Staff</button>
                         <button onclick="switchTab('rekap'); closeAllDropdowns()">📊 Rekap Absensi</button>
-                        <button onclick="goToIzinTab()">📝 Izin Online</button>
-                        <button onclick="switchTab('guide'); closeAllDropdowns()">📘 Panduan</button>
+                        <!-- Menu untuk IZIN ONLINE - HANYA untuk Admin/Guru/Developer -->
+                        <button class="role-admin role-guru role-developer" onclick="goToIzinTab()">📝 Izin Online</button>
+                        <!-- Menu untuk PANDUAN - HANYA untuk Admin/Guru/Developer -->
+                        <button class="role-admin role-guru role-developer" onclick="switchTab('guide'); closeAllDropdowns()">📘 Panduan</button>
                     </div>
                 </div>
                 
@@ -606,7 +611,7 @@
                     </div>
                 </div>
                 
-                <!-- Menu Pengumuman (Khusus Admin/Guru/Developer) -->
+                <!-- Menu Pengumuman (Khusus Admin/Guru/Developer) - DISEMBUNYIKAN UNTUK SISWA -->
                 <div class="dropdown" id="dropdownAnnouncement">
                     <button class="dropdown-btn role-admin role-guru role-developer" onclick="toggleDropdown('dropdownAnnouncement')">📢 Pengumuman ▼</button>
                     <div class="dropdown-content" id="dropdownAnnouncementContent">
@@ -615,9 +620,9 @@
                     </div>
                 </div>
                 
-                <!-- Manajemen (Admin/Guru/Developer) -->
+                <!-- Manajemen (Admin/Guru/Developer) - DISEMBUNYIKAN UNTUK SISWA -->
                 <div class="dropdown" id="dropdownManage">
-                    <button class="dropdown-btn" onclick="toggleDropdown('dropdownManage')">⚙️ Manajemen ▼</button>
+                    <button class="dropdown-btn role-admin role-guru" onclick="toggleDropdown('dropdownManage')">⚙️ Manajemen ▼</button>
                     <div class="dropdown-content" id="dropdownManageContent">
                         <button class="role-admin role-guru" onclick="switchTab('users'); closeAllDropdowns()">👥 Manajemen User</button>
                         <button class="role-admin role-guru role-developer" onclick="switchTab('logs'); closeAllDropdowns()">📋 Log Aktivitas</button>
@@ -712,7 +717,8 @@
                     <button class="btn-action btn-primary" onclick="simulateAttendance()">📷 Simulasi Scan Masuk</button>
                     <button class="btn-action btn-secondary" onclick="simulateAttendanceOut()" style="background:#ff9800;">🏠 Simulasi Scan Pulang</button>
                     <button class="btn-action btn-info" onclick="openSimulateOutModal()" style="background:#2196f3;">📋 Pilih Siswa Pulang</button>
-                    <button class="btn-action btn-success" onclick="exportToExcel()">📥 Download Excel</button>
+                    <!-- TOMBOL DOWNLOAD EXCEL HANYA UNTUK ADMIN/GURU/DEVELOPER -->
+                    <button class="btn-action btn-success role-admin role-guru role-developer" onclick="exportToExcel()">📥 Download Excel</button>
                 </div>
             </div>
             <div class="chart-container" style="margin-bottom:20px;"><div style="background:var(--bg-card); border-radius:20px; padding:15px;"><h4 style="margin:0 0 10px 0;">📊 Ringkasan Hari Ini</h4><div style="max-width:250px; margin:0 auto;"><canvas id="attendanceDonutChart" style="max-height:200px;"></canvas></div><div id="todayStatsText" class="text-small text-center" style="margin-top:10px;"></div></div></div>
@@ -720,7 +726,7 @@
         </div>
 
         <!-- TAB STAFF ATTENDANCE (Absensi Staff) -->
-        <div id="tab-staff-attendance" class="tab-content">
+        <div id="tab-staff-attendance" class="tab-content role-admin role-guru role-developer">
             <div class="controls-bar">
                 <div class="filter-group">
                     <label>📅 Tanggal:</label>
@@ -755,14 +761,14 @@
         </div>
 
         <!-- TAB STUDENTS (Data Siswa) -->
-        <div id="tab-students" class="tab-content">
+        <div id="tab-students" class="tab-content role-admin role-guru role-developer">
             <div class="controls-bar"><div style="display:flex; gap:10px; flex-wrap:wrap; width:100%;"><input type="hidden" id="editMode" value="add"><div class="filter-group"><label>ID FP:</label><input type="number" id="newId" placeholder="ID" style="width:80px;"></div><div class="filter-group"><label>Nama:</label><input type="text" id="newNama" placeholder="Nama Siswa" style="width:200px;"></div><div class="filter-group"><label>Kelas:</label><select id="newKelas"></select></div><div class="filter-group"><label>Jurusan:</label><select id="newJurusan"></select></div><div class="filter-group"><label>Delay:</label><select id="delayUnit"><option value="minutes">Menit</option><option value="hours">Jam</option></select></div><div class="filter-group" id="delayMinutesGroup"><input type="number" id="delayMinutesValue" value="60" style="width:70px;"><span>menit</span></div><div class="filter-group" id="delayHoursGroup" style="display:none;"><select id="delayHoursValue"></select><span>jam</span></div><input type="hidden" id="newDelay" value="60"><button class="btn-action role-guru role-admin" id="btnSaveStudent" onclick="saveStudent()">➕ Simpan Siswa</button><button class="btn-action btn-danger hidden role-guru role-admin" id="btnCancelStudent" onclick="resetStudentForm()">Batal</button></div></div>
             <div class="controls-bar"><div class="filter-group"><label>Kelas:</label><select id="filterStudentKelas" onchange="renderStudentsTable()"><option value="all">Semua</option></select></div><div class="filter-group"><label>Jurusan:</label><select id="filterStudentJurusan" onchange="renderStudentsTable()"><option value="all">Semua</option></select></div><div class="search-box"><input type="text" id="searchStudentName" placeholder="🔍 Cari nama siswa..." oninput="renderStudentsTable()"></div></div>
             <div class="table-container"><table><thead><tr><th>Foto</th><th>ID FP</th><th>Nama</th><th>Kelas</th><th>Jurusan</th><th>Delay</th><th>Aksi</th></tr></thead><tbody id="tbody-students"><tr><td colspan="7">Memuat data...<\/td><\/tr></tbody></table></div>
         </div>
 
         <!-- TAB STAFF (Data Staff) -->
-        <div id="tab-staff" class="tab-content">
+        <div id="tab-staff" class="tab-content role-admin role-guru role-developer">
             <div class="controls-bar">
                 <div style="display:flex; gap:10px; flex-wrap:wrap; width:100%;">
                     <input type="hidden" id="staffEditMode" value="add">
@@ -858,7 +864,7 @@
                 </div>
             </div>
             <div class="table-container role-admin role-guru">
-                <table>
+                </table>
                     <thead>
                         <tr><th>Foto</th><th>Nama</th><th>Email</th><th>Role</th><th>Detail</th><th>Aksi</th></tr>
                     </thead>
@@ -944,7 +950,7 @@
         </div>
 
         <!-- TAB GUIDE -->
-        <div id="tab-guide" class="tab-content">
+        <div id="tab-guide" class="tab-content role-admin role-guru role-developer">
             <div class="guide-container">
                 <h3>📘 Panduan Sistem Absensi Fingerprint</h3>
                 <p class="text-small">Sistem Absensi berbasis sidik jari dengan ESP32 dan real-time monitoring</p>
@@ -974,7 +980,7 @@
         </div>
         
         <!-- TAB IZIN ONLINE -->
-        <div id="tab-izin" class="tab-content">
+        <div id="tab-izin" class="tab-content role-admin role-guru role-developer">
             <div class="izin-container">
                 <div class="izin-header">
                     <h3>📝 Izin Online</h3>
