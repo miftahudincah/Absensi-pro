@@ -10,7 +10,7 @@ const firebaseConfig = {
   authDomain: "absensi-4389a-default-rtdb.firebaseapp.com",
   databaseURL: "https://absensi-4389a-default-rtdb.firebaseio.com",
   projectId: "absensi-4389a-default-rtdb",
-  storageBucket: "absensi-4389a-default-rtdb.appspot.com",
+  storageBucket: "absensi-4389a-default-rtdb.firebasestorage.app",
   messagingSenderId: "123456789",
   appId: "1:123456789:web:abcdef"
 };
@@ -192,16 +192,34 @@ if (typeof firebase === 'undefined') {
 }
 
 // Initialize Firebase
+let auth = null;
+let db = null;
+
 try {
-  firebase.initializeApp(firebaseConfig);
-  console.log("✅ Firebase berhasil diinisialisasi");
+  // Cek apakah Firebase sudah diinisialisasi
+  if (!firebase.apps.length) {
+    firebase.initializeApp(firebaseConfig);
+    console.log("✅ Firebase berhasil diinisialisasi");
+  } else {
+    console.log("✅ Firebase sudah diinisialisasi sebelumnya");
+  }
+  
+  auth = firebase.auth();
+  db = firebase.database();
+  
+  // Inisialisasi Storage
+  const storage = firebase.storage();
+  
+  console.log("📡 auth dan db siap:", { auth: !!auth, db: !!db, storage: !!storage });
+  
+  // Simpan ke global
+  window.auth = auth;
+  window.db = db;
+  window.storage = storage;
+  
 } catch (err) {
   console.error("❌ Gagal initialize Firebase:", err);
 }
-
-const auth = firebase.auth();
-const db = firebase.database();
-console.log("📡 auth dan db siap:", { auth: !!auth, db: !!db });
 
 // ================== FIREBASE APP CHECK (Keamanan) ==================
 // PERINGATAN: Jangan aktifkan App Check dengan kunci palsu!
@@ -231,6 +249,33 @@ if (!allowedDomains.includes(origin) && !origin.endsWith('.web.app')) {
   console.log(`✅ Domain diizinkan: ${origin}`);
 }
 
+// ==================== CEK KONEKSI DATABASE ====================
+// Fungsi untuk memeriksa koneksi ke Firebase
+function checkFirebaseConnection() {
+  if (!db) {
+    console.error('❌ Database tidak tersedia');
+    return false;
+  }
+  
+  // Cek koneksi realtime database
+  const connectedRef = firebase.database().ref('.info/connected');
+  connectedRef.on('value', (snap) => {
+    if (snap.val() === true) {
+      console.log('✅ Terhubung ke Firebase Realtime Database');
+      if (typeof showToast === 'function') {
+        showToast('Tersambung ke server database', 'success');
+      }
+    } else {
+      console.warn('⚠️ Tidak terhubung ke Firebase Realtime Database');
+      if (typeof showToast === 'function') {
+        showToast('Koneksi database terputus!', 'error');
+      }
+    }
+  });
+  
+  return true;
+}
+
 // ==================== EKSPOR KE GLOBAL ====================
 window.WHATSAPP_CONFIG = WHATSAPP_CONFIG;
 window.IZIN_CONFIG = IZIN_CONFIG;
@@ -247,5 +292,11 @@ window.hasPermission = hasPermission;
 window.getAllRoles = getAllRoles;
 window.isValidRole = isValidRole;
 window.getRolePriority = getRolePriority;
+window.checkFirebaseConnection = checkFirebaseConnection;
+
+// Jalankan pengecekan koneksi
+setTimeout(() => {
+  checkFirebaseConnection();
+}, 1000);
 
 console.log("✅ config.js loaded - Firebase, WhatsApp Gateway, Role Management (Kepala Sekolah, Wakil Kepala Sekolah, Staff TU, Guru, Developer, Siswa) siap digunakan");
