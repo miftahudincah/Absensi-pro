@@ -1,11 +1,13 @@
-// students.js - VERSION 4.0 (DENGAN TOMBOL WHATSAPP UNTUK ADMIN/GURU/DEVELOPER)
+// students.js - VERSION 4.1 (FIXED PHOTO CACHE & INTEGRATION WITH GLOBAL FUNCTIONS)
 // ======================= MANAJEMEN DATA SISWA =======================
 // Fitur: CRUD siswa, sinkronisasi dengan ESP32, delay per siswa,
 //        dukungan kelas & jurusan dinamis dari pengaturan sekolah,
 //        real-time update, import/export CSV.
-// PERUBAHAN V4.0: 
-//   - Menambahkan tombol WhatsApp untuk input nomor orang tua
-//   - Developer memiliki akses penuh seperti Admin/Guru
+// PERUBAHAN V4.1: 
+//   - Memperbaiki bug foto dengan timestamp untuk bypass cache browser
+//   - Integrasi dengan resetAllPhotoCaches() dari global-functions.js
+//   - Menambahkan force refresh foto setelah update
+//   - Memperbaiki cache management yang lebih baik
 // ====================================================================
 
 let studentFormResetTimer = null;
@@ -16,8 +18,9 @@ let formDropdownRetryCount = 0;
 const MAX_STUDENT_FILTERS_RETRY = 10;
 const MAX_FORM_DROPDOWN_RETRY = 10;
 
-// Cache untuk foto siswa
+// Cache untuk foto siswa (dengan timestamp management)
 const studentPhotoCache = new Map();
+const studentPhotoTimestampCache = new Map(); // Cache untuk timestamp terakhir update
 
 // ======================= CEK AKSES EDIT SISWA ========================
 function canEditStudents() {
@@ -46,10 +49,10 @@ function getStudentFilterByRole() {
     return { kelas: 'all', jurusan: 'all', isSiswa: false };
 }
 
-// ======================= FUNGSI FOTO SISWA ========================
+// ======================= FUNGSI FOTO SISWA (DIPERBAIKI) ========================
 
 /**
- * Mendapatkan URL foto siswa berdasarkan ID
+ * Mendapatkan URL foto siswa berdasarkan ID dengan timestamp untuk bypass cache
  * @param {string|number} studentId - ID siswa
  * @param {string} studentName - Nama siswa (fallback)
  * @returns {string} URL foto atau avatar inisial
@@ -57,11 +60,16 @@ function getStudentFilterByRole() {
 function getStudentPhotoUrl(studentId, studentName) {
     if (!studentId) {
         const initial = studentName ? studentName.charAt(0).toUpperCase() : 'U';
-        return `https://ui-avatars.com/api/?name=${encodeURIComponent(initial)}&background=00bcd4&color=fff&size=100&bold=true`;
+        const timestamp = Date.now();
+        return `https://ui-avatars.com/api/?name=${encodeURIComponent(initial)}&background=00bcd4&color=fff&size=100&bold=true&t=${timestamp}`;
     }
     
-    // Cek cache
-    if (studentPhotoCache.has(studentId)) {
+    // Cek cache dengan timestamp management
+    const lastUpdate = studentPhotoTimestampCache.get(studentId);
+    const now = Date.now();
+    
+    // Jika cache masih fresh (kurang dari 5 detik) dan ada, gunakan cache
+    if (studentPhotoCache.has(studentId) && lastUpdate && (now - lastUpdate) < 5000) {
         return studentPhotoCache.get(studentId);
     }
     
@@ -69,46 +77,108 @@ function getStudentPhotoUrl(studentId, studentName) {
     const userAuth = dbData?.users_auth?.find(u => u.fpId == studentId);
     
     let photoUrl;
+    const timestamp = now;
+    
     if (userAuth && userAuth.photoUrl && userAuth.photoUrl !== 'null' && userAuth.photoUrl !== 'undefined') {
-        photoUrl = userAuth.photoUrl;
+        // Tambahkan timestamp ke URL untuk bypass cache browser
+        const separator = userAuth.photoUrl.includes('?') ? '&' : '?';
+        photoUrl = userAuth.photoUrl.split('?')[0] + separator + 't=' + timestamp;
     } else {
-        // Fallback: avatar inisial nama
+        // Fallback: avatar inisial nama dengan timestamp
         const initial = studentName ? studentName.charAt(0).toUpperCase() : 'U';
-        photoUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(initial)}&background=00bcd4&color=fff&size=100&bold=true`;
+        photoUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(initial)}&background=00bcd4&color=fff&size=100&bold=true&t=${timestamp}`;
     }
     
-    // Simpan ke cache
+    // Simpan ke cache dengan timestamp
     studentPhotoCache.set(studentId, photoUrl);
+    studentPhotoTimestampCache.set(studentId, timestamp);
+    
     return photoUrl;
 }
 
 /**
- * Refresh cache foto siswa
+ * Refresh cache foto siswa - membersihkan semua cache dan memaksa reload
+ * @param {string|number} specificStudentId - Jika disediakan, hanya refresh untuk siswa tertentu
  */
-function refreshStudentPhotoCache() {
-    studentPhotoCache.clear();
-    if (studentsTabActive) {
+function refreshStudentPhotoCache(specificStudentId = null) {
+    if (specificStudentId) {
+        studentPhotoCache.delete(specificStudentId);
+        studentPhotoTimestampCache.delete(specificStudentId);
+        console.log(`🖼️ Student photo cache cleared for ID: ${specificStudentId}`);
+    } else {
+        studentPhotoCache.clear();
+        studentPhotoTimestampCache.clear();
+        console.log("🖼️ All student photo caches cleared");
+    }
+    
+    // Refresh tabel jika sedang aktif
+    if (studentsTabActive && typeof renderStudentsTable === 'function') {
         renderStudentsTable();
     }
-    console.log("🖼️ Student photo cache cleared");
 }
 
 /**
- * Setup listener untuk perubahan foto dari user auth
+ * Force refresh foto untuk semua siswa (dengan timestamp baru)
+ */
+function forceRefreshAllStudentPhotos() {
+    console.log("🖼️ Force refreshing all student photos...");
+    
+    // Bersihkan semua cache
+    studentPhotoCache.clear();
+    studentPhotoTimestampCache.clear();
+    
+    // Refresh tabel
+    if (studentsTabActive && typeof renderStudentsTable === 'function') {
+        renderStudentsTable();
+    }
+    
+    // Tampilkan notifikasi
+    if (typeof showToast === 'function') {
+        showToast("🖼️ Foto siswa telah direfresh", "success");
+    }
+}
+
+/**
+ * Setup listener untuk perubahan foto dari user auth (realtime)
  */
 function setupStudentPhotoListener() {
     if (!db) return;
     
-    db.ref('users_auth').on('child_changed', (snapshot) => {
+    // Hapus listener lama jika ada
+    if (window._studentPhotoListener) {
+        db.ref('users_auth').off('child_changed', window._studentPhotoListener);
+    }
+    
+    window._studentPhotoListener = (snapshot) => {
         const userData = snapshot.val();
         if (userData && userData.photoUrl && userData.fpId) {
-            console.log(`🖼️ Photo changed for student ID: ${userData.fpId}, clearing cache`);
+            console.log(`🖼️ Photo changed for student ID: ${userData.fpId}, refreshing cache`);
+            
+            // Hapus cache untuk siswa ini
             studentPhotoCache.delete(userData.fpId);
+            studentPhotoTimestampCache.delete(userData.fpId);
+            
+            // Jika user ini adalah currentUser, refresh avatar global juga
+            if (currentUser && currentUser.fpId == userData.fpId) {
+                if (typeof refreshAllAvatarsGlobal === 'function') {
+                    refreshAllAvatarsGlobal();
+                }
+            }
+            
+            // Refresh tabel jika sedang aktif
             if (studentsTabActive) {
                 renderStudentsTable();
             }
+            
+            // Refresh attendance table jika ada
+            if (document.getElementById('tab-attendance')?.classList.contains('active')) {
+                if (typeof renderTable === 'function') renderTable();
+            }
         }
-    });
+    };
+    
+    db.ref('users_auth').on('child_changed', window._studentPhotoListener);
+    console.log("📸 Student photo realtime listener set up");
 }
 
 /**
@@ -121,6 +191,9 @@ function showStudentPhotoModal(studentId, studentName, photoUrl) {
         ? `✅ Sudah memiliki akun (${userAuth.email || userAuth.nama})` 
         : '❌ Belum memiliki akun. Foto menggunakan inisial nama.';
     
+    // Dapatkan URL dengan timestamp terbaru
+    const freshPhotoUrl = getStudentPhotoUrl(studentId, studentName);
+    
     let modalHtml = `
         <div id="modal-student-photo" class="modal-overlay open">
             <div class="modal-box" style="max-width: 500px; text-align: center;">
@@ -129,9 +202,9 @@ function showStudentPhotoModal(studentId, studentName, photoUrl) {
                     <span onclick="closeModal('modal-student-photo')">✖</span>
                 </div>
                 <div style="padding: 20px;">
-                    <img src="${photoUrl}" 
+                    <img src="${freshPhotoUrl}" 
                          style="max-width: 100%; max-height: 60vh; border-radius: 20px; object-fit: contain;"
-                         onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(studentName?.charAt(0) || 'U')}&background=00bcd4&color=fff&size=200&bold=true'">
+                         onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(studentName?.charAt(0) || 'U')}&background=00bcd4&color=fff&size=200&bold=true&t=${Date.now()}'">
                     <p style="margin-top: 15px;">
                         <strong>${escapeHtmlStudents(studentName)}</strong><br>
                         <span style="color: var(--text-muted);">ID: ${studentId}</span>
@@ -691,7 +764,7 @@ function formatDelayDisplay(delayMinutes) {
     return `${menit} menit`;
 }
 
-// ======================= RENDER TABEL SISWA (DENGAN FILTER ROLE) =======================
+// ======================= RENDER TABEL SISWA (DIPERBAIKI DENGAN TIMESTAMP) =======================
 
 function renderStudentsTable(retryCount = 0) {
     const MAX_RETRY = 5;
@@ -714,7 +787,6 @@ function renderStudentsTable(retryCount = 0) {
             let table = tableContainer.querySelector('table');
             if (!table) {
                 table = document.createElement('table');
-                // UPDATE HEADER: Tambah kolom Foto dan Aksi
                 table.innerHTML = '<thead><tr><th>Foto</th><th>ID FP</th><th>Nama</th><th>Kelas</th><th>Jurusan</th><th>Delay</th><th>Aksi</th></tr></thead>';
                 tableContainer.appendChild(table);
                 console.log("students.js: Created table dynamically with photo column");
@@ -752,9 +824,7 @@ function renderStudentsTable(retryCount = 0) {
     
     // ========== FILTER DATA BERDASARKAN ROLE ==========
     let data = [...dbData.users];
-    // Perbaikan: isSiswa hanya true jika role === 'siswa', developer tetap dapat akses penuh
     const isSiswa = (currentUser && currentUser.role === 'siswa');
-    // Perbaikan: canEdit untuk Admin, Guru, dan Developer
     const canEdit = canEditStudents();
     
     if (isSiswa) {
@@ -806,9 +876,10 @@ function renderStudentsTable(retryCount = 0) {
         return;
     }
 
-    // RENDER SISWA DENGAN FOTO DAN TOMBOL AKSI (untuk Admin/Guru/Developer)
+    // RENDER SISWA DENGAN FOTO DAN TOMBOL AKSI
     for (const s of data) {
         const isNew = s.createdAt && (Date.now() - s.createdAt < 300000);
+        // Dapatkan URL foto dengan timestamp terbaru
         const photoUrl = getStudentPhotoUrl(s.id, s.nama);
         const studentInitial = s.nama ? s.nama.charAt(0).toUpperCase() : 'U';
         
@@ -818,7 +889,6 @@ function renderStudentsTable(retryCount = 0) {
             ? '<span class="badge-account" style="background:#4caf50; font-size:10px; margin-left:6px; padding:2px 6px; border-radius:20px;">✓ Berakun</span>' 
             : '<span class="badge-no-account" style="background:#888; font-size:10px; margin-left:6px; padding:2px 6px; border-radius:20px;">❌ Belum Berakun</span>';
         
-        // ========== PERBAIKAN: Tombol Aksi untuk Admin, Guru, dan Developer ==========
         let actionCell = '';
         if (canEdit) {
             actionCell = `
@@ -828,11 +898,14 @@ function renderStudentsTable(retryCount = 0) {
                     <button class="btn-wa" onclick="openParentWhatsAppModal('${s.id}', '${escapeHtmlStudents(s.nama)}')" title="Input Nomor WhatsApp Orang Tua">
                         📱 WA
                     </button>
-                 </td>
+                  </div>
             `;
         } else {
             actionCell = '<td style="display: none;"></td>';
         }
+        
+        // Handle error image dengan refresh cache
+        const onErrorScript = `this.onerror=null; this.src='https://ui-avatars.com/api/?name=${studentInitial}&background=00bcd4&color=fff&size=100&bold=true&t=${Date.now()}'; studentPhotoCache.delete('${s.id}');`;
         
         tbody.innerHTML += `
             <tr data-id="${s.id}">
@@ -840,17 +913,18 @@ function renderStudentsTable(retryCount = 0) {
                     <img src="${photoUrl}" 
                          class="student-avatar" 
                          style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; cursor: pointer; transition: transform 0.2s;"
-                         onerror="this.src='https://ui-avatars.com/api/?name=${studentInitial}&background=00bcd4&color=fff&size=100&bold=true'"
+                         onerror="${onErrorScript}"
                          onclick="showStudentPhotoModal('${s.id}', '${escapeHtmlStudents(s.nama)}', this.src)"
                          title="Klik untuk perbesar foto">
-                 </td>
+                  </div>
+                </td>
                 <td><strong>${s.id}</strong>${isNew ? '<br><span class="badge-new-student">NEW</span>' : ''}</td>
                 <td>${escapeHtmlStudents(s.nama)}${accountBadge}</td>
                 <td>${s.kelas || '-'}</td>
                 <td>${s.jurusan || '-'}</td>
                 <td><span class="delay-badge">⏱️ ${formatDelayDisplay(s.delayOut)}</span></td>
                 ${actionCell}
-             </tr>
+              </tr>
         `;
     }
     
@@ -960,7 +1034,7 @@ function saveStudent() {
             }
             
             // Clear cache foto untuk siswa ini
-            studentPhotoCache.delete(idStr);
+            refreshStudentPhotoCache(idStr);
             
             resetStudentForm();
             const authUser = dbData.users_auth?.find(u => u.fpId == idStr);
@@ -972,6 +1046,10 @@ function saveStudent() {
                     currentUser.jurusan = jurusan;
                     if (typeof saveUserToLocalStorage === 'function') saveUserToLocalStorage(currentUser);
                     if (typeof updateUserInterface === 'function') updateUserInterface();
+                    // Refresh avatar global
+                    if (typeof refreshAllAvatarsGlobal === 'function') {
+                        refreshAllAvatarsGlobal();
+                    }
                 }
             }
         })
@@ -982,7 +1060,6 @@ function saveStudent() {
 }
 
 function editStudent(id) {
-    // Cek akses
     if (!canEditStudents()) {
         showToast("⛔ Anda tidak memiliki akses untuk mengedit siswa!", "error");
         return;
@@ -1053,7 +1130,7 @@ async function deleteStudentWithFP(studentId) {
     } catch(e) { console.warn(e); }
 
     // Clear cache foto
-    studentPhotoCache.delete(studentId);
+    refreshStudentPhotoCache(studentId);
     
     if (registeredUser) await db.ref(`users_auth/${registeredUser.uid}`).remove().catch(()=>{});
     await db.ref(`users/${studentId}`).remove();
@@ -1112,7 +1189,6 @@ function importStudentsFromCSV(csvText) {
 function exportStudentsToCSV() {
     if (!dbData.users?.length) { showToast("❌ Tidak ada data", "error"); return; }
     
-    // Untuk siswa, hanya export data yang terfilter
     let dataToExport = dbData.users;
     if (currentUser && currentUser.role === 'siswa') {
         const userKelas = currentUser.kelas;
@@ -1157,6 +1233,14 @@ function cleanupStudentsSystem() {
     studentFiltersRetryCount = 0;
     formDropdownRetryCount = 0;
     studentPhotoCache.clear();
+    studentPhotoTimestampCache.clear();
+    
+    // Hapus listener Firebase
+    if (window._studentPhotoListener && db) {
+        db.ref('users_auth').off('child_changed', window._studentPhotoListener);
+        window._studentPhotoListener = null;
+    }
+    
     console.log("🧹 Students system cleaned up");
 }
 
@@ -1186,7 +1270,6 @@ setupStudentPhotoListener(); // Mulai listener foto
 function initialPopulateStudentFilters() {
     if (document.getElementById('filterStudentKelas') && document.getElementById('filterStudentJurusan')) {
         populateStudentFilters();
-        // Sembunyikan filter untuk siswa
         if (currentUser && currentUser.role === 'siswa') {
             const filterBar = document.querySelector('#tab-students .controls-bar:nth-child(2)');
             if (filterBar) filterBar.style.display = 'none';
@@ -1224,7 +1307,6 @@ if (typeof window !== 'undefined' && window.dbData && window.dbData.users) {
         populateJurusanOptions();
         populateStudentFilters();
         
-        // Sembunyikan form untuk siswa
         if (currentUser && currentUser.role === 'siswa') {
             hideStudentFormForSiswa();
         }
@@ -1267,9 +1349,10 @@ window.cleanupStudentsSystem = cleanupStudentsSystem;
 window.initDelayEventListeners = initDelayEventListeners;
 window.canEditStudents = canEditStudents;
 window.hideStudentFormForSiswa = hideStudentFormForSiswa;
-// Ekspor fungsi foto
+// Ekspor fungsi foto (baru)
 window.getStudentPhotoUrl = getStudentPhotoUrl;
 window.refreshStudentPhotoCache = refreshStudentPhotoCache;
+window.forceRefreshAllStudentPhotos = forceRefreshAllStudentPhotos;
 window.showStudentPhotoModal = showStudentPhotoModal;
 // Ekspor fungsi WhatsApp
 window.openParentWhatsAppModal = openParentWhatsAppModal;
@@ -1277,4 +1360,4 @@ window.saveParentWhatsAppNumber = saveParentWhatsAppNumber;
 window.getParentContact = getParentContact;
 window.testSendWhatsApp = testSendWhatsApp;
 
-console.log("✅ students.js V4.0 loaded - Dengan tombol WhatsApp untuk input nomor orang tua (Admin/Guru/Developer)");
+console.log("✅ students.js V4.1 loaded - Fixed photo cache with timestamp & global integration");

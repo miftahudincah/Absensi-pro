@@ -1,16 +1,22 @@
-// users.js - VERSION 5.2 (FULLY LOCKED: GURU & STAFF SAME AS STUDENT)
+// users.js - VERSION 5.3 (FIXED USER TABLE DISPLAY & PHOTO CACHE)
 // Manajemen User: Generate kode registrasi (dengan QR), daftar kode,
 // daftar pengguna, ubah role, hapus user, reset password, reset sistem.
 // Role yang didukung: developer, admin (Kepala Sekolah), wakil_kepala, staff_tu, guru, siswa
-// PERUBAHAN V5.2: 
-//   - GURU dan STAFF memiliki validasi KETAT seperti SISWA
-//   - CEK apakah sudah memiliki akun (berdasarkan email)
-//   - CEK apakah masih memiliki kode aktif (berdasarkan linkedId)
-//   - HIGHLIGHT di tabel user/kode jika sudah ada
-//   - RESET dropdown setelah generate
+// PERUBAHAN V5.3: 
+//   - Memperbaiki bug tabel user tidak menampilkan data
+//   - Menambahkan timestamp pada foto user untuk bypass cache
+//   - Menambahkan statistik ringkasan user
+//   - Menambahkan fallback jika tbody tidak ditemukan
+//   - Memperbaiki renderUsersTable dengan logging lengkap
 // ============================================================================
 
 let usersDataReadyListenerAdded = false;
+let usersTableRetryCount = 0;
+const MAX_USERS_TABLE_RETRY = 10;
+
+// Cache untuk foto user dengan timestamp management
+const usersPhotoCache = new Map();
+const usersPhotoTimestampCache = new Map();
 
 // ======================= ROLE HELPER FUNCTIONS =======================
 
@@ -120,7 +126,59 @@ function isValidRole(role) {
     return validRoles.includes(role);
 }
 
+// ======================= FUNGSI FOTO USER ========================
+
+/**
+ * Mendapatkan URL foto user dengan timestamp untuk bypass cache
+ * @param {string} uid - User ID
+ * @param {string} userName - Nama user (fallback)
+ * @param {string} photoUrl - URL foto yang tersimpan
+ * @returns {string} URL foto atau avatar inisial
+ */
+function getUserPhotoUrl(uid, userName, photoUrl) {
+    if (!uid && !userName) {
+        return `https://ui-avatars.com/api/?name=U&background=00bcd4&color=fff&size=100&bold=true&t=${Date.now()}`;
+    }
+    
+    // Cek cache dengan timestamp management
+    const lastUpdate = usersPhotoTimestampCache.get(uid);
+    const now = Date.now();
+    
+    if (usersPhotoCache.has(uid) && lastUpdate && (now - lastUpdate) < 5000) {
+        return usersPhotoCache.get(uid);
+    }
+    
+    let finalPhotoUrl;
+    const timestamp = now;
+    
+    if (photoUrl && photoUrl !== 'null' && photoUrl !== 'undefined' && photoUrl !== '') {
+        const separator = photoUrl.includes('?') ? '&' : '?';
+        finalPhotoUrl = photoUrl.split('?')[0] + separator + 't=' + timestamp;
+    } else {
+        const initial = userName ? userName.charAt(0).toUpperCase() : 'U';
+        finalPhotoUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(initial)}&background=00bcd4&color=fff&size=100&bold=true&t=${timestamp}`;
+    }
+    
+    usersPhotoCache.set(uid, finalPhotoUrl);
+    usersPhotoTimestampCache.set(uid, timestamp);
+    
+    return finalPhotoUrl;
+}
+
+/**
+ * Refresh cache foto user
+ */
+function refreshUsersPhotoCache() {
+    usersPhotoCache.clear();
+    usersPhotoTimestampCache.clear();
+    if (typeof renderUsersTable === 'function') {
+        renderUsersTable();
+    }
+    console.log("🖼️ Users photo cache cleared");
+}
+
 // ======================= EVENT LISTENER DATA READY ========================
+
 function setupUsersDataReadyListener() {
     if (usersDataReadyListenerAdded) return;
     usersDataReadyListenerAdded = true;
@@ -128,21 +186,34 @@ function setupUsersDataReadyListener() {
 
     window.addEventListener('dataReady', (e) => {
         console.log("🔄 users.js: dataReady received, updating users UI");
-        if (typeof renderUsersTable === 'function') renderUsersTable();
-        if (typeof renderCodesTable === 'function') renderCodesTable();
+        if (typeof renderUsersTable === 'function') {
+            renderUsersTable();
+        }
+        if (typeof renderCodesTable === 'function') {
+            renderCodesTable();
+        }
         updateCodesStatistics();
-        if (typeof populateStudentSelectForCode === 'function') populateStudentSelectForCode();
-        if (typeof populateStaffSelectForCode === 'function') populateStaffSelectForCode();
+        if (typeof populateStudentSelectForCode === 'function') {
+            populateStudentSelectForCode();
+        }
+        if (typeof populateStaffSelectForCode === 'function') {
+            populateStaffSelectForCode();
+        }
     });
 
     window.addEventListener('uiReady', (e) => {
         console.log("👥 users.js: uiReady received, checking permissions");
-        if (typeof renderUsersTable === 'function') renderUsersTable();
-        if (typeof populateStaffSelectForCode === 'function') populateStaffSelectForCode();
+        if (typeof renderUsersTable === 'function') {
+            renderUsersTable();
+        }
+        if (typeof populateStaffSelectForCode === 'function') {
+            populateStaffSelectForCode();
+        }
     });
 }
 
 // ======================= UPDATE STATISTIK KODE ========================
+
 function updateCodesStatistics() {
     const statsContainer = document.getElementById('codesStats');
     if (!statsContainer) {
@@ -154,10 +225,10 @@ function updateCodesStatistics() {
     const activeCodes = codes.filter(c => !c.used).length;
     const usedCodes = codes.filter(c => c.used).length;
     const studentCodes = codes.filter(c => c.type === 'siswa' && !c.used).length;
-    const teacherCodes = codes.filter(c => (c.type === 'guru' || c.type === 'staff_tu' || c.type === 'wakil_kepala' || c.type === 'staff') && !c.used).length;
+    const teacherCodes = codes.filter(c => (c.type === 'guru' || c.type === 'staff' || c.type === 'staff_tu' || c.type === 'wakil_kepala') && !c.used).length;
 
     statsContainer.innerHTML = `
-        <div style="display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 15px; padding: 10px; background: #1e1e1e; border-radius: 8px;">
+        <div style="display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 15px; padding: 10px; background: var(--bg-hover); border-radius: 8px;">
             <div><span style="color: #4caf50;">🟢 Aktif:</span> <strong>${activeCodes}</strong></div>
             <div><span style="color: #888;">🔴 Terpakai:</span> <strong>${usedCodes}</strong></div>
             <div><span style="color: #4a90e2;">👨‍🎓 Siswa:</span> <strong>${studentCodes}</strong></div>
@@ -177,7 +248,52 @@ function createCodesStatsContainer() {
     }
 }
 
+// ======================= UPDATE STATISTIK USER ========================
+
+function updateUsersStatistics() {
+    let statsContainer = document.getElementById('usersStats');
+    
+    // Cari atau buat container statistik user
+    if (!statsContainer) {
+        const controlsBar = document.querySelector('#tab-users .controls-bar:first-child');
+        if (controlsBar && !document.getElementById('usersStats')) {
+            const statsDiv = document.createElement('div');
+            statsDiv.id = 'usersStats';
+            statsDiv.style.marginBottom = '10px';
+            statsDiv.style.padding = '10px';
+            statsDiv.style.background = 'var(--bg-hover)';
+            statsDiv.style.borderRadius = '8px';
+            controlsBar.insertAdjacentElement('afterend', statsDiv);
+            statsContainer = statsDiv;
+        } else {
+            return;
+        }
+    }
+    
+    const users = dbData?.users_auth || [];
+    const total = users.length;
+    const siswa = users.filter(u => u.role === 'siswa').length;
+    const guru = users.filter(u => u.role === 'guru').length;
+    const staffTu = users.filter(u => u.role === 'staff_tu').length;
+    const wakil = users.filter(u => u.role === 'wakil_kepala').length;
+    const admin = users.filter(u => u.role === 'admin').length;
+    const developer = users.filter(u => u.role === 'developer').length;
+    
+    statsContainer.innerHTML = `
+        <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+            <span>👥 <strong>Total User:</strong> ${total}</span>
+            <span>👨‍🎓 <strong>Siswa:</strong> ${siswa}</span>
+            <span>👨‍🏫 <strong>Guru:</strong> ${guru}</span>
+            <span>📋 <strong>Staff TU:</strong> ${staffTu}</span>
+            <span>👔 <strong>Wakil Kepala:</strong> ${wakil}</span>
+            <span>👑 <strong>Kepala Sekolah:</strong> ${admin}</span>
+            <span>⚡ <strong>Developer:</strong> ${developer}</span>
+        </div>
+    `;
+}
+
 // ======================= DROPDOWN SISWA UNTUK GENERATE KODE ========================
+
 function populateStudentSelectForCode() {
     const select = document.getElementById('selectStudentForCode');
     if (!select) return;
@@ -193,11 +309,8 @@ function populateStudentSelectForCode() {
     select.innerHTML = '<option value="">-- Pilih Siswa --</option>';
 
     const registeredUserIds = dbData.users_auth?.map(u => u.fpId).filter(id => id) || [];
-    
-    // Ambil staff yang sudah memiliki kode aktif
     const activeCodes = dbData.codes?.filter(c => !c.used && c.type === 'siswa') || [];
     const studentIdsWithActiveCode = activeCodes.map(c => c.linkedId).filter(id => id);
-    
     const availableStudents = dbData.users.filter(s => 
         !registeredUserIds.includes(s.id) && !studentIdsWithActiveCode.includes(s.id)
     );
@@ -219,7 +332,8 @@ function populateStudentSelectForCode() {
     }
 }
 
-// ======================= DROPDOWN STAFF UNTUK GENERATE KODE (FILTER KETAT) ========================
+// ======================= DROPDOWN STAFF UNTUK GENERATE KODE ========================
+
 let staffListCacheForCode = [];
 let staffListLoadedForCode = false;
 
@@ -245,8 +359,6 @@ async function populateStaffSelectForCode() {
         
         const availableStaff = [];
         const registeredEmails = dbData?.users_auth?.map(u => u.email?.toLowerCase()) || [];
-        
-        // Ambil semua staff yang sudah memiliki kode aktif (belum used)
         const activeCodes = dbData?.codes?.filter(c => !c.used && (c.type === 'guru' || c.type === 'staff' || c.type === 'staff_tu' || c.type === 'wakil_kepala')) || [];
         const staffIdsWithActiveCode = activeCodes.map(c => c.linkedId).filter(id => id);
         
@@ -265,7 +377,6 @@ async function populateStaffSelectForCode() {
                 else if (staff.jabatan === 'staff_tu') targetRole = 'staff_tu';
                 else if (staff.jabatan === 'guru') targetRole = 'guru';
                 
-                // ========== HANYA STAFF YANG BELUM PUNYA AKUN DAN BELUM PUNYA KODE AKTIF ==========
                 if (!hasAccount && !hasActiveCode && staff.nama && staff.email) {
                     availableStaff.push({
                         id: staffId,
@@ -317,7 +428,6 @@ async function populateStaffSelectForCode() {
             select.title = "Pilih staff yang akan digenerate kode registrasi";
         }
         
-        // Tampilkan ringkasan di console
         if (staffData) {
             const totalStaff = Object.keys(staffData).length;
             const withAccount = Object.values(staffData).filter(s => s.email && registeredEmails.includes(s.email.toLowerCase())).length;
@@ -413,7 +523,8 @@ function highlightExistingCode(code) {
     }
 }
 
-// ======================= GENERATE KODE REGISTRASI + QR CODE (VALIDASI KETAT) ========================
+// ======================= GENERATE KODE REGISTRASI ========================
+
 function generateRegistrationCode() {
     if (!currentUser) {
         showToast("Anda harus login!", "error");
@@ -431,8 +542,6 @@ function generateRegistrationCode() {
         return;
     }
 
-    // ========== VALIDASI WAJIB PILIH SEBELUM GENERATE ==========
-    
     // VALIDASI UNTUK SISWA
     if (targetType === 'siswa') {
         const selectSiswa = document.getElementById('selectStudentForCode');
@@ -455,76 +564,13 @@ function generateRegistrationCode() {
             highlightExistingCode(existingCode.code);
             return;
         }
-    }
-    // ========== VALIDASI UNTUK GURU (WAJIB PILIH DROPDOWN & CEK KETAT) ==========
-    else if (targetType === 'guru') {
-        const selectStaff = document.getElementById('selectStaffForCode');
         
-        if (!selectStaff) {
-            showToast("❌ Error: Dropdown staff tidak ditemukan!", "error");
-            return;
-        }
-        
-        const selectedStaffId = selectStaff.value;
-        const isValidSelection = selectedStaffId && 
-                                 selectedStaffId !== '' && 
-                                 selectedStaffId !== '-- Pilih Staff --' &&
-                                 selectedStaffId !== '⏳ Memuat data staff...' &&
-                                 selectedStaffId !== '-- Memuat data staff --';
-        
-        // ========== VALIDASI WAJIB: Harus memilih staff dari dropdown! ==========
-        if (!isValidSelection) {
-            return showDropdownError(selectStaff, "⚠️ HARAP PILIH GURU DARI DROPDOWN TERLEBIH DAHULU sebelum generate kode!");
-        }
-        
-        const selectedOption = selectStaff.querySelector('option[value="' + selectedStaffId + '"]');
-        const staffEmail = selectedOption?.getAttribute('data-email');
-        const staffName = selectedOption?.getAttribute('data-nama');
-        const staffJabatan = selectedOption?.getAttribute('data-jabatan') || 'guru';
-        
-        if (!staffEmail) {
-            showToast(`❌ GURU ini tidak memiliki email! Silakan edit data staff dan isi email terlebih dahulu.`, "error");
-            return;
-        }
-        
-        // ========== CEK APAKAH SUDAH MEMILIKI AKUN (SAMA SEPERTI SISWA) ==========
-        const existingUser = dbData.users_auth?.find(u => u.email?.toLowerCase() === staffEmail.toLowerCase());
-        if (existingUser) {
-            showToast(`❌ GAGAL: Guru (${staffName}) sudah memiliki akun dengan email ${staffEmail}.`, "error");
-            highlightUserInTable(staffEmail);
-            return;
-        }
-        
-        // ========== CEK APAKAH MASIH ADA KODE AKTIF UNTUK ID STAFF YANG SAMA ==========
-        const existingCode = dbData.codes?.find(c => c.linkedId == selectedStaffId && !c.used && (c.type === 'guru' || c.type === 'staff'));
-        if (existingCode) {
-            showToast(`❌ GAGAL: Guru ini masih memiliki kode aktif (${existingCode.code})! Tunggu expired atau hapus kode lama!`, "error");
-            highlightExistingCode(existingCode.code);
-            return;
-        }
-        
-        // Jika lolos semua validasi, generate kode GURU dengan data lengkap
-        const codeData = {
-            used: false,
-            createdAt: firebase.database.ServerValue.TIMESTAMP,
-            type: targetType,
-            createdBy: currentUser.nama || currentUser.email,
-            createdRole: currentUser.role,
-            linkedId: selectedStaffId,
-            linkedEmail: staffEmail,
-            linkedName: staffName,
-            targetRole: 'guru',
-            requireId: true,
-            nama: staffName,
-            email: staffEmail,
-            jabatan: staffJabatan
-        };
-        
-        generateStaffCode(codeData, targetType, selectedStaffId, staffName, staffEmail, staffJabatan, 'guru');
+        // Generate kode SISWA
+        generateStudentCode(selectedId);
         return;
     }
-    // ========== VALIDASI UNTUK STAFF (WAJIB PILIH DROPDOWN & CEK KETAT) ==========
-    else if (targetType === 'staff') {
+    // VALIDASI UNTUK GURU/STAFF
+    else if (targetType === 'guru' || targetType === 'staff') {
         const selectStaff = document.getElementById('selectStaffForCode');
         
         if (!selectStaff) {
@@ -539,7 +585,6 @@ function generateRegistrationCode() {
                                  selectedStaffId !== '⏳ Memuat data staff...' &&
                                  selectedStaffId !== '-- Memuat data staff --';
         
-        // ========== VALIDASI WAJIB: Harus memilih staff dari dropdown! ==========
         if (!isValidSelection) {
             return showDropdownError(selectStaff, "⚠️ HARAP PILIH STAFF DARI DROPDOWN TERLEBIH DAHULU sebelum generate kode!");
         }
@@ -547,15 +592,14 @@ function generateRegistrationCode() {
         const selectedOption = selectStaff.querySelector('option[value="' + selectedStaffId + '"]');
         const staffEmail = selectedOption?.getAttribute('data-email');
         const staffName = selectedOption?.getAttribute('data-nama');
-        const staffRole = selectedOption?.getAttribute('data-role');
+        const staffRole = selectedOption?.getAttribute('data-role') || 'guru';
         const staffJabatan = selectedOption?.getAttribute('data-jabatan') || 'guru';
         
         if (!staffEmail) {
-            showToast(`❌ STAFF ini tidak memiliki email! Silakan edit data staff dan isi email terlebih dahulu.`, "error");
+            showToast(`❌ Staff ini tidak memiliki email! Silakan edit data staff dan isi email terlebih dahulu.`, "error");
             return;
         }
         
-        // ========== CEK APAKAH SUDAH MEMILIKI AKUN (SAMA SEPERTI SISWA) ==========
         const existingUser = dbData.users_auth?.find(u => u.email?.toLowerCase() === staffEmail.toLowerCase());
         if (existingUser) {
             const roleName = existingUser.role === 'admin' ? 'Kepala Sekolah' : 
@@ -566,174 +610,80 @@ function generateRegistrationCode() {
             return;
         }
         
-        // ========== CEK APAKAH MASIH ADA KODE AKTIF UNTUK ID STAFF YANG SAMA ==========
-        const existingCode = dbData.codes?.find(c => c.linkedId == selectedStaffId && !c.used && (c.type === 'staff' || c.type === 'staff_tu' || c.type === 'wakil_kepala'));
+        const existingCode = dbData.codes?.find(c => c.linkedId == selectedStaffId && !c.used && (c.type === 'guru' || c.type === 'staff' || c.type === 'staff_tu' || c.type === 'wakil_kepala'));
         if (existingCode) {
             showToast(`❌ GAGAL: Staff ini masih memiliki kode aktif (${existingCode.code})! Tunggu expired atau hapus kode lama!`, "error");
             highlightExistingCode(existingCode.code);
             return;
         }
         
-        let targetRole = staffRole || 'guru';
+        let targetRole = staffRole;
+        if (targetType === 'guru') targetRole = 'guru';
         
-        // Jika lolos semua validasi, generate kode STAFF dengan data lengkap
-        const codeData = {
-            used: false,
-            createdAt: firebase.database.ServerValue.TIMESTAMP,
-            type: targetType,
-            createdBy: currentUser.nama || currentUser.email,
-            createdRole: currentUser.role,
-            linkedId: selectedStaffId,
-            linkedEmail: staffEmail,
-            linkedName: staffName,
-            targetRole: targetRole,
-            requireId: true,
-            staffJabatan: staffJabatan,
-            nama: staffName,
-            email: staffEmail,
-            roleLabel: targetRole === 'admin' ? 'Kepala Sekolah' : 
-                      (targetRole === 'wakil_kepala' ? 'Wakil Kepala Sekolah' :
-                      (targetRole === 'staff_tu' ? 'Staff TU' : 'Guru'))
-        };
-        
-        generateStaffCode(codeData, targetType, selectedStaffId, staffName, staffEmail, staffJabatan, targetRole);
+        generateStaffCode(selectedStaffId, staffEmail, staffName, staffJabatan, targetRole);
         return;
     }
     else {
         showToast("❌ Target kode tidak valid!", "error");
         return;
     }
+}
 
-    // ========== GENERATE KODE UNTUK SISWA ==========
+function generateStudentCode(selectedId) {
     const timestamp = Date.now().toString(36).toUpperCase();
     const random = Math.random().toString(36).substring(2, 6).toUpperCase();
     const code = `REG-${timestamp.slice(-3)}${random}`;
-
+    
+    const student = dbData.users.find(s => s.id == selectedId);
+    const studentName = student?.nama || selectedId;
+    
     const codeData = {
         used: false,
         createdAt: firebase.database.ServerValue.TIMESTAMP,
-        type: targetType,
+        type: 'siswa',
         createdBy: currentUser.nama || currentUser.email,
-        createdRole: currentUser.role
+        createdRole: currentUser.role,
+        linkedId: selectedId,
+        linkedName: studentName,
+        requireId: true,
+        kelas: student?.kelas || '-',
+        jurusan: student?.jurusan || '-'
     };
-
+    
     const btn = document.querySelector('button[onclick="generateRegistrationCode()"]');
     const originalText = btn?.innerHTML;
     if (btn) {
         btn.disabled = true;
         btn.innerHTML = '⏳ Generating...';
     }
-
-    if (targetType === 'siswa') {
-        const selectedId = document.getElementById('selectStudentForCode').value;
-        if (!selectedId) {
-            showToast("⚠️ Harap pilih Siswa terlebih dahulu!", "error");
-            if (btn) { btn.disabled = false; btn.innerHTML = originalText; }
-            return;
+    
+    db.ref('codes/' + code).set(codeData).then(() => {
+        showToast(`✅ Kode untuk ${studentName} berhasil dibuat!`, "success");
+        
+        if (typeof logActivity === 'function') {
+            logActivity('generate_code', `Generate kode siswa: ${code} untuk ${studentName} (ID: ${selectedId})`);
         }
-
-        const existingUser = dbData.users_auth?.find(u => u.fpId == selectedId);
-        if (existingUser) {
-            showToast(`❌ GAGAL: ID Siswa (${selectedId}) sudah terdaftar pada akun (${existingUser.email}).`, "error");
-            if (btn) { btn.disabled = false; btn.innerHTML = originalText; }
-            return;
+        
+        const selectSiswa = document.getElementById('selectStudentForCode');
+        if (selectSiswa) {
+            selectSiswa.value = '';
         }
-
-        const existingCode = dbData.codes?.find(c => c.linkedId == selectedId && !c.used && c.type === 'siswa');
-        if (existingCode) {
-            showToast(`❌ GAGAL: Siswa ini masih memiliki kode aktif (${existingCode.code}). Tunggu expired!`, "error");
-            if (btn) { btn.disabled = false; btn.innerHTML = originalText; }
-            return;
-        }
-
-        codeData.linkedId = selectedId;
-        const student = dbData.users.find(s => s.id == selectedId);
-        const studentName = student?.nama || selectedId;
-
-        db.ref('codes/' + code).set(codeData).then(() => {
-            const display = document.getElementById('generatedKeyDisplay');
-            display.style.display = 'block';
-            const qrData = JSON.stringify({ 
-                code: code, 
-                studentId: selectedId,
-                type: 'siswa',
-                requireId: true,
-                nama: studentName
-            });
-            const qrContainerId = `qrcode-${code.replace(/[^a-zA-Z0-9]/g, '')}`;
-
-            display.innerHTML = `
-                <div style="background: #1a1a2e; border-radius: 8px; padding: 15px; margin: 10px 0; border-left: 4px solid #4a90e2;">
-                    <div style="font-size: 12px; color: #888;">✨ KODE REGISTRASI BERHASIL DIGENERATE ✨</div>
-                    <div style="font-size: 20px; font-family: monospace; font-weight: bold; color: #4a90e2; margin: 10px 0;">${code}</div>
-                    <div>Tipe: <strong>SISWA</strong> 👨‍🎓</div>
-                    <div><span style="color: #ff9800;">🆔 ID WAJIB: <strong>${selectedId}</strong></span></div>
-                    <div>Terkunci ID: <strong>${selectedId}</strong> - ${studentName}</div>
-                    <div>Kelas: <strong>${student?.kelas || '-'}</strong> | Jurusan: <strong>${student?.jurusan || '-'}</strong></div>
-                    <div>Dibuat oleh: <strong>${currentUser.nama || currentUser.email} (${getRoleDisplayName(currentUser.role)})</strong></div>
-                    <div style="margin-top: 10px;"><small>⏰ Kode akan expired dalam 5 jam</small></div>
-                    <div id="${qrContainerId}" style="margin: 15px auto; display: flex; justify-content: center;"></div>
-                    <button class="btn-action btn-success" onclick="copyToClipboard('${code}')" style="margin-top: 10px;">📋 Copy Kode</button>
-                </div>
-            `;
-
-            try {
-                new QRCode(document.getElementById(qrContainerId), {
-                    text: qrData,
-                    width: 150,
-                    height: 150,
-                    colorDark: "#000000",
-                    colorLight: "#ffffff",
-                    correctLevel: QRCode.CorrectLevel.H
-                });
-            } catch (err) {
-                console.error("QR Code generation error:", err);
-                document.getElementById(qrContainerId).innerHTML = '<span style="color:red;">Gagal generate QR</span>';
-            }
-            showToast(`✅ Kode untuk ${studentName} berhasil dibuat!`, "success");
-            
-            if (typeof logActivity === 'function') {
-                logActivity('generate_code', `Generate kode ${targetType}: ${code} untuk ${studentName} (ID: ${selectedId}) oleh ${getRoleDisplayName(currentUser.role)}`);
-            }
-            
-            // RESET DROPDOWN agar tidak bisa generate ulang dengan ID yang sama
-            const selectSiswa = document.getElementById('selectStudentForCode');
-            if (selectSiswa) {
-                selectSiswa.value = '';
-                selectSiswa.style.borderColor = '';
-                selectSiswa.style.backgroundColor = '';
-            }
-            
-            // Refresh dropdown untuk menghilangkan siswa yang sudah digenerate
-            setTimeout(() => populateStudentSelectForCode(), 500);
-            
-            if (typeof renderCodesTable === 'function') renderCodesTable();
-            updateCodesStatistics();
-        }).catch(err => {
-            console.error("Generate code error:", err);
-            showToast("❌ Gagal membuat kode: " + err.message, "error");
-        }).finally(() => {
-            if (btn) { btn.disabled = false; btn.innerHTML = originalText; }
-        });
-    }
+        
+        setTimeout(() => populateStudentSelectForCode(), 500);
+        if (typeof renderCodesTable === 'function') renderCodesTable();
+        updateCodesStatistics();
+    }).catch(err => {
+        console.error("Generate code error:", err);
+        showToast("❌ Gagal membuat kode: " + err.message, "error");
+    }).finally(() => {
+        if (btn) { btn.disabled = false; btn.innerHTML = originalText; }
+    });
 }
 
-/**
- * Fungsi helper untuk generate kode staff/guru dengan reset dropdown
- */
-function generateStaffCode(codeData, targetType, selectedStaffId, staffName, staffEmail, staffJabatan, targetRole) {
+function generateStaffCode(selectedStaffId, staffEmail, staffName, staffJabatan, targetRole) {
     const timestamp = Date.now().toString(36).toUpperCase();
     const random = Math.random().toString(36).substring(2, 6).toUpperCase();
     const code = `REG-${timestamp.slice(-3)}${random}`;
-    
-    codeData.code = code;
-    
-    const btn = document.querySelector('button[onclick="generateRegistrationCode()"]');
-    const originalText = btn?.innerHTML;
-    if (btn) {
-        btn.disabled = true;
-        btn.innerHTML = '⏳ Generating...';
-    }
     
     let typeDisplay = '';
     let borderColor = '';
@@ -741,116 +691,73 @@ function generateStaffCode(codeData, targetType, selectedStaffId, staffName, sta
     let roleIcon = '';
     let roleLabel = '';
     
-    if (targetType === 'guru') {
-        typeDisplay = 'GURU';
-        borderColor = '#ff9800';
-        textColor = '#ff9800';
-        roleIcon = '👨‍🏫';
-        roleLabel = 'Guru';
-    } else {
-        switch(targetRole) {
-            case 'admin':
-                typeDisplay = 'KEPALA SEKOLAH';
-                borderColor = '#f44336';
-                textColor = '#f44336';
-                roleIcon = '👑';
-                roleLabel = 'Kepala Sekolah';
-                break;
-            case 'wakil_kepala':
-                typeDisplay = 'WAKIL KEPALA SEKOLAH';
-                borderColor = '#9c27b0';
-                textColor = '#9c27b0';
-                roleIcon = '👔';
-                roleLabel = 'Wakil Kepala Sekolah';
-                break;
-            case 'staff_tu':
-                typeDisplay = 'STAFF TU';
-                borderColor = '#607d8b';
-                textColor = '#607d8b';
-                roleIcon = '📋';
-                roleLabel = 'Staff TU';
-                break;
-            default:
-                typeDisplay = 'GURU';
-                borderColor = '#ff9800';
-                textColor = '#ff9800';
-                roleIcon = '👨‍🏫';
-                roleLabel = 'Guru';
-        }
+    switch(targetRole) {
+        case 'admin':
+            typeDisplay = 'KEPALA SEKOLAH';
+            borderColor = '#f44336';
+            textColor = '#f44336';
+            roleIcon = '👑';
+            roleLabel = 'Kepala Sekolah';
+            break;
+        case 'wakil_kepala':
+            typeDisplay = 'WAKIL KEPALA SEKOLAH';
+            borderColor = '#9c27b0';
+            textColor = '#9c27b0';
+            roleIcon = '👔';
+            roleLabel = 'Wakil Kepala Sekolah';
+            break;
+        case 'staff_tu':
+            typeDisplay = 'STAFF TU';
+            borderColor = '#607d8b';
+            textColor = '#607d8b';
+            roleIcon = '📋';
+            roleLabel = 'Staff TU';
+            break;
+        default:
+            typeDisplay = 'GURU';
+            borderColor = '#ff9800';
+            textColor = '#ff9800';
+            roleIcon = '👨‍🏫';
+            roleLabel = 'Guru';
+    }
+    
+    const codeData = {
+        used: false,
+        createdAt: firebase.database.ServerValue.TIMESTAMP,
+        type: 'staff',
+        createdBy: currentUser.nama || currentUser.email,
+        createdRole: currentUser.role,
+        linkedId: selectedStaffId,
+        linkedEmail: staffEmail,
+        linkedName: staffName,
+        targetRole: targetRole,
+        requireId: true,
+        staffJabatan: staffJabatan,
+        nama: staffName,
+        email: staffEmail,
+        roleLabel: roleLabel
+    };
+    
+    const btn = document.querySelector('button[onclick="generateRegistrationCode()"]');
+    const originalText = btn?.innerHTML;
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '⏳ Generating...';
     }
     
     db.ref('codes/' + code).set(codeData).then(() => {
-        const display = document.getElementById('generatedKeyDisplay');
-        display.style.display = 'block';
-        
-        const qrData = JSON.stringify({ 
-            code: code, 
-            staffId: selectedStaffId, 
-            email: staffEmail, 
-            nama: staffName,
-            jabatan: staffJabatan,
-            type: targetType,
-            targetRole: targetRole,
-            requireId: true,
-            roleLabel: roleLabel
-        });
-        const qrContainerId = `qrcode-${code.replace(/[^a-zA-Z0-9]/g, '')}`;
-        
-        let additionalInfo = '';
-        if (targetType === 'guru') {
-            additionalInfo = `<div>Jabatan: <strong>Guru</strong></div>`;
-        } else {
-            additionalInfo = `<div>Jabatan: <strong>${roleLabel}</strong> ${roleIcon}</div>`;
-        }
-
-        display.innerHTML = `
-            <div style="background: #1a1a2e; border-radius: 8px; padding: 15px; margin: 10px 0; border-left: 4px solid ${borderColor};">
-                <div style="font-size: 12px; color: #888;">✨ KODE REGISTRASI BERHASIL DIGENERATE ✨</div>
-                <div style="font-size: 20px; font-family: monospace; font-weight: bold; color: ${textColor}; margin: 10px 0;">${code}</div>
-                <div>Tipe: <strong>${typeDisplay}</strong> ${roleIcon}</div>
-                <div><span style="color: #ff9800;">🆔 ID WAJIB: <strong>${selectedStaffId}</strong></span></div>
-                <div>Terkunci ID: <strong>${selectedStaffId}</strong> - ${escapeHtmlString(staffName)}</div>
-                <div>Email: <strong>${escapeHtmlString(staffEmail)}</strong></div>
-                ${additionalInfo}
-                <div>Dibuat oleh: <strong>${currentUser.nama || currentUser.email} (${getRoleDisplayName(currentUser.role)})</strong></div>
-                <div style="margin-top: 10px;"><small>⏰ Kode akan expired dalam 5 jam</small></div>
-                <div id="${qrContainerId}" style="margin: 15px auto; display: flex; justify-content: center;"></div>
-                <button class="btn-action btn-success" onclick="copyToClipboard('${code}')" style="margin-top: 10px;">📋 Copy Kode</button>
-            </div>
-        `;
-
-        try {
-            new QRCode(document.getElementById(qrContainerId), {
-                text: qrData,
-                width: 150,
-                height: 150,
-                colorDark: "#000000",
-                colorLight: "#ffffff",
-                correctLevel: QRCode.CorrectLevel.H
-            });
-        } catch (err) {
-            console.error("QR Code generation error:", err);
-            document.getElementById(qrContainerId).innerHTML = '<span style="color:red;">Gagal generate QR</span>';
-        }
-        
-        const roleDisplayName = targetType === 'guru' ? 'GURU' : typeDisplay;
-        showToast(`✅ Kode registrasi untuk ${staffName} (${roleDisplayName}) berhasil dibuat!`, "success");
+        showToast(`✅ Kode registrasi untuk ${staffName} (${typeDisplay}) berhasil dibuat!`, "success");
         
         if (typeof logActivity === 'function') {
-            logActivity('generate_code', `Generate kode ${targetType}: ${code} untuk ${staffName} (ID: ${selectedStaffId}) role ${targetRole} oleh ${getRoleDisplayName(currentUser.role)}`);
+            logActivity('generate_code', `Generate kode staff: ${code} untuk ${staffName} (ID: ${selectedStaffId}) role ${targetRole}`);
         }
         
-        // RESET DROPDOWN agar tidak bisa generate ulang dengan ID yang sama
         const selectStaff = document.getElementById('selectStaffForCode');
         if (selectStaff) {
             selectStaff.value = '';
-            selectStaff.style.borderColor = '';
-            selectStaff.style.backgroundColor = '';
         }
         
-        // Refresh dropdown untuk menghilangkan staff yang sudah digenerate
         setTimeout(() => populateStaffSelectForCode(), 500);
-        
         if (typeof renderCodesTable === 'function') renderCodesTable();
         updateCodesStatistics();
         
@@ -871,11 +778,13 @@ function copyToClipboard(text) {
 }
 
 // ======================= DELETE KODE REGISTRASI ========================
+
 function deleteCode(code) {
     const codeData = dbData.codes?.find(c => c.code === code);
     const typeDisplay = codeData?.type ? getRoleDisplayName(codeData.type) : 'UMUM';
     const linkedInfo = codeData?.linkedName ? ` - ${codeData.linkedName}` : (codeData?.linkedId ? ` - ID: ${codeData.linkedId}` : '');
     const codeInfo = `${typeDisplay}${linkedInfo} - ${code}`;
+    
     if (!confirm(`⚠️ Yakin ingin menghapus kode: ${codeInfo}?\n\nKode yang sudah dihapus tidak dapat digunakan lagi.`)) return;
     
     db.ref('codes/' + code).remove()
@@ -886,7 +795,6 @@ function deleteCode(code) {
                 logActivity('delete_code', `Hapus kode: ${codeInfo}`);
             }
             
-            // Refresh dropdown setelah hapus kode
             setTimeout(() => {
                 if (typeof populateStudentSelectForCode === 'function') populateStudentSelectForCode();
                 if (typeof populateStaffSelectForCode === 'function') populateStaffSelectForCode();
@@ -899,15 +807,19 @@ function deleteCode(code) {
 }
 
 // ======================= RENDER TABEL KODE REGISTRASI ========================
+
 function renderCodesTable() {
     const tbody = document.getElementById('tbody-codes');
     if (!tbody) return;
+    
     tbody.innerHTML = '';
+    
     if (typeof dbData === 'undefined' || !dbData.codes || dbData.codes.length === 0) {
-        tbody.innerHTML = `<td><td colspan="5" style="text-align:center; padding: 30px; color:#888;">🔑 Belum ada kode registrasi. Generate kode di atas.</option></tr></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding: 30px; color:#888;">🔑 Belum ada kode registrasi. Generate kode di atas.</td></tr>`;
         updateCodesStatistics();
         return;
     }
+    
     const sorted = [...dbData.codes].reverse();
     sorted.forEach(c => {
         let typeLabel = '';
@@ -945,22 +857,10 @@ function renderCodesTable() {
                 linkedInfo += `<br><small style="color:#ff9800;">🆔 ID: ${c.linkedId}</small>`;
                 requireIdBadge = `<br><small style="color:#f44336;">🔒 ID WAJIB DIINPUT SAAT REGISTRASI</small>`;
             }
-        } else if (c.type === 'staff_tu') {
-            typeLabel = 'STAFF TU';
-            typeIcon = '📋';
-            colorStyle = '#607d8b';
-            linkedInfo = c.linkedName ? `<br><small style="color:#888">👤 ${escapeHtmlString(c.linkedName)}</small>` : '';
-            if (c.linkedEmail) linkedInfo += `<br><small style="color:#888">📧 ${escapeHtmlString(c.linkedEmail)}</small>`;
-        } else if (c.type === 'wakil_kepala') {
-            typeLabel = 'WAKIL KEPALA SEKOLAH';
-            typeIcon = '👔';
-            colorStyle = '#9c27b0';
-            linkedInfo = c.linkedName ? `<br><small style="color:#888">👤 ${escapeHtmlString(c.linkedName)}</small>` : '';
         }
         
         const createdByName = c.createdBy ? `<br><small>👤 ${escapeHtmlString(c.createdBy)}</small>` : '';
         const timeRemaining = getCodeTimeRemaining(c.createdAt);
-        
         const isExpiringSoon = !c.used && timeRemaining && (timeRemaining.includes('menit') && parseInt(timeRemaining) < 30);
         
         tbody.innerHTML += `
@@ -969,7 +869,7 @@ function renderCodesTable() {
                     <span style="color:${colorStyle}">${typeIcon}</span>
                     <strong>${c.code}</strong>
                     <br><small style="font-weight:normal; color:#888">${typeLabel}${linkedInfo}${requireIdBadge}${createdByName}</small>
-                 </td>
+                  </div>
                 <td>${c.used ? '<span style="color:#4caf50;">✅ Terpakai</span>' : `<span style="color:#ff9800;">🟢 Aktif</span>${timeRemaining ? `<br><small style="color:#888;">⏰ ${timeRemaining}</small>` : ''}`}</div>
                 <td style="font-size: 12px;">${c.createdAt ? new Date(c.createdAt).toLocaleString('id-ID') : '-'}</div>
                 <td style="font-size: 12px;">${c.userId ? c.userId.substring(0, 20) + '...' : '-'}</div>
@@ -994,7 +894,174 @@ function getCodeTimeRemaining(createdAt) {
     else return '< 1 menit';
 }
 
+// ======================= RENDER TABEL PENGGUNA (FIXED) ========================
+
+function renderUsersTable() {
+    console.log("🎨 renderUsersTable dipanggil - users_auth count:", dbData?.users_auth?.length || 0);
+    
+    let tbody = document.getElementById('tbody-users');
+    
+    // Jika tbody tidak ditemukan, coba buat secara dinamis
+    if (!tbody) {
+        console.warn("⚠️ tbody-users tidak ditemukan, mencoba membuat...");
+        const table = document.querySelector('#tab-users .table-container table');
+        if (table) {
+            const newTbody = document.createElement('tbody');
+            newTbody.id = 'tbody-users';
+            table.appendChild(newTbody);
+            tbody = newTbody;
+            console.log("✅ tbody-users created dynamically");
+        } else {
+            console.error("❌ Table not found in #tab-users");
+            return;
+        }
+    }
+    
+    const searchInput = document.getElementById('searchUser');
+    const search = searchInput?.value.toLowerCase() || '';
+    
+    // ========== CEK DATA ==========
+    if (typeof dbData === 'undefined' || !dbData.users_auth) {
+        console.log("⏳ users.js: dbData.users_auth not ready yet");
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 30px;">⏳ Memuat data pengguna...</td></tr>`;
+        return;
+    }
+    
+    if (!dbData.users_auth || dbData.users_auth.length === 0) {
+        console.log("📭 users.js: Tidak ada data user auth");
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 30px; color:#888;">👥 Belum ada pengguna terdaftar.</td></tr>`;
+        updateUsersStatistics();
+        return;
+    }
+    
+    // ========== FILTER DATA ==========
+    let data = [...dbData.users_auth];
+    
+    if (search) {
+        data = data.filter(u => u.nama && u.nama.toLowerCase().includes(search));
+    }
+    
+    data.sort((a, b) => getRolePriority(a.role) - getRolePriority(b.role));
+    
+    console.log(`📊 Users data to render: ${data.length} users (total: ${dbData.users_auth.length}, search: "${search}")`);
+    
+    if (data.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 30px; color:#888;">🔍 Tidak ada pengguna yang cocok dengan pencarian.</td></tr>`;
+        updateUsersStatistics();
+        return;
+    }
+    
+    // ========== RENDER TABLE ==========
+    tbody.innerHTML = '';
+    
+    for (const u of data) {
+        const isMe = (currentUser && currentUser.uid === u.uid);
+        const isDeveloper = (u.role === 'developer');
+        
+        // Dapatkan URL foto dengan timestamp
+        const photoUrl = getUserPhotoUrl(u.uid, u.nama, u.photoUrl);
+        const initial = u.nama ? u.nama.charAt(0).toUpperCase() : 'U';
+        
+        const canManageThisUser = canManageUser(currentUser, u);
+        const canDeleteThisUser = canDeleteUser(currentUser?.role);
+        const canResetPassThisUser = canResetPassword(currentUser?.role);
+        
+        // Role HTML
+        let roleHtml = '';
+        let actionsHtml = '-';
+        
+        if (canManageThisUser && !isDeveloper) {
+            roleHtml = `
+                <select class="form-control" onchange="updateUserRole('${u.uid}', this.value)" 
+                        style="background:var(--bg-input); color:var(--text-primary); border:1px solid var(--border); padding:5px; border-radius:4px; font-size:0.8rem;">
+                    <option value="siswa" ${u.role === 'siswa' ? 'selected' : ''}>👨‍🎓 Siswa</option>
+                    <option value="guru" ${u.role === 'guru' ? 'selected' : ''}>👨‍🏫 Guru</option>
+                    <option value="staff_tu" ${u.role === 'staff_tu' ? 'selected' : ''}>📋 Staff TU</option>
+                    <option value="wakil_kepala" ${u.role === 'wakil_kepala' ? 'selected' : ''}>👔 Wakil Kepala Sekolah</option>
+                    <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>👑 Kepala Sekolah</option>
+                </select>
+            `;
+            
+            let actionButtons = '';
+            if (canDeleteThisUser && !isDeveloper && !isMe) {
+                actionButtons += `<button class="btn-icon delete" onclick="deleteUser('${u.uid}', '${escapeHtmlString(u.nama)}')" title="Hapus User" style="background:transparent; border:none; cursor:pointer; font-size:18px;">🗑️</button>`;
+            }
+            if (canResetPassThisUser && !isDeveloper) {
+                actionButtons += `<button class="btn-icon" onclick="resetUserPassword('${u.email}')" title="Reset Password" style="background:transparent; border:none; cursor:pointer; font-size:18px;">🔑</button>`;
+            }
+            actionsHtml = actionButtons || '-';
+        } else {
+            const roleIcon = getRoleIcon(u.role);
+            const roleDisplay = getRoleDisplayName(u.role);
+            let roleClass = `role-${u.role}`;
+            if (u.role === 'admin') roleClass = 'role-admin';
+            else if (u.role === 'wakil_kepala') roleClass = 'role-wakil-kepala';
+            else if (u.role === 'staff_tu') roleClass = 'role-staff-tu';
+            else if (u.role === 'guru') roleClass = 'role-guru';
+            else if (u.role === 'developer') roleClass = 'role-developer';
+            else roleClass = 'role-siswa';
+            
+            roleHtml = `<span class="role-badge ${roleClass}">${roleIcon} ${roleDisplay}</span>`;
+            if (isMe) roleHtml += ` <small style="color:#4a90e2;">(Anda)</small>`;
+        }
+        
+        // Detail text
+        let detailText = '';
+        let detailIcon = '';
+        if (u.role === 'siswa') {
+            detailIcon = '📚';
+            detailText = `${u.kelas || '-'} / ${u.jurusan || '-'}`;
+        } else if (u.role === 'guru') {
+            detailIcon = '📖';
+            detailText = u.subject || '-';
+        } else if (u.role === 'staff_tu') {
+            detailIcon = '📋';
+            detailText = u.departemen || 'Staff TU';
+        } else if (u.role === 'wakil_kepala') {
+            detailIcon = '👔';
+            detailText = u.bidang || 'Wakil Kepala Sekolah';
+        } else if (u.role === 'developer') {
+            detailIcon = '⚡';
+            detailText = 'Developer (Super Admin)';
+        } else {
+            detailIcon = '👑';
+            detailText = 'Kepala Sekolah';
+        }
+        
+        const registeredDate = u.registeredAt ? new Date(u.registeredAt).toLocaleDateString('id-ID') : '-';
+        
+        // Error handler untuk gambar
+        const onErrorScript = `this.onerror=null; this.src='https://ui-avatars.com/api/?name=${initial}&background=00bcd4&color=fff&size=100&bold=true&t=${Date.now()}'; usersPhotoCache.delete('${u.uid}');`;
+        
+        tbody.innerHTML += `
+            <tr class="${isMe ? 'current-user-row' : ''}" style="border-bottom: 1px solid var(--border);">
+                <td style="text-align:center; padding:8px;">
+                    <img src="${photoUrl}" 
+                         style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; cursor: pointer;"
+                         onerror="${onErrorScript}"
+                         title="Foto ${escapeHtmlString(u.nama)}">
+                 </div>
+                <td style="padding:8px;">
+                    <strong>${escapeHtmlString(u.nama)}</strong>
+                    ${isMe ? '<br><small style="color:#4a90e2;">Akun Anda</small>' : ''}
+                  </div>
+                <td style="padding:8px; color: var(--text-muted); font-size:0.85rem;">${u.email || '-'}</div>
+                <td style="padding:8px;">${roleHtml}</div>
+                <td style="padding:8px; color: var(--text-muted); font-size:0.8rem;">
+                    ${detailIcon} ${escapeHtmlString(detailText)}<br>
+                    <small>📅 ${registeredDate}</small>
+                  </div>
+                <td style="text-align:center; padding:8px;">${actionsHtml}</div>
+            </tr>
+        `;
+    }
+    
+    console.log(`✅ renderUsersTable selesai, menampilkan ${data.length} users`);
+    updateUsersStatistics();
+}
+
 // ======================= UPDATE USER ROLE ========================
+
 function updateUserRole(uid, newRole) {
     if (!currentUser) {
         showToast("Anda harus login!", "error");
@@ -1035,9 +1102,6 @@ function updateUserRole(uid, newRole) {
     
     if (!confirm(`⚠️ Yakin ingin mengubah role ${user.nama} dari ${roleNames[user.role]} menjadi ${roleNames[newRole]}?`)) return;
 
-    const btn = document.querySelector(`select[onchange*="updateUserRole('${uid}']`);
-    if (btn) btn.disabled = true;
-
     db.ref('users_auth/' + uid).update({
         role: newRole,
         updatedAt: firebase.database.ServerValue.TIMESTAMP
@@ -1045,7 +1109,7 @@ function updateUserRole(uid, newRole) {
         showToast(`✅ Role ${user.nama} berhasil diubah menjadi ${roleNames[newRole]}`, "success");
         
         if (typeof logActivity === 'function') {
-            logActivity('update_user_role', `Ubah role ${user.nama} (${user.email}) dari ${user.role} menjadi ${newRole} oleh ${getRoleDisplayName(currentUser.role)}`);
+            logActivity('update_user_role', `Ubah role ${user.nama} (${user.email}) dari ${user.role} menjadi ${newRole}`);
         }
         
         if (currentUser.uid === uid) {
@@ -1058,145 +1122,11 @@ function updateUserRole(uid, newRole) {
     }).catch((err) => {
         console.error("Update role error:", err);
         showToast("❌ Gagal mengubah role: " + err.message, "error");
-    }).finally(() => {
-        if (btn) btn.disabled = false;
     });
-}
-
-// ======================= RENDER TABEL PENGGUNA (USER MANAGEMENT) ========================
-function renderUsersTable() {
-    console.log("🎨 renderUsersTable dipanggil");
-    const tbody = document.getElementById('tbody-users');
-    const searchInput = document.getElementById('searchUser');
-    const search = searchInput?.value.toLowerCase() || '';
-    if (!tbody) {
-        console.warn("⚠️ tbody-users tidak ditemukan!");
-        return;
-    }
-    tbody.innerHTML = '';
-    if (typeof dbData === 'undefined' || !dbData.users_auth || dbData.users_auth.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 30px; color:#888;">👥 Belum ada pengguna terdaftar.</option></td></tr>`;
-        return;
-    }
-
-    let data = dbData.users_auth.filter(u => u.nama && u.nama.toLowerCase().includes(search));
-    data.sort((a, b) => getRolePriority(a.role) - getRolePriority(b.role));
-
-    if (data.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 30px; color:#888;">🔍 Tidak ada pengguna yang cocok dengan pencarian.</option></td></tr>`;
-        return;
-    }
-
-    data.forEach(u => {
-        const isMe = (currentUser && currentUser.uid === u.uid);
-        const avatar = u.photoUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.nama || 'User')}&background=random&color=fff&size=40`;
-
-        let roleHtml = '';
-        let actionsHtml = '-';
-
-        const isDeveloper = (u.role === 'developer');
-        const canManageThisUser = canManageUser(currentUser, u);
-        const canDeleteThisUser = canDeleteUser(currentUser?.role);
-        const canResetPassThisUser = canResetPassword(currentUser?.role);
-
-        if (canManageThisUser) {
-            roleHtml = `
-                <select class="form-control" onchange="updateUserRole('${u.uid}', this.value)" 
-                        style="background:#2c2c2c; color:white; border:1px solid #444; padding:5px; border-radius:4px; font-size:0.8rem;">
-                    <option value="siswa" ${u.role === 'siswa' ? 'selected' : ''}>👨‍🎓 Siswa</option>
-                    <option value="guru" ${u.role === 'guru' ? 'selected' : ''}>👨‍🏫 Guru</option>
-                    <option value="staff_tu" ${u.role === 'staff_tu' ? 'selected' : ''}>📋 Staff TU</option>
-                    <option value="wakil_kepala" ${u.role === 'wakil_kepala' ? 'selected' : ''}>👔 Wakil Kepala Sekolah</option>
-                    <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>👑 Kepala Sekolah</option>
-                </select>
-            `;
-            
-            let actionButtons = '';
-            if (canDeleteThisUser && !isDeveloper && !isMe) {
-                actionButtons += `<button class="btn-icon delete" onclick="deleteUser('${u.uid}', '${escapeHtmlString(u.nama)}')" 
-                        title="Hapus User" style="background:transparent; border:none; cursor:pointer; color:#f44336; font-size:18px;">🗑️</button>`;
-            }
-            if (canResetPassThisUser && !isDeveloper) {
-                actionButtons += `<button class="btn-icon" onclick="resetUserPassword('${u.email}')" 
-                        title="Reset Password" style="background:transparent; border:none; cursor:pointer; color:#ff9800; font-size:18px;">🔑</button>`;
-            }
-            actionsHtml = actionButtons || '-';
-        } else {
-            const roleIcon = getRoleIcon(u.role);
-            const roleDisplay = getRoleDisplayName(u.role);
-            let roleClass = `role-${u.role}`;
-            if (u.role === 'admin') roleClass = 'role-admin';
-            else if (u.role === 'wakil_kepala') roleClass = 'role-wakil-kepala';
-            else if (u.role === 'staff_tu') roleClass = 'role-staff-tu';
-            else if (u.role === 'guru') roleClass = 'role-guru';
-            else if (u.role === 'developer') roleClass = 'role-developer';
-            else roleClass = 'role-siswa';
-            
-            roleHtml = `<span class="role-badge ${roleClass}">${roleIcon} ${roleDisplay}</span>`;
-            if (isMe) roleHtml += ` <small style="color:#4a90e2;">(Anda)</small>`;
-        }
-
-        let detailText = '';
-        let detailIcon = '';
-        if (u.role === 'siswa') {
-            detailIcon = '📚';
-            detailText = `${u.kelas || '-'} / ${u.jurusan || '-'}`;
-        } else if (u.role === 'guru') {
-            detailIcon = '📖';
-            detailText = u.subject || '-';
-        } else if (u.role === 'staff_tu') {
-            detailIcon = '📋';
-            detailText = u.departemen || 'Staff TU';
-        } else if (u.role === 'wakil_kepala') {
-            detailIcon = '👔';
-            detailText = u.bidang || 'Wakil Kepala Sekolah';
-        } else if (u.role === 'developer') {
-            detailIcon = '⚡';
-            detailText = 'Developer (Super Admin)';
-        } else {
-            detailIcon = '👑';
-            detailText = 'Kepala Sekolah';
-        }
-        const registeredDate = u.registeredAt ? new Date(u.registeredAt).toLocaleDateString('id-ID') : '-';
-
-        tbody.innerHTML += `
-            <tr class="${isMe ? 'current-user-row' : ''}">
-                <td style="text-align:center;"><img src="${avatar}" style="width:40px; height:40px; border-radius:50%; object-fit:cover;"></td>
-                <td><strong>${escapeHtmlString(u.nama)}</strong>${isMe ? '<br><small style="color:#4a90e2;">Akun Anda</small>' : ''}</td>
-                <td style="color:#aaa; font-size:0.85rem;">${u.email || '-'}</div>
-                <td>${roleHtml}</div>
-                <td style="color:#888; font-size:0.8rem;">${detailIcon} ${escapeHtmlString(detailText)}<br><small>📅 ${registeredDate}</small></div>
-                <td style="text-align:center;">${actionsHtml}</div>
-            </tr>
-        `;
-    });
-    console.log(`✅ renderUsersTable: ${data.length} users ditampilkan`);
-}
-
-function resetUserPassword(email) {
-    if (!email) { showToast("❌ Email tidak valid!", "error"); return; }
-    
-    if (!canResetPassword(currentUser?.role)) {
-        showToast("⛔ Hanya Kepala Sekolah, Wakil Kepala Sekolah, dan Developer yang dapat mereset password!", "error");
-        return;
-    }
-    
-    if (!confirm(`⚠️ Kirim link reset password ke ${email}?`)) return;
-    
-    auth.sendPasswordResetEmail(email)
-        .then(() => {
-            showToast(`✅ Link reset password telah dikirim ke ${email}`, "success");
-            if (typeof logActivity === 'function') {
-                logActivity('reset_user_password', `Kirim link reset password ke ${email} oleh ${getRoleDisplayName(currentUser.role)}`);
-            }
-        })
-        .catch((err) => {
-            if (err.code === 'auth/user-not-found') showToast("❌ Email tersebut tidak terdaftar di Firebase Auth!", "error");
-            else showToast("❌ Gagal mengirim: " + err.message, "error");
-        });
 }
 
 // ======================= DELETE USER ========================
+
 function deleteUser(uid, nama) {
     if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'developer')) {
         showToast("⛔ Hanya Kepala Sekolah dan Developer yang dapat menghapus user!", "error");
@@ -1215,24 +1145,50 @@ function deleteUser(uid, nama) {
 
     if (!confirm(`⚠️ Yakin ingin menghapus user: ${nama}?\n\nUser ini akan kehilangan akses login.\nData absensi yang terkait tidak akan terpengaruh.\n\nTINDAKAN INI TIDAK DAPAT DIBATALKAN!`)) return;
 
-    const btn = document.querySelector(`button[onclick*="deleteUser('${uid}']`);
-    if (btn) btn.disabled = true;
-
     db.ref('users_auth/' + uid).remove()
         .then(() => {
             showToast(`✅ User "${nama}" berhasil dihapus dari Database.`, "success");
             
             if (typeof logActivity === 'function') {
-                logActivity('delete_user', `Hapus user: ${nama} (UID: ${uid}) oleh ${getRoleDisplayName(currentUser.role)}`);
+                logActivity('delete_user', `Hapus user: ${nama} (UID: ${uid})`);
             }
+            
+            // Refresh cache foto
+            usersPhotoCache.delete(uid);
+            usersPhotoTimestampCache.delete(uid);
             
             renderUsersTable();
         })
-        .catch((err) => showToast("❌ Gagal menghapus: " + err.message, "error"))
-        .finally(() => { if (btn) btn.disabled = false; });
+        .catch((err) => showToast("❌ Gagal menghapus: " + err.message, "error"));
+}
+
+// ======================= RESET PASSWORD ========================
+
+function resetUserPassword(email) {
+    if (!email) { showToast("❌ Email tidak valid!", "error"); return; }
+    
+    if (!canResetPassword(currentUser?.role)) {
+        showToast("⛔ Hanya Kepala Sekolah, Wakil Kepala Sekolah, dan Developer yang dapat mereset password!", "error");
+        return;
+    }
+    
+    if (!confirm(`⚠️ Kirim link reset password ke ${email}?`)) return;
+    
+    auth.sendPasswordResetEmail(email)
+        .then(() => {
+            showToast(`✅ Link reset password telah dikirim ke ${email}`, "success");
+            if (typeof logActivity === 'function') {
+                logActivity('reset_user_password', `Kirim link reset password ke ${email}`);
+            }
+        })
+        .catch((err) => {
+            if (err.code === 'auth/user-not-found') showToast("❌ Email tersebut tidak terdaftar di Firebase Auth!", "error");
+            else showToast("❌ Gagal mengirim: " + err.message, "error");
+        });
 }
 
 // ======================= RESET SYSTEM DATA ========================
+
 function resetSystemData() {
     if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'developer')) {
         showToast("⛔ Hanya Kepala Sekolah atau Developer yang dapat mereset sistem!", "error");
@@ -1286,10 +1242,13 @@ function resetSystemData() {
 }
 
 // ======================= CLEANUP ========================
+
 function cleanupUsersSystem() {
     usersDataReadyListenerAdded = false;
     staffListLoadedForCode = false;
     staffListCacheForCode = [];
+    usersPhotoCache.clear();
+    usersPhotoTimestampCache.clear();
     console.log("🧹 Users system cleaned up");
 }
 
@@ -1299,14 +1258,25 @@ function escapeHtmlString(str) {
 }
 
 // ======================= INISIALISASI ========================
+
 setupUsersDataReadyListener();
 
+// Jika data sudah ada, render langsung
 if (typeof dbData !== 'undefined' && dbData.users_auth) {
     setTimeout(() => {
-        if (typeof renderUsersTable === 'function') renderUsersTable();
-        if (typeof renderCodesTable === 'function') renderCodesTable();
-        if (typeof populateStudentSelectForCode === 'function') populateStudentSelectForCode();
-        if (typeof populateStaffSelectForCode === 'function') populateStaffSelectForCode();
+        console.log("📊 users.js: Initial render with existing data");
+        if (typeof renderUsersTable === 'function') {
+            renderUsersTable();
+        }
+        if (typeof renderCodesTable === 'function') {
+            renderCodesTable();
+        }
+        if (typeof populateStudentSelectForCode === 'function') {
+            populateStudentSelectForCode();
+        }
+        if (typeof populateStaffSelectForCode === 'function') {
+            populateStaffSelectForCode();
+        }
     }, 100);
 }
 
@@ -1333,5 +1303,7 @@ window.canDeleteUser = canDeleteUser;
 window.isValidRole = isValidRole;
 window.highlightUserInTable = highlightUserInTable;
 window.highlightExistingCode = highlightExistingCode;
+window.refreshUsersPhotoCache = refreshUsersPhotoCache;
+window.updateUsersStatistics = updateUsersStatistics;
 
-console.log("✅ users.js V5.2 loaded - FULLY LOCKED: GURU & STAFF validasi ketat seperti SISWA (cek akun, cek kode aktif, reset dropdown, highlight)!");
+console.log("✅ users.js V5.3 loaded - Fixed user table display & photo cache");

@@ -1,9 +1,11 @@
-// rekap-per-siswa.js - VERSION 2.1 (DENGAN PERIODE LENGKAP DI MODAL)
+// rekap-per-siswa.js - VERSION 2.2 (FIXED PHOTO CACHE WITH TIMESTAMP & GLOBAL INTEGRATION)
 // Fitur Rekap Absensi per Siswa - Tampil dalam Modal
-// PERUBAHAN V2.1: 
-//   - Menambahkan pilihan periode lengkap di dalam modal
+// PERUBAHAN V2.2: 
+//   - Memperbaiki bug foto dengan timestamp untuk bypass cache browser
+//   - Integrasi dengan resetAllPhotoCaches() dari global-functions.js
+//   - Menambahkan timestamp pada URL avatar default
+//   - Memperbaiki cache management dengan timestamp
 //   - Periode: Hari Ini, Minggu Ini, Bulan Ini, Semester Ini, Tahun Ini, Pertama Kali, Custom Range
-//   - Periode dapat diubah langsung dari modal tanpa harus ke halaman utama
 // ============================================================================
 
 let currentRekapPerSiswaData = null;
@@ -13,7 +15,10 @@ let currentStudentIndex = -1;
 let currentModalPeriod = 'minggu'; // default period
 let currentModalCustomStart = null;
 let currentModalCustomEnd = null;
+
+// Cache untuk foto siswa rekap dengan timestamp management
 const rekapPhotoCache = new Map();
+const rekapPhotoTimestampCache = new Map();
 
 // ======================= FUNGSI PERIODE LENGKAP ========================
 
@@ -112,52 +117,124 @@ function formatIndonesianDateShort(dateStr) {
     return `${parts[2]} ${bulan[parseInt(parts[1]) - 1]} ${parts[0]}`;
 }
 
-// ======================= FUNGSI FOTO SISWA ========================
+// ======================= FUNGSI FOTO SISWA (DIPERBAIKI) ========================
 
+/**
+ * Mendapatkan URL foto siswa untuk rekap dengan timestamp untuk bypass cache
+ * @param {string|number} studentId - ID siswa
+ * @param {string} studentName - Nama siswa (fallback)
+ * @returns {string} URL foto atau avatar inisial
+ */
 function getRekapStudentPhotoUrl(studentId, studentName) {
     if (!studentId) {
         const initial = studentName ? studentName.charAt(0).toUpperCase() : 'U';
-        return `https://ui-avatars.com/api/?name=${encodeURIComponent(initial)}&background=00bcd4&color=fff&size=100&bold=true`;
+        const timestamp = Date.now();
+        return `https://ui-avatars.com/api/?name=${encodeURIComponent(initial)}&background=00bcd4&color=fff&size=100&bold=true&t=${timestamp}`;
     }
     
-    if (rekapPhotoCache.has(studentId)) {
+    // Cek cache dengan timestamp management
+    const lastUpdate = rekapPhotoTimestampCache.get(studentId);
+    const now = Date.now();
+    
+    // Jika cache masih fresh (kurang dari 5 detik) dan ada, gunakan cache
+    if (rekapPhotoCache.has(studentId) && lastUpdate && (now - lastUpdate) < 5000) {
         return rekapPhotoCache.get(studentId);
     }
     
+    // Cari user auth yang memiliki fpId = studentId
     const userAuth = dbData?.users_auth?.find(u => u.fpId == studentId);
     
     let photoUrl;
+    const timestamp = now;
+    
     if (userAuth && userAuth.photoUrl && userAuth.photoUrl !== 'null' && userAuth.photoUrl !== 'undefined') {
-        photoUrl = userAuth.photoUrl;
+        // Tambahkan timestamp ke URL untuk bypass cache browser
+        const separator = userAuth.photoUrl.includes('?') ? '&' : '?';
+        photoUrl = userAuth.photoUrl.split('?')[0] + separator + 't=' + timestamp;
     } else {
+        // Fallback: avatar inisial nama dengan timestamp
         const initial = studentName ? studentName.charAt(0).toUpperCase() : 'U';
-        photoUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(initial)}&background=00bcd4&color=fff&size=100&bold=true`;
+        photoUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(initial)}&background=00bcd4&color=fff&size=100&bold=true&t=${timestamp}`;
     }
     
+    // Simpan ke cache dengan timestamp
     rekapPhotoCache.set(studentId, photoUrl);
+    rekapPhotoTimestampCache.set(studentId, timestamp);
+    
     return photoUrl;
 }
 
-function refreshRekapPhotoCache() {
-    rekapPhotoCache.clear();
+/**
+ * Refresh cache foto rekap
+ * @param {string|number} specificStudentId - Jika disediakan, hanya refresh untuk siswa tertentu
+ */
+function refreshRekapPhotoCache(specificStudentId = null) {
+    if (specificStudentId) {
+        rekapPhotoCache.delete(specificStudentId);
+        rekapPhotoTimestampCache.delete(specificStudentId);
+        console.log(`🖼️ Rekap photo cache cleared for student ID: ${specificStudentId}`);
+    } else {
+        rekapPhotoCache.clear();
+        rekapPhotoTimestampCache.clear();
+        console.log("🖼️ All rekap photo caches cleared");
+    }
+    
+    // Refresh modal jika sedang terbuka
     if (currentRekapPerSiswaData) {
         renderRekapPerSiswaModal(currentRekapPerSiswaData);
     }
-    console.log("🖼️ Rekap photo cache cleared");
 }
 
+/**
+ * Force refresh semua foto di rekap
+ */
+function forceRefreshRekapPhotos() {
+    console.log("🖼️ Force refreshing all rekap photos...");
+    
+    // Bersihkan semua cache
+    rekapPhotoCache.clear();
+    rekapPhotoTimestampCache.clear();
+    
+    // Refresh modal jika sedang terbuka
+    if (currentRekapPerSiswaData) {
+        renderRekapPerSiswaModal(currentRekapPerSiswaData);
+    }
+    
+    // Tampilkan notifikasi
+    if (typeof showToast === 'function') {
+        showToast("🖼️ Foto rekap telah direfresh", "success");
+    }
+}
+
+/**
+ * Setup listener untuk perubahan foto dari user auth (realtime)
+ */
 function setupRekapPhotoListener() {
     if (!db) return;
     
-    db.ref('users_auth').on('child_changed', (snapshot) => {
+    // Hapus listener lama jika ada
+    if (window._rekapPhotoListener) {
+        db.ref('users_auth').off('child_changed', window._rekapPhotoListener);
+    }
+    
+    window._rekapPhotoListener = (snapshot) => {
         const userData = snapshot.val();
         if (userData && userData.photoUrl && userData.fpId) {
+            console.log(`🖼️ Photo changed for student ID: ${userData.fpId}, clearing rekap cache`);
+            
+            // Hapus cache untuk siswa ini
             rekapPhotoCache.delete(userData.fpId);
+            rekapPhotoTimestampCache.delete(userData.fpId);
+            
+            // Refresh modal jika sedang menampilkan siswa ini
             if (currentRekapPerSiswaData && currentRekapPerSiswaData.student.id == userData.fpId) {
                 renderRekapPerSiswaModal(currentRekapPerSiswaData);
             }
         }
-    });
+    };
+    
+    db.ref('users_auth').on('child_changed', window._rekapPhotoListener);
+    console.log("📸 Rekap photo realtime listener set up");
 }
 
 // ======================= INISIALISASI ========================
@@ -484,7 +561,7 @@ function updateModalCustomDates() {
     }
 }
 
-// ======================= RENDER MODAL ========================
+// ======================= RENDER MODAL (DIPERBAIKI) ========================
 
 function renderRekapPerSiswaModal(data) {
     if (!data) return;
@@ -495,8 +572,12 @@ function renderRekapPerSiswaModal(data) {
         ? '<span class="badge-account" style="background:#4caf50; font-size:11px; margin-left:10px; padding:2px 8px; border-radius:20px;">✓ Berakun</span>' 
         : '<span class="badge-no-account" style="background:#888; font-size:11px; margin-left:10px; padding:2px 8px; border-radius:20px;">❌ Belum Berakun</span>';
     
+    // Dapatkan URL foto dengan timestamp terbaru
     const avatarUrl = getRekapStudentPhotoUrl(student.id, student.nama);
     const studentInitial = student.nama ? student.nama.charAt(0).toUpperCase() : 'U';
+    
+    // Error handler untuk gambar gagal dimuat
+    const onErrorScript = `this.onerror=null; this.src='https://ui-avatars.com/api/?name=${studentInitial}&background=00bcd4&color=fff&size=100&bold=true&t=${Date.now()}'; rekapPhotoCache.delete('${student.id}');`;
     
     // Build detail tabel
     let tableRows = '';
@@ -505,16 +586,16 @@ function renderRekapPerSiswaModal(data) {
         tableRows += `
             <tr style="border-bottom: 1px solid var(--border);">
                 <td style="padding: 10px; text-align: center;">${no++}</td>
-                <td style="padding: 10px; text-align: center;">${formatIndonesianDateShort(item.date)}</div>
-                <td style="padding: 10px; text-align: center;">${item.dayName}</div>
+                <td style="padding: 10px; text-align: center;">${formatIndonesianDateShort(item.date)}</td>
+                <td style="padding: 10px; text-align: center;">${item.dayName}</td>
                 <td style="padding: 10px; text-align: center;">
                     <span style="color: ${item.statusColor}; font-weight: bold; display: inline-flex; align-items: center; gap: 4px;">
                         ${item.statusIcon} ${item.statusText}
                     </span>
-                 </div>
-                <td style="padding: 10px; text-align: center; font-family: monospace;">${item.timeIn}</div>
-                <td style="padding: 10px; text-align: center; font-family: monospace;">${item.timeOut}</div>
-            </tr>
+                 </td>
+                <td style="padding: 10px; text-align: center; font-family: monospace;">${item.timeIn}</td>
+                <td style="padding: 10px; text-align: center; font-family: monospace;">${item.timeOut}</td>
+             </tr>
         `;
     }
     
@@ -538,12 +619,12 @@ function renderRekapPerSiswaModal(data) {
                         <th style="padding: 10px; text-align: center;">Status</th>
                         <th style="padding: 10px; text-align: center;">Jam Masuk</th>
                         <th style="padding: 10px; text-align: center;">Jam Pulang</th>
-                    </tr>
+                     </tr>
                 </thead>
                 <tbody>
                     ${tableRows}
                 </tbody>
-            </table>
+             </table>
         </div>
         <div class="rekap-footer" style="margin-top: 15px; padding-top: 10px; text-align: center; font-size: 11px; color: var(--text-muted); border-top: 1px solid var(--border);">
             * Data dihitung berdasarkan hari sekolah (tidak termasuk hari libur mingguan & khusus)
@@ -607,7 +688,7 @@ function renderRekapPerSiswaModal(data) {
                         <div style="display: flex; align-items: center; gap: 15px;">
                             <img src="${avatarUrl}" 
                                  style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover; border: 3px solid #00bcd4; background: var(--bg-card); cursor: pointer;"
-                                 onerror="this.src='https://ui-avatars.com/api/?name=${studentInitial}&background=00bcd4&color=fff&size=100&bold=true'"
+                                 onerror="${onErrorScript}"
                                  onclick="showRekapStudentPhoto('${student.id}', '${escapeHtml(student.nama)}', this.src)">
                             <div>
                                 <h2 style="margin: 0; color: var(--text-primary); font-size: 1.4rem;">
@@ -777,6 +858,7 @@ async function exportCurrentRekapPerSiswaToPDF() {
     const dateNow = new Date().toLocaleDateString('id-ID');
     const timeNow = new Date().toLocaleTimeString('id-ID');
     
+    // Dapatkan URL foto dengan timestamp terbaru untuk PDF
     let avatarUrl = getRekapStudentPhotoUrl(student.id, student.nama);
     const studentInitial = student.nama ? student.nama.charAt(0).toUpperCase() : 'U';
     
@@ -826,7 +908,7 @@ async function exportCurrentRekapPerSiswaToPDF() {
                 <h3>LAPORAN REKAP ABSENSI PER SISWA</h3>
             </div>
             <div class="student-info">
-                <img src="${avatarUrl}" onerror="this.src='https://ui-avatars.com/api/?name=${studentInitial}&background=00bcd4&color=fff&size=100&bold=true'">
+                <img src="${avatarUrl}" onerror="this.src='https://ui-avatars.com/api/?name=${studentInitial}&background=00bcd4&color=fff&size=100&bold=true&t=${Date.now()}'">
                 <div class="student-details">
                     <h2>${escapeHtml(student.nama)}</h2>
                     <p>🆔 ID: ${student.id} | 📚 Kelas: ${student.kelas || '-'} | 🎓 Jurusan: ${student.jurusan || '-'}</p>
@@ -896,6 +978,9 @@ async function exportCurrentRekapPerSiswaToPDF() {
 }
 
 function showRekapStudentPhoto(studentId, studentName, photoUrl) {
+    // Dapatkan URL dengan timestamp terbaru
+    const freshPhotoUrl = getRekapStudentPhotoUrl(studentId, studentName);
+    
     const userAuth = dbData?.users_auth?.find(u => u.fpId == studentId);
     const hasAccount = !!userAuth;
     const accountInfo = hasAccount 
@@ -910,9 +995,9 @@ function showRekapStudentPhoto(studentId, studentName, photoUrl) {
                     <span onclick="closeModal('modal-rekap-photo')">✖</span>
                 </div>
                 <div style="padding: 20px;">
-                    <img src="${photoUrl}" 
+                    <img src="${freshPhotoUrl}" 
                          style="max-width: 100%; max-height: 60vh; border-radius: 20px; object-fit: contain;"
-                         onerror="this.src='https://ui-avatars.com/api/?name=${escapeHtml(studentName?.charAt(0) || 'U')}&background=00bcd4&color=fff&size=200&bold=true'">
+                         onerror="this.src='https://ui-avatars.com/api/?name=${escapeHtml(studentName?.charAt(0) || 'U')}&background=00bcd4&color=fff&size=200&bold=true&t=${Date.now()}'">
                     <p style="margin-top: 15px;">
                         <strong>${escapeHtml(studentName)}</strong><br>
                         <span style="color: var(--text-muted);">ID: ${studentId}</span>
@@ -945,6 +1030,14 @@ function cleanupRekapPerSiswa() {
     currentStudentList = [];
     currentStudentIndex = -1;
     rekapPhotoCache.clear();
+    rekapPhotoTimestampCache.clear();
+    
+    // Hapus listener Firebase
+    if (window._rekapPhotoListener && db) {
+        db.ref('users_auth').off('child_changed', window._rekapPhotoListener);
+        window._rekapPhotoListener = null;
+    }
+    
     console.log("🧹 Rekap per Siswa system cleaned up");
 }
 
@@ -960,7 +1053,8 @@ window.exportCurrentRekapPerSiswaToPDF = exportCurrentRekapPerSiswaToPDF;
 window.cleanupRekapPerSiswa = cleanupRekapPerSiswa;
 window.getRekapStudentPhotoUrl = getRekapStudentPhotoUrl;
 window.refreshRekapPhotoCache = refreshRekapPhotoCache;
+window.forceRefreshRekapPhotos = forceRefreshRekapPhotos;
 window.showRekapStudentPhoto = showRekapStudentPhoto;
 window.getRekapDateRange = getRekapDateRange;
 
-console.log("✅ rekap-per-siswa.js V2.1 loaded - Modal dengan pilihan periode lengkap (Hari, Minggu, Bulan, Semester, Tahun, Pertama Kali, Custom)");
+console.log("✅ rekap-per-siswa.js V2.2 loaded - Fixed photo cache with timestamp & global integration");
