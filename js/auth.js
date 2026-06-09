@@ -1,13 +1,12 @@
-// auth.js - VERSION 5.4 (FIXED PHOTO CACHE & GLOBAL INTEGRATION)
+// auth.js - VERSION 5.3 (REGISTRATION ONLY: SISWA & STAFF)
 // Fitur: Registrasi langsung, QR Scanner, Upload foto profil ke Supabase
 // Role yang didukung: developer, admin (Kepala Sekolah), wakil_kepala, staff_tu, guru, siswa
-// PERUBAHAN V5.4: 
-//   - Menambahkan resetAllPhotoCaches() di logout dan login
-//   - Memperbaiki refresh avatar dengan timestamp
-//   - Integrasi dengan global functions untuk foto
+// PERUBAHAN V5.3: 
 //   - Registrasi hanya 2 pilihan: SISWA dan STAFF (Guru & Karyawan)
+//   - Menghapus pilihan "Guru (Legacy)"
 //   - Staff WAJIB mengisi ID Staff saat registrasi
 //   - Validasi ID Staff harus sesuai dengan linkedId di kode
+//   - Sama seperti sistem registrasi siswa yang terkunci ID
 // ============================================================================
 
 let lastRegisterAttempt = 0;
@@ -79,43 +78,6 @@ function updateUserInterfaceByRole() {
     const sidebarUserRole = document.getElementById('sidebarUserRole');
     if (sidebarUserRole) {
         sidebarUserRole.textContent = getRoleDisplayName(currentUser.role);
-    }
-}
-
-/**
- * Refresh semua avatar di UI dengan timestamp (global version)
- */
-function refreshAllAuthAvatars() {
-    if (!currentUser) return;
-    
-    console.log("🖼️ refreshAllAuthAvatars called");
-    
-    const timestamp = Date.now();
-    let photoUrl = currentUser.photoUrl;
-    
-    if (!photoUrl || photoUrl === 'null' || photoUrl === 'undefined' || photoUrl === '') {
-        const initial = currentUser.nama ? currentUser.nama.charAt(0).toUpperCase() : 'U';
-        photoUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(initial)}&background=00bcd4&color=fff&size=100&bold=true&t=${timestamp}`;
-    } else {
-        // Tambahkan timestamp untuk bypass cache browser
-        const separator = photoUrl.includes('?') ? '&' : '?';
-        photoUrl = photoUrl.split('?')[0] + separator + 't=' + timestamp;
-    }
-    
-    // Update semua elemen avatar
-    const avatarElements = ['headerAvatar', 'navbarAvatar', 'sidebarAvatar', 'profileImg'];
-    avatarElements.forEach(id => {
-        const el = document.getElementById(id);
-        if (el && photoUrl) {
-            el.src = photoUrl;
-            console.log(`✅ Avatar updated for: ${id}`);
-        }
-    });
-    
-    // Update gambar di sidebar jika ada
-    const sidebarImg = document.querySelector('#sidebarUserInfo img, .sidebar-user-img');
-    if (sidebarImg && photoUrl) {
-        sidebarImg.src = photoUrl;
     }
 }
 
@@ -362,12 +324,6 @@ function handleLogin(e) {
                     currentUser = { uid: user.uid, email: user.email, ...userData };
                     
                     updateUserInterfaceByRole();
-                    
-                    // ============ REFRESH ALL PHOTOS AFTER LOGIN ============
-                    refreshAllAuthAvatars();
-                    if (typeof resetAllPhotoCaches === 'function') {
-                        resetAllPhotoCaches();
-                    }
                     
                     if (typeof logActivity === 'function') {
                         const roleDisplay = getRoleDisplayName(userData.role);
@@ -702,17 +658,9 @@ async function handleRegister(e) {
     }
 }
 
-// ======================= FUNGSI LOGOUT (DENGAN RESET CACHE FOTO) =======================
-
 function handleLogout() {
     if (typeof logActivity === 'function' && currentUser) {
         logActivity('logout', `Logout dari akun ${currentUser.nama || currentUser.email} (${getRoleDisplayName(currentUser.role)})`);
-    }
-    
-    // ============ RESET ALL PHOTO CACHES ON LOGOUT ============
-    if (typeof resetAllPhotoCaches === 'function') {
-        console.log("🖼️ Resetting all photo caches on logout...");
-        resetAllPhotoCaches();
     }
     
     const cleanups = [
@@ -721,11 +669,8 @@ function handleLogout() {
         'cleanupSettingsSystem', 'cleanupRekap', 'cleanupUI', 'cleanupAnnouncementSystem'
     ];
     cleanups.forEach(fn => { if (typeof window[fn] === 'function') window[fn](); });
-    
-    // Clear user session
-    if (typeof clearUserSession === 'function') clearUserSession();
-    
     auth.signOut().then(() => {
+        if (typeof clearUserSession === 'function') clearUserSession();
         location.reload();
     }).catch(() => location.reload());
 }
@@ -808,7 +753,7 @@ function togglePassword(id, icon) {
     if (icon) icon.style.color = input.type === "text" ? "var(--primary)" : "#aaa";
 }
 
-// ======================= FUNGSI UPLOAD FOTO PROFIL (DIPERBAIKI) =======================
+// ======================= FUNGSI UPLOAD FOTO PROFIL =======================
 
 async function uploadProfilePhoto(input) {
     if (!input.files || !input.files[0]) return;
@@ -858,16 +803,17 @@ async function uploadProfilePhoto(input) {
             saveUserToLocalStorage(currentUser);
         }
         
-        // ============ REFRESH ALL AVATARS WITH TIMESTAMP ============
-        refreshAllAuthAvatars();
-        
-        // ============ RESET ALL PHOTO CACHES ============
-        if (typeof resetAllPhotoCaches === 'function') {
-            resetAllPhotoCaches();
+        if (typeof refreshAllAvatars === 'function') {
+            refreshAllAvatars();
         } else {
-            // Fallback: clear individual caches
-            if (typeof clearAttendancePhotoCache === 'function') clearAttendancePhotoCache();
-            if (typeof refreshStudentPhotoCache === 'function') refreshStudentPhotoCache();
+            console.warn("refreshAllAvatars not available, using manual update");
+            const headerAvatar = document.getElementById('headerAvatar');
+            if (headerAvatar) headerAvatar.src = result.url;
+            imgEl.src = result.url;
+            const sidebarAvatar = document.getElementById('sidebarAvatar');
+            if (sidebarAvatar) sidebarAvatar.src = result.url;
+            const navbarAvatar = document.getElementById('navbarAvatar');
+            if (navbarAvatar) navbarAvatar.src = result.url;
         }
         
         const fallbackMsg = result.isFallback ? ' (via ImgBB fallback)' : '';
@@ -894,40 +840,6 @@ async function uploadProfilePhoto(input) {
     }
 }
 
-// ======================= LISTENER UNTUK PERUBAHAN FOTO (REALTIME) =======================
-
-function setupAuthPhotoListener() {
-    if (!currentUser || !currentUser.uid) return;
-    
-    if (typeof db !== 'undefined' && db) {
-        // Hapus listener lama jika ada
-        if (window._authPhotoListener) {
-            db.ref(`users_auth/${currentUser.uid}/photoUrl`).off('value', window._authPhotoListener);
-        }
-        
-        window._authPhotoListener = (snapshot) => {
-            const newPhotoUrl = snapshot.val();
-            if (newPhotoUrl && currentUser.photoUrl !== newPhotoUrl) {
-                console.log("🖼️ Photo URL changed in Firebase, refreshing...");
-                currentUser.photoUrl = newPhotoUrl;
-                
-                if (typeof saveUserToLocalStorage === 'function') {
-                    saveUserToLocalStorage(currentUser);
-                }
-                
-                refreshAllAuthAvatars();
-                
-                if (typeof resetAllPhotoCaches === 'function') {
-                    resetAllPhotoCaches();
-                }
-            }
-        };
-        
-        db.ref(`users_auth/${currentUser.uid}/photoUrl`).on('value', window._authPhotoListener);
-        console.log("📸 Auth photo realtime listener set up");
-    }
-}
-
 // ======================= EKSPOR KE GLOBAL =======================
 window.openQrScanner = openQrScanner;
 window.closeQrScanner = closeQrScanner;
@@ -944,12 +856,5 @@ window.isValidRole = isValidRole;
 window.getRoleDisplayName = getRoleDisplayName;
 window.getRoleIcon = getRoleIcon;
 window.updateUserInterfaceByRole = updateUserInterfaceByRole;
-window.refreshAllAuthAvatars = refreshAllAuthAvatars;
-window.setupAuthPhotoListener = setupAuthPhotoListener;
 
-// Auto setup photo listener jika user sudah ada
-if (typeof currentUser !== 'undefined' && currentUser) {
-    setTimeout(setupAuthPhotoListener, 1000);
-}
-
-console.log("✅ auth.js V5.4 loaded - Fixed photo cache & global integration, logout reset caches");
+console.log("✅ auth.js V5.3 loaded - REGISTRATION ONLY: SISWA & STAFF (Guru & Karyawan) dengan validasi ID wajib!");

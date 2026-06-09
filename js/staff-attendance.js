@@ -1,11 +1,5 @@
-// staff-attendance.js - VERSION 2.6 (FIXED: TAMPILKAN SEMUA DATA ABSENSI, TIDAK HANYA HARI INI)
+// staff-attendance.js - VERSION 2.5 (DENGAN NOTIFIKASI WHATSAPP UNTUK STAFF)
 // Absensi Guru/Karyawan dengan Notifikasi WhatsApp
-// PERUBAHAN V2.6: 
-//   - Memperbaiki filter tanggal: bisa pilih Semua Tanggal
-//   - Menambahkan opsi "📅 Semua Tanggal" di dropdown filter
-//   - Menambahkan opsi 7 hari terakhir
-//   - Memperbaiki render tabel untuk menampilkan semua data
-//   - Menambahkan statistik ringkasan
 // ============================================================================
 
 let staffAttendanceDonutChart = null;
@@ -13,7 +7,6 @@ let staffAttendanceListener = null;
 let staffAttendanceInitialized = false;
 let currentStaffListForAttendance = [];
 let currentStaffListForOut = [];
-let allStaffAttendanceData = []; // Cache untuk semua data absensi staff
 
 // ======================= ROLE HELPER FUNCTIONS ========================
 
@@ -65,54 +58,39 @@ function isStaffAttendanceVisible() {
     return visibleRoles.includes(window.currentUser.role);
 }
 
-// ======================= FUNGSI FOTO STAFF ========================
-
-/**
- * Mendapatkan URL foto staff dengan timestamp untuk bypass cache
- */
-function getStaffPhotoUrl(staffId, staffName) {
-    const timestamp = Date.now();
-    if (!staffId) {
-        const initial = staffName ? staffName.charAt(0).toUpperCase() : 'G';
-        return `https://ui-avatars.com/api/?name=${encodeURIComponent(initial)}&background=ff9800&color=fff&size=100&bold=true&t=${timestamp}`;
-    }
-    
-    // Cari dari users_auth untuk mendapatkan foto jika ada
-    let photoUrl = null;
-    if (window.dbData && window.dbData.users_auth) {
-        const userAuth = window.dbData.users_auth.find(u => u.uid === staffId || u.staffId === staffId);
-        if (userAuth && userAuth.photoUrl && userAuth.photoUrl !== 'null' && userAuth.photoUrl !== 'undefined') {
-            const separator = userAuth.photoUrl.includes('?') ? '&' : '?';
-            photoUrl = userAuth.photoUrl.split('?')[0] + separator + 't=' + timestamp;
-        }
-    }
-    
-    if (photoUrl) return photoUrl;
-    
-    const initial = staffName ? staffName.charAt(0).toUpperCase() : 'G';
-    return `https://ui-avatars.com/api/?name=${encodeURIComponent(initial)}&background=ff9800&color=fff&size=100&bold=true&t=${timestamp}`;
-}
-
 // ======================= NOTIFIKASI WHATSAPP UNTUK STAFF ========================
 
+/**
+ * Kirim notifikasi WhatsApp ke staff (Guru/Karyawan)
+ * @param {string} staffId - ID staff
+ * @param {string} staffName - Nama staff
+ * @param {string} type - Jenis notifikasi ('check_in', 'check_out')
+ * @param {string} time - Waktu kejadian
+ * @param {string} date - Tanggal (opsional)
+ */
 async function sendStaffWhatsAppNotification(staffId, staffName, type, time, date = null) {
+    // Cek apakah fitur WhatsApp diaktifkan
     if (typeof window.WHATSAPP_CONFIG === 'undefined' || !window.WHATSAPP_CONFIG.enabled) {
         console.log('📱 WhatsApp notification disabled for staff');
         return;
     }
     
+    // Cek notifikasi berdasarkan jenis
     if (type === 'check_in' && !window.WHATSAPP_CONFIG.sendOnCheckIn) return;
     if (type === 'check_out' && !window.WHATSAPP_CONFIG.sendOnCheckOut) return;
     
     try {
+        // Ambil nomor WhatsApp staff dari database
         let phoneNumber = null;
         
+        // Cari dari staff_contacts
         const staffContactSnapshot = await db.ref(`staff_contacts/${staffId}`).once('value');
         const staffContactData = staffContactSnapshot.val();
         
         if (staffContactData && staffContactData.phoneNumber) {
             phoneNumber = staffContactData.phoneNumber;
         } else {
+            // Cari dari data staff node
             const staffSnapshot = await db.ref(`staff/${staffId}`).once('value');
             const staffData = staffSnapshot.val();
             if (staffData && staffData.noHp) {
@@ -120,6 +98,7 @@ async function sendStaffWhatsAppNotification(staffId, staffName, type, time, dat
             }
         }
         
+        // Cari dari users_auth
         if (!phoneNumber && window.dbData && window.dbData.users_auth) {
             const userAuth = window.dbData.users_auth.find(u => u.uid === staffId || u.staffId === staffId);
             if (userAuth && userAuth.noHp) {
@@ -132,13 +111,16 @@ async function sendStaffWhatsAppNotification(staffId, staffName, type, time, dat
             return;
         }
         
+        // Format nomor
         let formattedNumber = phoneNumber.replace(/[^0-9]/g, '');
         if (formattedNumber.startsWith('0')) formattedNumber = '62' + formattedNumber.substring(1);
         if (!formattedNumber.startsWith('62')) formattedNumber = '62' + formattedNumber;
         
+        // Format tanggal
         const today = date || new Date().toISOString().split('T')[0];
         const formattedDate = formatIndonesianDate(today);
         
+        // Buat pesan sesuai jenis
         let title = '';
         let message = '';
         
@@ -153,11 +135,14 @@ async function sendStaffWhatsAppNotification(staffId, staffName, type, time, dat
                 break;
         }
         
+        // Kirim notifikasi via Fonnte jika fungsi tersedia
         if (typeof sendViaFonnte === 'function') {
             const fullMessage = `*📢 SISTEM ABSENSI SEKOLAH*\n\n*${title}*\n\n${message}\n\n---\n📱 Sistem Absensi IoT - Real-time`;
             const result = await sendViaFonnte(formattedNumber, fullMessage);
             if (result) {
                 console.log(`📱 WhatsApp sent to staff ${staffName}: ${type}`);
+                
+                // Simpan log notifikasi
                 await db.ref(`staff_notifications_log/${staffId}/${Date.now()}`).set({
                     type: type,
                     phoneNumber: formattedNumber,
@@ -173,6 +158,9 @@ async function sendStaffWhatsAppNotification(staffId, staffName, type, time, dat
     }
 }
 
+/**
+ * Format tanggal Indonesia
+ */
 function formatIndonesianDate(dateStr) {
     if (!dateStr) return '';
     const parts = dateStr.split('-');
@@ -181,12 +169,16 @@ function formatIndonesianDate(dateStr) {
     return `${parts[2]} ${bulan[parseInt(parts[1]) - 1]} ${parts[0]}`;
 }
 
+/**
+ * Simpan kontak WhatsApp staff
+ */
 async function saveStaffContact(staffId, staffName, phoneNumber, relation = 'staff') {
     if (!window.currentUser || (window.currentUser.role !== 'admin' && window.currentUser.role !== 'developer')) {
         if (window.showToast) window.showToast('⛔ Hanya Admin dan Developer yang dapat mengedit kontak staff!', 'error');
         return false;
     }
     
+    // Format nomor
     let formattedNumber = phoneNumber.replace(/[^0-9]/g, '');
     if (formattedNumber.startsWith('0')) formattedNumber = '62' + formattedNumber.substring(1);
     if (!formattedNumber.startsWith('62')) formattedNumber = '62' + formattedNumber;
@@ -202,6 +194,7 @@ async function saveStaffContact(staffId, staffName, phoneNumber, relation = 'sta
             updatedAt: firebase.database.ServerValue.TIMESTAMP
         });
         
+        // Update juga di data staff node
         await db.ref(`staff/${staffId}/noHp`).set(formattedNumber);
         
         if (window.showToast) window.showToast(`✅ Nomor WhatsApp ${staffName} berhasil disimpan!`, 'success');
@@ -218,25 +211,20 @@ async function saveStaffContact(staffId, staffName, phoneNumber, relation = 'sta
     }
 }
 
-async function getStaffContact(staffId) {
-    try {
-        const snapshot = await db.ref(`staff_contacts/${staffId}`).once('value');
-        return snapshot.val();
-    } catch (error) {
-        console.error('Get staff contact error:', error);
-        return null;
-    }
-}
-
+/**
+ * Buka modal kontak WhatsApp staff
+ */
 function openStaffContactModal(staffId, staffName) {
     const modalId = 'modal-staff-contact';
     let existingModal = document.getElementById(modalId);
     if (existingModal) existingModal.remove();
     
-    getStaffContact(staffId).then(contact => {
-        let existingNumber = '';
-        let existingRelation = 'staff';
-        
+    // Load existing data
+    let existingNumber = '';
+    let existingRelation = 'staff';
+    
+    db.ref(`staff_contacts/${staffId}`).once('value', (snapshot) => {
+        const contact = snapshot.val();
         if (contact && contact.rawNumber) {
             existingNumber = contact.rawNumber;
             existingRelation = contact.relation || 'staff';
@@ -287,6 +275,9 @@ function openStaffContactModal(staffId, staffName) {
     });
 }
 
+/**
+ * Simpan kontak staff dari modal
+ */
 async function saveStaffContactFromModal(staffId, staffName) {
     const phoneNumber = document.getElementById('staffContactPhone')?.value.trim();
     const relation = document.getElementById('staffContactRelation')?.value;
@@ -300,12 +291,18 @@ async function saveStaffContactFromModal(staffId, staffName) {
     window.closeModal('modal-staff-contact');
 }
 
+/**
+ * Test kirim WhatsApp ke staff
+ */
 async function testSendStaffWhatsApp(staffId, staffName) {
+    // Ambil nomor dari database
     let phoneNumber = null;
     
-    const contact = await getStaffContact(staffId);
-    if (contact && contact.phoneNumber) {
-        phoneNumber = contact.phoneNumber;
+    const staffContactSnapshot = await db.ref(`staff_contacts/${staffId}`).once('value');
+    const staffContactData = staffContactSnapshot.val();
+    
+    if (staffContactData && staffContactData.phoneNumber) {
+        phoneNumber = staffContactData.phoneNumber;
     }
     
     if (!phoneNumber) {
@@ -347,253 +344,9 @@ Jika Anda menerima pesan ini, berarti notifikasi WhatsApp untuk staff berhasil t
     }
 }
 
-// ======================= POPULATE FILTER TANGGAL (DIPERBAIKI) ========================
+// ======================= FUNGSI UNTUK MODAL YANG SUDAH ADA ========================
 
-function populateStaffDateFilter() {
-    const dateSelect = document.getElementById('filterStaffDate');
-    if (!dateSelect) return;
-    
-    const currentValue = dateSelect.value;
-    dateSelect.innerHTML = '<option value="all">📅 Semua Tanggal</option>';
-    dateSelect.innerHTML += '<option value="today">📆 Hari Ini</option>';
-    
-    // Tambahkan 7 hari terakhir
-    for (let i = 1; i <= 7; i++) {
-        const date = new Date();
-        date.setDate(date.getDate() - i);
-        const dateStr = date.toISOString().split('T')[0];
-        const dayName = date.toLocaleDateString('id-ID', { weekday: 'long' });
-        dateSelect.innerHTML += `<option value="${dateStr}">${dayName}, ${dateStr}</option>`;
-    }
-    
-    if (currentValue && currentValue !== 'all' && currentValue !== 'today') {
-        const exists = Array.from(dateSelect.options).some(opt => opt.value === currentValue);
-        if (exists) dateSelect.value = currentValue;
-    }
-    
-    console.log(`✅ populateStaffDateFilter selesai, total options: ${dateSelect.options.length}`);
-}
-
-// ======================= RENDER TABEL ABSENSI STAFF (DIPERBAIKI) ========================
-
-async function loadAllStaffAttendance() {
-    console.log("📊 loadAllStaffAttendance - Memuat semua data absensi staff...");
-    
-    try {
-        const snapshot = await window.firebase.database().ref('staff_attendance').once('value');
-        const data = snapshot.val();
-        
-        allStaffAttendanceData = [];
-        
-        if (data) {
-            for (const [date, records] of Object.entries(data)) {
-                if (records && typeof records === 'object') {
-                    for (const [staffId, record] of Object.entries(records)) {
-                        if (record) {
-                            allStaffAttendanceData.push({
-                                ...record,
-                                date: date,
-                                staffId: staffId
-                            });
-                        }
-                    }
-                }
-            }
-        }
-        
-        // Urutkan dari yang terbaru
-        allStaffAttendanceData.sort((a, b) => {
-            const dateCompare = (b.date || '').localeCompare(a.date || '');
-            if (dateCompare !== 0) return dateCompare;
-            return (b.timestamp || 0) - (a.timestamp || 0);
-        });
-        
-        console.log(`✅ Loaded ${allStaffAttendanceData.length} staff attendance records`);
-        return allStaffAttendanceData;
-        
-    } catch (err) {
-        console.error("Error loading staff attendance:", err);
-        return [];
-    }
-}
-
-async function renderStaffAttendanceTable() {
-    console.log("📊 renderStaffAttendanceTable dipanggil");
-    
-    if (!isStaffAttendanceVisible()) {
-        const tbody = document.getElementById('tbody-staff-attendance');
-        if (tbody) {
-            const roleDisplay = getRoleDisplayName(window.currentUser?.role);
-            tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:30px;">🔒 ${roleDisplay} tidak memiliki akses ke halaman ini.<\/td><\/tr>`;
-        }
-        return;
-    }
-    
-    let tbody = document.getElementById('tbody-staff-attendance');
-    if (!tbody) {
-        console.error("❌ tbody-staff-attendance not found");
-        // Coba buat tbody secara dinamis
-        const table = document.querySelector('#tab-staff-attendance .table-container table');
-        if (table) {
-            const newTbody = document.createElement('tbody');
-            newTbody.id = 'tbody-staff-attendance';
-            table.appendChild(newTbody);
-            tbody = newTbody;
-            console.log("✅ tbody-staff-attendance created dynamically");
-        } else {
-            return;
-        }
-    }
-    
-    // Pastikan header tabel memiliki kolom yang lengkap
-    const table = tbody.closest('table');
-    const thead = table?.querySelector('thead tr');
-    if (thead && thead.children.length < 8) {
-        thead.innerHTML = `
-            <th>Foto</th>
-            <th>Tanggal</th>
-            <th>Jam Masuk</th>
-            <th>Jam Pulang</th>
-            <th>ID</th>
-            <th>Nama</th>
-            <th>Jabatan</th>
-            <th>Aksi</th>
-        `;
-        console.log("✅ Staff attendance table header updated");
-    }
-    
-    // Tampilkan loading
-    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:30px;">
-        <div style="display:inline-block; width:30px; height:30px; border:3px solid var(--border); border-top-color:#00bcd4; border-radius:50%; animation: spin 1s linear infinite;"></div>
-        <div style="margin-top:10px;">⏳ Memuat data absensi staff...</div>
-    <\/td><\/tr>`;
-    
-    try {
-        // Load semua data
-        const allData = await loadAllStaffAttendance();
-        
-        // Filter berdasarkan tanggal yang dipilih
-        const filterDate = document.getElementById('filterStaffDate')?.value || 'all';
-        const todayStr = new Date().toISOString().split('T')[0];
-        
-        let filteredData = [...allData];
-        
-        if (filterDate === 'today') {
-            filteredData = filteredData.filter(record => record.date === todayStr);
-        } else if (filterDate !== 'all') {
-            filteredData = filteredData.filter(record => record.date === filterDate);
-        }
-        
-        console.log(`📊 Filtered data: ${filteredData.length} records (filter: ${filterDate})`);
-        
-        if (filteredData.length === 0) {
-            let emptyMessage = `📭 Belum ada data absensi staff`;
-            if (filterDate !== 'all') {
-                emptyMessage += ` pada tanggal ${filterDate === 'today' ? 'hari ini' : filterDate}`;
-            }
-            tbody.innerHTML = `<td><td colspan="8" style="text-align:center; padding:30px;">${emptyMessage}<\/td><\/tr>`;
-            updateStaffAttendanceStatistics(filteredData);
-            return;
-        }
-        
-        const canDelete = canDeleteStaffAttendance();
-        const canEditWA = window.currentUser && (window.currentUser.role === 'admin' || window.currentUser.role === 'developer');
-        
-        tbody.innerHTML = '';
-        
-        for (const row of filteredData) {
-            const photoUrl = getStaffPhotoUrl(row.staffId, row.nama);
-            const initial = row.nama ? row.nama.charAt(0).toUpperCase() : 'G';
-            const formattedDate = formatIndonesianDate(row.date);
-            
-            // Format status
-            let statusHtml = '';
-            if (row.status === 'pulang') {
-                statusHtml = `<span style="color:#f44336;">🏠 ${row.timeOut || '-'}</span>`;
-            } else {
-                statusHtml = `<span style="color:#4caf50;">✅ ${row.timeIn || '-'}</span>`;
-            }
-            
-            let actionButtons = '';
-            if (canDelete) {
-                actionButtons = `<button onclick="window.deleteStaffAttendance('${row.date}', '${row.staffId}')" class="btn-icon delete" title="Hapus Data" style="background:#f44336; border:none; border-radius:8px; padding:5px 10px; cursor:pointer; color:white;">🗑️</button>`;
-            } else {
-                actionButtons = '-';
-            }
-            
-            let waButton = '';
-            if (canEditWA) {
-                waButton = `<button onclick="openStaffContactModal('${row.staffId}', '${escapeHtml(row.nama)}')" class="btn-wa" title="Set WhatsApp" style="background:#25D366; border:none; border-radius:8px; padding:5px 10px; margin-left:5px; cursor:pointer; color:white;">📱</button>`;
-            }
-            
-            tbody.innerHTML += `
-                <tr style="border-bottom: 1px solid var(--border);">
-                    <td style="text-align:center; padding:8px;">
-                        <img src="${photoUrl}" 
-                             style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; cursor: pointer;"
-                             onerror="this.src='https://ui-avatars.com/api/?name=${initial}&background=ff9800&color=fff&size=100&bold=true&t=${Date.now()}'"
-                             onclick="showStaffPhotoModal('${row.staffId}', '${escapeHtml(row.nama)}', this.src)"
-                             title="Klik untuk lihat foto">
-                     </div>
-                    <td style="padding:8px;"><strong>${formattedDate}</strong><br><small>${row.date}</small></div>
-                    <td style="padding:8px;">${statusHtml}</div>
-                    <td style="padding:8px;">${row.timeOut ? `<span style="color:#f44336;">🏠 ${row.timeOut}</span>` : '<span style="color:#888;">-</span>'}</div>
-                    <td style="padding:8px;"><strong>${escapeHtml(row.staffId)}</strong></div>
-                    <td style="padding:8px;">${escapeHtml(row.nama)}</div>
-                    <td style="padding:8px;">${escapeHtml(row.jabatan || '-')}</div>
-                    <td style="white-space: nowrap; padding:8px;">
-                        ${actionButtons}
-                        ${waButton}
-                     </div>
-                </tr>
-            `;
-        }
-        
-        updateStaffAttendanceStatistics(filteredData);
-        
-    } catch (err) {
-        console.error("Error rendering staff attendance:", err);
-        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:30px; color:#f44336;">
-            ❌ Gagal memuat data: ${err.message}<br>
-            <button onclick="renderStaffAttendanceTable()" style="margin-top:10px; padding:8px 20px; border-radius:20px; border:none; background:#00bcd4; color:white; cursor:pointer;">🔄 Coba Lagi</button>
-        <\/td><\/tr>`;
-    }
-}
-
-function updateStaffAttendanceStatistics(data) {
-    let statsContainer = document.getElementById('staffAttendanceStats');
-    if (!statsContainer) {
-        const controlsBar = document.querySelector('#tab-staff-attendance .controls-bar');
-        if (controlsBar && !document.getElementById('staffAttendanceStats')) {
-            statsContainer = document.createElement('div');
-            statsContainer.id = 'staffAttendanceStats';
-            statsContainer.style.marginBottom = '15px';
-            statsContainer.style.padding = '10px';
-            statsContainer.style.background = 'var(--bg-hover)';
-            statsContainer.style.borderRadius = '8px';
-            controlsBar.insertAdjacentElement('afterend', statsContainer);
-        } else {
-            return;
-        }
-    }
-    
-    const total = data.length;
-    const hadir = data.filter(r => r.status === 'hadir' || !r.timeOut).length;
-    const pulang = data.filter(r => r.status === 'pulang' || r.timeOut).length;
-    const uniqueStaff = new Set(data.map(r => r.staffId)).size;
-    
-    statsContainer.innerHTML = `
-        <div style="display: flex; gap: 20px; flex-wrap: wrap;">
-            <span>👥 <strong>Total Transaksi:</strong> ${total}</span>
-            <span>✅ <strong style="color:#4caf50;">Masuk:</strong> ${hadir}</span>
-            <span>🏠 <strong style="color:#f44336;">Pulang:</strong> ${pulang}</span>
-            <span>👤 <strong>Staff Unik:</strong> ${uniqueStaff}</span>
-        </div>
-    `;
-}
-
-// ======================= FUNGSI UNTUK MODAL ABSENSI ========================
-
+// Fungsi untuk membuka modal absen masuk staff (menggunakan modal yang sudah ada di HTML)
 window.openSimulateStaffInModal = function() {
     console.log("🔓 openSimulateStaffInModal dipanggil");
     
@@ -604,12 +357,14 @@ window.openSimulateStaffInModal = function() {
         return;
     }
     
+    // Tunggu Firebase siap
     if (!window.firebase || !window.firebase.database) {
         console.log("⏳ Menunggu Firebase...");
         setTimeout(() => window.openSimulateStaffInModal(), 500);
         return;
     }
     
+    // Reset form
     const searchInput = document.getElementById('simulateStaffSearchInput');
     if (searchInput) searchInput.value = '';
     const warningSpan = document.getElementById('simulateStaffWarning');
@@ -618,6 +373,7 @@ window.openSimulateStaffInModal = function() {
     document.getElementById('selectedStaffName').value = '';
     document.getElementById('selectedStaffJabatan').value = '';
     
+    // Load data staff
     window.firebase.database().ref('staff').once('value', (snapshot) => {
         const data = snapshot.val();
         currentStaffListForAttendance = [];
@@ -656,8 +412,10 @@ window.openSimulateStaffInModal = function() {
             return;
         }
         
+        // Render daftar staff
         renderStaffListForInModal();
         
+        // Buka modal
         const modal = document.getElementById('modal-simulate-staff-in');
         if (modal) modal.classList.add('open');
     }).catch(err => {
@@ -690,6 +448,7 @@ function renderStaffListForInModal(filterText = '') {
     });
     staffListDiv.innerHTML = html;
     
+    // Tambahkan event listener ke setiap item
     document.querySelectorAll('#simulateStaffList .staff-list-item').forEach(el => {
         el.addEventListener('click', () => {
             const id = el.getAttribute('data-id');
@@ -722,6 +481,7 @@ function checkExistingStaffAttendance(staffId) {
     });
 }
 
+// Eksekusi absen masuk - DENGAN NOTIFIKASI WHATSAPP
 window.executeSimulateStaffIn = async function() {
     console.log("✅ executeSimulateStaffIn dipanggil");
     const staffId = document.getElementById('selectedStaffId')?.value;
@@ -762,13 +522,13 @@ window.executeSimulateStaffIn = async function() {
             window.logActivity('simulate_staff_attendance_in', `Absen masuk staff: ${nama} (ID: ${staffId}) - Waktu: ${timeStr} oleh ${getRoleDisplayName(window.currentUser?.role)}`);
         }
         
+        // ======================== KIRIM NOTIFIKASI WHATSAPP KE STAFF ========================
         await sendStaffWhatsAppNotification(staffId, nama, 'check_in', timeStr, dateStr);
         
         window.closeModal('modal-simulate-staff-in');
-        
-        // Refresh data cache dan tabel
-        await loadAllStaffAttendance();
-        await renderStaffAttendanceTable();
+        if (typeof window.renderStaffAttendanceTable === 'function') {
+            window.renderStaffAttendanceTable();
+        }
         
     } catch (err) {
         console.error("Error:", err);
@@ -777,6 +537,8 @@ window.executeSimulateStaffIn = async function() {
         if (btn) { btn.disabled = false; btn.innerHTML = originalText; }
     }
 };
+
+// ======================= ABSEN PULANG STAFF ========================
 
 window.openSimulateStaffOutModal = function() {
     console.log("🔓 openSimulateStaffOutModal dipanggil");
@@ -790,6 +552,7 @@ window.openSimulateStaffOutModal = function() {
     
     const todayStr = new Date().toISOString().split('T')[0];
     
+    // Reset form
     const searchInput = document.getElementById('simulateStaffOutSearchInput');
     if (searchInput) searchInput.value = '';
     document.getElementById('selectedStaffOutId').value = '';
@@ -861,6 +624,7 @@ function renderStaffListForOutModal(filterText = '') {
     });
 }
 
+// Eksekusi absen pulang - DENGAN NOTIFIKASI WHATSAPP
 window.executeSimulateStaffOut = async function() {
     console.log("✅ executeSimulateStaffOut dipanggil");
     const staffId = document.getElementById('selectedStaffOutId')?.value;
@@ -899,13 +663,13 @@ window.executeSimulateStaffOut = async function() {
             window.logActivity('simulate_staff_attendance_out', `Absen pulang staff: ${nama} (ID: ${staffId}) - Waktu: ${timeOutStr} oleh ${getRoleDisplayName(window.currentUser?.role)}`);
         }
         
+        // ======================== KIRIM NOTIFIKASI WHATSAPP KE STAFF ========================
         await sendStaffWhatsAppNotification(staffId, nama, 'check_out', timeOutStr, todayStr);
         
         window.closeModal('modal-simulate-staff-out');
-        
-        // Refresh data cache dan tabel
-        await loadAllStaffAttendance();
-        await renderStaffAttendanceTable();
+        if (typeof window.renderStaffAttendanceTable === 'function') {
+            window.renderStaffAttendanceTable();
+        }
         
     } catch (err) {
         console.error("Error:", err);
@@ -915,25 +679,127 @@ window.executeSimulateStaffOut = async function() {
     }
 };
 
+// ======================= RENDER TABEL ABSENSI STAFF ========================
+
+window.renderStaffAttendanceTable = function() {
+    console.log("📊 renderStaffAttendanceTable dipanggil");
+    
+    if (!isStaffAttendanceVisible()) {
+        const tbody = document.getElementById('tbody-staff-attendance');
+        if (tbody) {
+            const roleDisplay = getRoleDisplayName(window.currentUser?.role);
+            tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:30px;">🔒 ${roleDisplay} tidak memiliki akses ke halaman ini.<\/td><\/tr>`;
+        }
+        return;
+    }
+    
+    let tbody = document.getElementById('tbody-staff-attendance');
+    if (!tbody) {
+        console.error("❌ tbody-staff-attendance not found");
+        return;
+    }
+    
+    const filterDate = document.getElementById('filterStaffDate')?.value || 'today';
+    const todayStr = new Date().toISOString().split('T')[0];
+    let targetDate = filterDate === 'today' ? todayStr : filterDate;
+    
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:30px;"><div style="display:inline-block; width:30px; height:30px; border:3px solid var(--border); border-top-color:#00bcd4; border-radius:50%; animation: spin 1s linear infinite;"></div><div>⏳ Memuat data...</div><\/td><\/tr>`;
+    
+    window.firebase.database().ref(`staff_attendance/${targetDate}`).once('value', (snapshot) => {
+        const data = snapshot.val();
+        const attendanceList = [];
+        
+        if (data) {
+            Object.keys(data).forEach(key => {
+                attendanceList.push({ id: key, ...data[key] });
+            });
+        }
+        
+        attendanceList.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+        
+        if (attendanceList.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:30px;">📭 Belum ada data absensi staff pada tanggal ${targetDate}<\/td><\/tr>`;
+            return;
+        }
+        
+        const canDelete = canDeleteStaffAttendance();
+        const isStaffTU = window.currentUser?.role === 'staff_tu';
+        
+        tbody.innerHTML = '';
+        
+        for (const row of attendanceList) {
+            const photoUrl = getStaffPhotoUrl(row.staffId, row.nama);
+            const initial = row.nama ? row.nama.charAt(0).toUpperCase() : 'G';
+            
+            // Format status - HANYA TAMPILKAN JAM, TANPA STATUS TERLAMBAT
+            let statusHtml = '';
+            if (row.status === 'pulang') {
+                statusHtml = `<span style="color:#f44336;">🏠 Pulang (${row.timeOut || '-'})</span>`;
+            } else {
+                // Untuk staff, hanya tampilkan jam masuk tanpa label terlambat
+                statusHtml = `<span style="color:#4caf50;">✅ ${row.timeIn || '-'}</span>`;
+            }
+            
+            let actionButtons = '';
+            if (canDelete) {
+                actionButtons = `<button onclick="window.deleteStaffAttendance('${targetDate}', '${row.staffId}')" style="background:#f44336; border:none; border-radius:8px; padding:5px 10px; cursor:pointer; color:white;">🗑️</button>`;
+            } else if (isStaffTU) {
+                actionButtons = '<span style="color:#888;">🔒 Read only</span>';
+            } else {
+                actionButtons = '-';
+            }
+            
+            // Tombol WhatsApp untuk Admin/Developer
+            let waButton = '';
+            if (window.currentUser && (window.currentUser.role === 'admin' || window.currentUser.role === 'developer')) {
+                waButton = `<button onclick="openStaffContactModal('${row.staffId}', '${escapeHtml(row.nama)}')" style="background:#25D366; border:none; border-radius:8px; padding:5px 10px; margin-left:5px; cursor:pointer; color:white;" title="Set WhatsApp">📱</button>`;
+            }
+            
+            tbody.innerHTML += `
+                <tr>
+                    <td><img src="${photoUrl}" style="width:40px;height:40px;border-radius:50%;object-fit:cover;" onerror="this.src='https://ui-avatars.com/api/?name=${initial}&background=ff9800&color=fff'"></td>
+                    <td>${escapeHtml(row.timeIn || '-')}<br><small>${row.date || targetDate}</small></td>
+                    <td><strong>${escapeHtml(row.staffId)}</strong></td>
+                    <td>${escapeHtml(row.nama)}</div>
+                    <td>${escapeHtml(row.jabatan || '-')}</div>
+                    <td>${statusHtml}</div>
+                    <td>${actionButtons}${waButton}</div>
+                </tr>
+            `;
+        }
+    }).catch(err => {
+        console.error("Error:", err);
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:30px; color:#f44336;">❌ Gagal memuat data: ${err.message}<\/td><\/tr>`;
+    });
+};
+
+function getStaffPhotoUrl(staffId, staffName) {
+    if (!staffId) {
+        return `https://ui-avatars.com/api/?name=${encodeURIComponent(staffName?.charAt(0) || 'G')}&background=ff9800&color=fff`;
+    }
+    return `https://ui-avatars.com/api/?name=${encodeURIComponent(staffName?.charAt(0) || 'G')}&background=ff9800&color=fff`;
+}
+
+// ======================= HAPUS ABSENSI ========================
+
 window.deleteStaffAttendance = async function(date, staffId) {
     if (!canDeleteStaffAttendance()) {
         if (window.showToast) window.showToast("⛔ Hanya Kepala Sekolah dan Developer yang dapat menghapus absensi staff!", "error");
         return;
     }
     
-    if (!confirm(`⚠️ Hapus data absensi staff ini?\n\nTanggal: ${date}\nID: ${staffId}`)) return;
+    if (!confirm("⚠️ Hapus data absensi staff ini?")) return;
     
     try {
         await window.firebase.database().ref(`staff_attendance/${date}/${staffId}`).remove();
         if (window.showToast) window.showToast("✅ Data absensi berhasil dihapus!", "success");
-        
-        // Refresh data cache dan tabel
-        await loadAllStaffAttendance();
-        await renderStaffAttendanceTable();
+        window.renderStaffAttendanceTable();
     } catch (err) {
         if (window.showToast) window.showToast("❌ Gagal: " + err.message, "error");
     }
 };
+
+// ======================= EXPORT EXCEL ========================
 
 window.exportStaffAttendanceToExcel = async function() {
     if (!canViewStaffAttendance()) {
@@ -941,75 +807,35 @@ window.exportStaffAttendanceToExcel = async function() {
         return;
     }
     
-    const filterDate = document.getElementById('filterStaffDate')?.value || 'all';
-    const todayStr = new Date().toISOString().split('T')[0];
+    const filterDate = document.getElementById('filterStaffDate')?.value || 'today';
+    const targetDate = filterDate === 'today' ? new Date().toISOString().split('T')[0] : filterDate;
     
-    let dataToExport = [...allStaffAttendanceData];
+    const snapshot = await window.firebase.database().ref(`staff_attendance/${targetDate}`).once('value');
+    const data = snapshot.val();
+    const attendanceList = data ? Object.values(data) : [];
     
-    if (filterDate === 'today') {
-        dataToExport = dataToExport.filter(record => record.date === todayStr);
-    } else if (filterDate !== 'all') {
-        dataToExport = dataToExport.filter(record => record.date === filterDate);
-    }
-    
-    if (dataToExport.length === 0) {
+    if (attendanceList.length === 0) {
         if (window.showToast) window.showToast("❌ Tidak ada data untuk diekspor!", "error");
         return;
     }
     
-    let csv = "\uFEFFTanggal,ID,Nama,Jabatan,Waktu Masuk,Waktu Pulang,Status\n";
-    dataToExport.forEach(a => {
-        csv += `"${a.date}","${a.staffId}","${a.nama}","${a.jabatan || '-'}","${a.timeIn || '-'}","${a.timeOut || '-'}","${a.status === 'pulang' ? 'Pulang' : 'Hadir'}"\n`;
+    let csv = "\uFEFFID,Nama,Jabatan,Waktu Masuk,Waktu Pulang,Status,Tanggal\n";
+    attendanceList.forEach(a => {
+        csv += `"${a.staffId}","${a.nama}","${a.jabatan || '-'}","${a.timeIn || '-'}","${a.timeOut || '-'}","${a.status === 'pulang' ? 'Pulang' : 'Hadir'}","${targetDate}"\n`;
     });
     
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `absensi_staff_${filterDate === 'all' ? 'semua' : (filterDate === 'today' ? todayStr : filterDate)}.csv`;
+    link.download = `absensi_staff_${targetDate}.csv`;
     link.click();
     URL.revokeObjectURL(link.href);
     if (window.showToast) window.showToast("📥 Laporan berhasil diunduh!", "success");
 };
 
-function showStaffPhotoModal(staffId, staffName, photoUrl) {
-    const modalId = 'modal-staff-photo';
-    const existingModal = document.getElementById(modalId);
-    if (existingModal) existingModal.remove();
-    
-    const freshPhotoUrl = getStaffPhotoUrl(staffId, staffName);
-    
-    const modalHtml = `
-        <div id="${modalId}" class="modal-overlay open" style="display:flex; align-items:center; justify-content:center; z-index:10000;">
-            <div class="modal-box" style="max-width: 500px; text-align: center; background:var(--bg-card); border-radius:20px;">
-                <div class="modal-title" style="display:flex; justify-content:space-between; align-items:center; padding:15px 20px; border-bottom:1px solid var(--border);">
-                    <span>📸 Foto ${escapeHtml(staffName)}</span>
-                    <span onclick="window.closeModal('${modalId}')" style="cursor:pointer; font-size:24px;">✖</span>
-                </div>
-                <div style="padding: 20px;">
-                    <img src="${freshPhotoUrl}" style="max-width: 100%; max-height: 60vh; border-radius: 20px; object-fit: contain;"
-                         onerror="this.src='https://ui-avatars.com/api/?name=${escapeHtml(staffName?.charAt(0) || 'G')}&background=ff9800&color=fff&size=200&bold=true&t=${Date.now()}'">
-                    <p style="margin-top: 15px;">
-                        <strong>${escapeHtml(staffName)}</strong><br>
-                        <span style="color: var(--text-muted);">ID: ${staffId}</span>
-                    </p>
-                </div>
-                <div class="modal-actions" style="padding:15px 20px; border-top:1px solid var(--border);">
-                    <button class="btn-cancel" onclick="window.closeModal('${modalId}')" style="padding:8px 20px; border-radius:20px; border:none; cursor:pointer;">Tutup</button>
-                </div>
-            </div>
-        </div>
-    `;
-    document.body.insertAdjacentHTML('beforeend', modalHtml);
-}
-
-function escapeHtml(str) {
-    if (!str) return '';
-    return String(str).replace(/[&<>]/g, m => m === '&' ? '&amp;' : m === '<' ? '&lt;' : '&gt;');
-}
-
 // ======================= INITIALIZATION ========================
 
-async function initStaffAttendance() {
+function initStaffAttendance() {
     if (staffAttendanceInitialized) return;
     
     console.log("📊 Initializing Staff Attendance system...");
@@ -1024,19 +850,11 @@ async function initStaffAttendance() {
         return;
     }
     
+    // Tunggu Firebase siap
     if (!window.firebase || !window.firebase.database) {
         console.log("⏳ Menunggu Firebase...");
         setTimeout(initStaffAttendance, 500);
         return;
-    }
-    
-    // Setup filter tanggal
-    populateStaffDateFilter();
-    
-    const filterDateSelect = document.getElementById('filterStaffDate');
-    if (filterDateSelect && !filterDateSelect._listenerAdded) {
-        filterDateSelect.addEventListener('change', () => renderStaffAttendanceTable());
-        filterDateSelect._listenerAdded = true;
     }
     
     // Setup search input listeners
@@ -1052,66 +870,35 @@ async function initStaffAttendance() {
         searchInputOut._listenerAdded = true;
     }
     
-    // Setup realtime listener untuk perubahan data
+    // Setup listener untuk perubahan data
     if (!staffAttendanceListener) {
-        staffAttendanceListener = window.firebase.database().ref('staff_attendance').on('value', async () => {
-            await loadAllStaffAttendance();
+        staffAttendanceListener = true;
+        window.firebase.database().ref('staff_attendance').on('value', () => {
             if (document.getElementById('tab-staff-attendance')?.classList.contains('active')) {
-                await renderStaffAttendanceTable();
+                window.renderStaffAttendanceTable();
             }
         });
     }
     
-    // Load data awal
-    await loadAllStaffAttendance();
-    await renderStaffAttendanceTable();
-    
     staffAttendanceInitialized = true;
-    console.log("✅ Staff Attendance system initialized");
+    window.renderStaffAttendanceTable();
 }
 
-// Tambahkan CSS untuk spinner
+function escapeHtml(str) {
+    if (!str) return '';
+    return String(str).replace(/[&<>]/g, m => m === '&' ? '&amp;' : m === '<' ? '&lt;' : '&gt;');
+}
+
+// CSS spinner
 if (!document.querySelector('#staff-attendance-spinner-style')) {
     const style = document.createElement('style');
     style.id = 'staff-attendance-spinner-style';
-    style.textContent = `
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        .btn-icon.delete {
-            background: #f44336;
-            border: none;
-            border-radius: 8px;
-            padding: 5px 10px;
-            cursor: pointer;
-            color: white;
-            transition: all 0.2s;
-        }
-        .btn-icon.delete:hover {
-            background: #d32f2f;
-            transform: scale(1.02);
-        }
-        .btn-wa {
-            background: #25D366;
-            border: none;
-            border-radius: 8px;
-            padding: 5px 10px;
-            cursor: pointer;
-            color: white;
-            transition: all 0.2s;
-        }
-        .btn-wa:hover {
-            background: #128C7E;
-            transform: scale(1.02);
-        }
-    `;
+    style.textContent = `@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`;
     document.head.appendChild(style);
 }
 
 // Ekspor ke global
 window.initStaffAttendance = initStaffAttendance;
-window.renderStaffAttendanceTable = renderStaffAttendanceTable;
 window.isStaffAttendanceVisible = isStaffAttendanceVisible;
 window.canManageStaffAttendance = canManageStaffAttendance;
 window.getRoleDisplayName = getRoleDisplayName;
@@ -1120,11 +907,8 @@ window.saveStaffContact = saveStaffContact;
 window.openStaffContactModal = openStaffContactModal;
 window.saveStaffContactFromModal = saveStaffContactFromModal;
 window.testSendStaffWhatsApp = testSendStaffWhatsApp;
-window.showStaffPhotoModal = showStaffPhotoModal;
-window.populateStaffDateFilter = populateStaffDateFilter;
-window.loadAllStaffAttendance = loadAllStaffAttendance;
 
-console.log("✅ staff-attendance.js V2.6 loaded - Fixed: dapat menampilkan semua data absensi staff (tidak hanya hari ini)");
+console.log("✅ staff-attendance.js V2.5 loaded - Dengan notifikasi WhatsApp untuk staff + tombol set WA di tabel absensi");
 
 // Auto-initialize
 setTimeout(initStaffAttendance, 500);

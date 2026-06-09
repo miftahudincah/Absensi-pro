@@ -1,22 +1,18 @@
-// logs.js - VERSION 3.0 (DENGAN PEMBATASAN TAMPILAN LOG BERDASARKAN ROLE)
-// Manajemen Log Aktivitas dengan filter berdasarkan role dan batas waktu
+// logs.js - VERSION 2.0 (DENGAN ROLE BARU: WAKIL KEPALA SEKOLAH & STAFF TU)
+// Manajemen Log Aktivitas dengan filter berdasarkan role
 // Role yang didukung:
-// - Developer: lihat semua log (365 hari / 1 tahun)
-// - Admin (Kepala Sekolah): lihat log 7 hari terakhir
-// - Wakil Kepala Sekolah: lihat log 7 hari terakhir
-// - Staff TU: lihat log 7 hari terakhir (tidak termasuk aksi sensitif)
-// - Guru: lihat log 7 hari terakhir
-// - Siswa: hanya log milik sendiri (7 hari terakhir)
+// - Developer: lihat semua log
+// - Admin (Kepala Sekolah): lihat semua log
+// - Wakil Kepala Sekolah: lihat semua log (read-only)
+// - Staff TU: lihat log terbatas (hanya log yang relevan dengan tugasnya)
+// - Guru: lihat semua log
+// - Siswa: hanya log milik sendiri
 // ============================================================================
 
 let logsListener = null;
 let currentLogsData = [];
 let logsPerPage = 20;
 let currentLogsPage = 1;
-
-// Konfigurasi batas tampilan log (dalam hari)
-const LOG_VISIBLE_DAYS_DEVELOPER = 365;      // Developer: 1 tahun
-const LOG_VISIBLE_DAYS_NON_DEVELOPER = 7;    // Non-developer: 7 hari
 
 // ======================= ROLE HELPER FUNCTIONS ========================
 
@@ -51,42 +47,10 @@ function getRoleIcon(role) {
 }
 
 /**
- * Cek apakah user adalah developer
- */
-function isDeveloper() {
-    return currentUser && currentUser.role === 'developer';
-}
-
-/**
- * Mendapatkan batas tanggal tampilan log (cutoff date) berdasarkan role
- * @returns {number} Timestamp cutoff
- */
-function getLogDisplayCutoffDate() {
-    const now = Date.now();
-    if (isDeveloper()) {
-        return now - (LOG_VISIBLE_DAYS_DEVELOPER * 24 * 60 * 60 * 1000);
-    } else {
-        return now - (LOG_VISIBLE_DAYS_NON_DEVELOPER * 24 * 60 * 60 * 1000);
-    }
-}
-
-/**
- * Mendapatkan teks batas waktu untuk ditampilkan di UI
- * @returns {string}
- */
-function getLogRetentionText() {
-    if (isDeveloper()) {
-        return `Menampilkan log 1 tahun terakhir (${LOG_VISIBLE_DAYS_DEVELOPER} hari)`;
-    } else {
-        return `Menampilkan log 7 hari terakhir (${LOG_VISIBLE_DAYS_NON_DEVELOPER} hari)`;
-    }
-}
-
-/**
  * Cek apakah user dapat melihat log
  * - Siswa: hanya log sendiri
  * - Staff TU: log terbatas (tidak termasuk aksi sensitif)
- * - Guru/Wakil/Admin/Developer: semua log (tapi dibatasi waktu)
+ * - Guru/Wakil/Admin/Developer: semua log
  */
 function canViewAllLogs(role) {
     const allAccessRoles = ['admin', 'developer', 'wakil_kepala', 'guru'];
@@ -114,23 +78,6 @@ function filterSensitiveActionsForStaffTU(logs) {
 }
 
 /**
- * Filter log berdasarkan batas waktu (cutoff date)
- * @param {Array} logs - Array log
- * @returns {Array} Log yang masih dalam batas waktu
- */
-function filterLogsByDateLimit(logs) {
-    const cutoffDate = getLogDisplayCutoffDate();
-    const filtered = logs.filter(log => {
-        const timestamp = log.timestamp;
-        if (!timestamp) return false;
-        return timestamp >= cutoffDate;
-    });
-    
-    console.log(`📊 Filter logs by date: ${logs.length} → ${filtered.length} (cutoff: ${new Date(cutoffDate).toLocaleDateString()})`);
-    return filtered;
-}
-
-/**
  * Mendapatkan daftar aksi yang diizinkan untuk filter dropdown berdasarkan role
  */
 function getAllowedActionsForFilter(role) {
@@ -145,14 +92,11 @@ function getAllowedActionsForFilter(role) {
         'delete_chat_message', 'clear_chat',
         'upload_profile_photo', 'save_school_name', 'upload_school_logo', 'remove_school_logo',
         'update_global_delay', 'save_classes', 'save_majors', 'update_school_type',
-        'export_attendance_excel', 'export_rekap_excel', 'export_rekap_pdf', 'forgot_password',
-        'add_staff', 'edit_staff', 'delete_staff', 'create_staff_account',
-        'simulate_staff_attendance_in', 'simulate_staff_attendance_out', 'delete_staff_attendance',
-        'create_izin', 'update_izin', 'delete_izin', 'approve_izin', 'reject_izin',
-        'generate_code', 'delete_code'
+        'export_attendance_excel', 'export_rekap_excel', 'export_rekap_pdf', 'forgot_password'
     ];
     
     if (role === 'staff_tu') {
+        // Staff TU tidak bisa melihat aksi sensitif
         const sensitiveActions = ['delete_user', 'reset_system', 'update_user_role', 'delete_announcement'];
         return allActions.filter(a => !sensitiveActions.includes(a));
     }
@@ -166,16 +110,9 @@ function initLogsSystem() {
     console.log("📋 Initializing logs system...");
     if (!currentUser) return;
     
-    // Set default date range (7 hari terakhir untuk semua, tapi developer bisa lihat lebih)
     const endDate = new Date();
-    let startDate = new Date();
-    
-    if (isDeveloper()) {
-        startDate.setDate(startDate.getDate() - LOG_VISIBLE_DAYS_DEVELOPER);
-    } else {
-        startDate.setDate(startDate.getDate() - LOG_VISIBLE_DAYS_NON_DEVELOPER);
-    }
-    
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - 7);
     const startInput = document.getElementById('logStartDate');
     const endInput = document.getElementById('logEndDate');
     if (startInput && !startInput.value) startInput.value = startDate.toISOString().split('T')[0];
@@ -183,9 +120,6 @@ function initLogsSystem() {
     
     // Populate action filter dropdown berdasarkan role
     populateActionFilter();
-    
-    // Tampilkan info retention di UI
-    updateLogRetentionInfo();
     
     if (logsListener) {
         db.ref('logs').off('value', logsListener);
@@ -202,35 +136,6 @@ function initLogsSystem() {
         currentLogsData.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
         renderLogsTable();
     });
-}
-
-/**
- * Update informasi retention di UI
- */
-function updateLogRetentionInfo() {
-    const retentionInfo = document.getElementById('logRetentionInfo');
-    if (!retentionInfo) {
-        // Buat elemen info retention jika belum ada
-        const controlsBar = document.querySelector('#tab-logs .controls-bar');
-        if (controlsBar && !document.getElementById('logRetentionInfo')) {
-            const infoDiv = document.createElement('div');
-            infoDiv.id = 'logRetentionInfo';
-            infoDiv.style.cssText = 'margin-bottom: 10px; padding: 8px 12px; background: var(--bg-hover); border-radius: 8px; font-size: 12px;';
-            controlsBar.insertAdjacentElement('afterend', infoDiv);
-        }
-    }
-    
-    const infoEl = document.getElementById('logRetentionInfo');
-    if (infoEl) {
-        const retentionText = getLogRetentionText();
-        const roleText = isDeveloper() ? '👨‍💻 Mode Developer' : '🔒 Mode Terbatas';
-        infoEl.innerHTML = `
-            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
-                <span>📅 ${retentionText}</span>
-                <span class="role-badge ${isDeveloper() ? 'role-developer' : 'role-siswa'}">${roleText}</span>
-            </div>
-        `;
-    }
 }
 
 /**
@@ -256,10 +161,7 @@ function populateActionFilter() {
         '👥 Pertemanan': ['send_friend_request', 'accept_friend_request', 'reject_friend_request', 'remove_friend'],
         '💬 Chat': ['delete_chat_message', 'clear_chat'],
         '⚙️ Pengaturan': ['upload_profile_photo', 'save_school_name', 'upload_school_logo', 'remove_school_logo', 'update_global_delay', 'save_classes', 'save_majors', 'update_school_type'],
-        '📊 Ekspor': ['export_rekap_excel', 'export_rekap_pdf'],
-        '👥 Staff': ['add_staff', 'edit_staff', 'delete_staff', 'create_staff_account', 'simulate_staff_attendance_in', 'simulate_staff_attendance_out', 'delete_staff_attendance'],
-        '📝 Izin Online': ['create_izin', 'update_izin', 'delete_izin', 'approve_izin', 'reject_izin'],
-        '🔑 Kode Registrasi': ['generate_code', 'delete_code']
+        '📊 Ekspor': ['export_rekap_excel', 'export_rekap_pdf']
     };
     
     for (const [category, actions] of Object.entries(actionCategories)) {
@@ -285,16 +187,16 @@ async function renderLogsTable() {
     if (!tbody) return;
     
     if (!currentUser) {
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">🔒 Silakan login terlebih dahulu</div><\/tr>';
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">🔒 Silakan login terlebih dahulu</td></tr>';
         return;
     }
     
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">⏳ Memuat data...</div><\/tr>';
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">⏳ Memuat data...</td></tr>';
     
     try {
         let filteredLogs = [...currentLogsData];
         
-        // ========== FILTER 1: BERDASARKAN ROLE USER ==========
+        // FILTER BERDASARKAN ROLE
         if (currentUser.role === 'siswa') {
             // Siswa hanya melihat log milik sendiri
             filteredLogs = filteredLogs.filter(log => log.userId === currentUser.uid);
@@ -302,20 +204,15 @@ async function renderLogsTable() {
             // Staff TU: lihat semua log kecuali aksi sensitif
             filteredLogs = filterSensitiveActionsForStaffTU(filteredLogs);
         }
-        // Admin, Wakil Kepala Sekolah, Guru, Developer: lihat semua (belum difilter waktu)
+        // Admin, Wakil Kepala Sekolah, Guru, Developer: lihat semua (tidak perlu filter tambahan)
         
-        // ========== FILTER 2: BERDASARKAN BATAS WAKTU (CUTOFF DATE) ==========
-        // Non-developer hanya lihat 7 hari terakhir, developer lihat 1 tahun
-        filteredLogs = filterLogsByDateLimit(filteredLogs);
-        
-        // ========== FILTER 3: BERDASARKAN PILIHAN USER ==========
         // Filter berdasarkan aksi (jika ada)
         const actionFilter = document.getElementById('logActionFilter')?.value;
         if (actionFilter && actionFilter !== 'all') {
             filteredLogs = filteredLogs.filter(log => log.action === actionFilter);
         }
         
-        // Filter tanggal (override dari pilihan user)
+        // Filter tanggal
         const startDateStr = document.getElementById('logStartDate')?.value;
         const endDateStr = document.getElementById('logEndDate')?.value;
         if (startDateStr && endDateStr) {
@@ -337,13 +234,8 @@ async function renderLogsTable() {
         const paginatedLogs = filteredLogs.slice(startIdx, startIdx + logsPerPage);
         
         if (paginatedLogs.length === 0) {
-            let emptyMessage = '📭 Tidak ada log aktivitas.';
-            if (!isDeveloper()) {
-                emptyMessage = `📭 Tidak ada log aktivitas dalam ${LOG_VISIBLE_DAYS_NON_DEVELOPER} hari terakhir.`;
-            }
-            tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;">${emptyMessage}<br><small class="text-small">💡 Log lebih dari ${LOG_VISIBLE_DAYS_NON_DEVELOPER} hari hanya dapat dilihat oleh Developer.</small><\/td><\/tr>`;
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">📭 Tidak ada log aktivitas.</td></tr>';
             renderPagination(totalPages);
-            updateLogsCount(filteredLogs.length);
             return;
         }
         
@@ -369,12 +261,12 @@ async function renderLogsTable() {
             
             html += `
                 <tr class="${rowClass}" style="border-bottom: 1px solid var(--border);">
-                    <td style="white-space: nowrap; padding: 12px 8px;">${time}</div>
-                    <td style="padding: 12px 8px;"><strong>${escapeHtmlLog(log.userName || log.userId)}</strong></div>
-                    <td style="padding: 12px 8px;"><span class="role-badge ${roleClass}">${roleIcon} ${roleDisplay}</span></div>
-                    <td style="padding: 12px 8px;">${actionIcon} ${formatActionName(log.action)}</div>
-                    <td style="padding: 12px 8px; max-width: 400px; word-break: break-word;">${escapeHtmlLog(log.details || '-')}</div>
-                    <td style="padding: 12px 8px;"><small>${log.ipAddress || '-'}</small></div>
+                    <td style="white-space: nowrap; padding: 12px 8px;">${time}</td>
+                    <td style="padding: 12px 8px;"><strong>${escapeHtmlLog(log.userName || log.userId)}</strong></td>
+                    <td style="padding: 12px 8px;"><span class="role-badge ${roleClass}">${roleIcon} ${roleDisplay}</span></td>
+                    <td style="padding: 12px 8px;">${actionIcon} ${formatActionName(log.action)}</td>
+                    <td style="padding: 12px 8px; max-width: 400px; word-break: break-word;">${escapeHtmlLog(log.details || '-')}</td>
+                    <td style="padding: 12px 8px;"><small>${log.ipAddress || '-'}</small></td>
                 </tr>
             `;
         }
@@ -386,7 +278,7 @@ async function renderLogsTable() {
         
     } catch (err) {
         console.error("Render logs error:", err);
-        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;">❌ Gagal memuat log: ${err.message}</div><\/tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;">❌ Gagal memuat log: ${err.message}</td></tr>`;
     }
 }
 
@@ -396,8 +288,7 @@ async function renderLogsTable() {
 function updateLogsCount(count) {
     const logsHeader = document.querySelector('#tab-logs .controls-bar h4');
     if (logsHeader) {
-        const retentionInfo = isDeveloper() ? '(1 tahun)' : '(7 hari)';
-        logsHeader.innerHTML = `📋 Log Aktivitas ${retentionInfo} <span style="font-size: 12px; color: #888;">(${count} record)</span>`;
+        logsHeader.innerHTML = `📋 Log Aktivitas <span style="font-size: 12px; color: #888;">(${count} record)</span>`;
     }
 }
 
@@ -450,36 +341,6 @@ function renderPagination(totalPages) {
 function changeLogsPage(page) {
     currentLogsPage = page;
     renderLogsTable();
-}
-
-/**
- * Reset filter log ke default
- */
-function resetLogFilters() {
-    const actionFilter = document.getElementById('logActionFilter');
-    const startDate = document.getElementById('logStartDate');
-    const endDate = document.getElementById('logEndDate');
-    
-    if (actionFilter) actionFilter.value = 'all';
-    
-    // Reset ke default date range
-    const end = new Date();
-    let start = new Date();
-    if (isDeveloper()) {
-        start.setDate(start.getDate() - LOG_VISIBLE_DAYS_DEVELOPER);
-    } else {
-        start.setDate(start.getDate() - LOG_VISIBLE_DAYS_NON_DEVELOPER);
-    }
-    
-    if (startDate) startDate.value = start.toISOString().split('T')[0];
-    if (endDate) endDate.value = end.toISOString().split('T')[0];
-    
-    currentLogsPage = 1;
-    renderLogsTable();
-    
-    if (typeof showToast === 'function') {
-        showToast('🔄 Filter log telah direset', 'success');
-    }
 }
 
 // ======================= ACTION ICONS & NAMES ========================
@@ -677,16 +538,11 @@ window.renderLogsTable = renderLogsTable;
 window.changeLogsPage = changeLogsPage;
 window.cleanupLogsSystem = cleanupLogsSystem;
 window.populateActionFilter = populateActionFilter;
-window.resetLogFilters = resetLogFilters;
 window.getAllowedActionsForFilter = getAllowedActionsForFilter;
 window.filterSensitiveActionsForStaffTU = filterSensitiveActionsForStaffTU;
 window.getRoleDisplayName = getRoleDisplayName;
 window.getRoleIcon = getRoleIcon;
 window.canViewAllLogs = canViewAllLogs;
 window.canViewSensitiveLogs = canViewSensitiveLogs;
-window.isDeveloper = isDeveloper;
-window.getLogDisplayCutoffDate = getLogDisplayCutoffDate;
-window.getLogRetentionText = getLogRetentionText;
-window.updateLogRetentionInfo = updateLogRetentionInfo;
 
-console.log("✅ logs.js V3.0 loaded - Log dibatasi waktu: Non-developer hanya lihat 7 hari terakhir, Developer lihat 1 tahun");
+console.log("✅ logs.js V2.0 loaded - Log aktivitas dengan role: Developer, Kepala Sekolah, Wakil Kepala Sekolah, Staff TU (terbatas), Guru, Siswa");

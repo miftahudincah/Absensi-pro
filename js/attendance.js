@@ -1,12 +1,9 @@
-// attendance.js - VERSION 5.1 (FIXED PHOTO CACHE WITH TIMESTAMP & GLOBAL INTEGRATION)
+// attendance.js - VERSION 5.0 (DENGAN INTEGRASI WHATSAPP NOTIFIKASI)
 // Mengelola data absensi, filter, validasi delay pulang,
 // serta manual status (sakit, izin, alpha) untuk siswa yang tidak hadir.
-// PERUBAHAN V5.1: 
-//   - Memperbaiki bug foto dengan timestamp untuk bypass cache browser
-//   - Integrasi dengan resetAllPhotoCaches() dari global-functions.js
-//   - Menambahkan force refresh foto setelah update
-//   - Memperbaiki cache management yang lebih baik
-//   - Notifikasi WhatsApp tetap terjaga
+// PERUBAHAN V5.0: 
+//   - Menambahkan notifikasi WhatsApp saat absen masuk/pulang/terlambat
+//   - Menambahkan fungsi kirim notifikasi ke orang tua
 // ============================================================================
 
 // ======================== GLOBAL VARIABLES ========================
@@ -15,14 +12,13 @@ let attendanceDataReadyListenerAdded = false;
 let attendanceRetryCount = 0;
 const MAX_ATTENDANCE_RETRY = 15;
 
-// Cache untuk foto siswa di attendance (dengan timestamp management)
+// Cache untuk foto siswa di attendance
 const attendancePhotoCache = new Map();
-const attendancePhotoTimestampCache = new Map(); // Cache untuk timestamp terakhir update
 
-// ======================== FUNGSI FOTO SISWA (DIPERBAIKI) ========================
+// ======================== FUNGSI FOTO SISWA ========================
 
 /**
- * Mendapatkan URL foto siswa untuk tabel absensi dengan timestamp untuk bypass cache
+ * Mendapatkan URL foto siswa untuk tabel absensi
  * @param {string|number} studentId - ID siswa
  * @param {string} studentName - Nama siswa (fallback)
  * @returns {string} URL foto atau avatar inisial
@@ -30,16 +26,11 @@ const attendancePhotoTimestampCache = new Map(); // Cache untuk timestamp terakh
 function getAttendanceStudentPhotoUrl(studentId, studentName) {
     if (!studentId) {
         const initial = studentName ? studentName.charAt(0).toUpperCase() : 'U';
-        const timestamp = Date.now();
-        return `https://ui-avatars.com/api/?name=${encodeURIComponent(initial)}&background=00bcd4&color=fff&size=100&bold=true&t=${timestamp}`;
+        return `https://ui-avatars.com/api/?name=${encodeURIComponent(initial)}&background=00bcd4&color=fff&size=100&bold=true`;
     }
     
-    // Cek cache dengan timestamp management
-    const lastUpdate = attendancePhotoTimestampCache.get(studentId);
-    const now = Date.now();
-    
-    // Jika cache masih fresh (kurang dari 5 detik) dan ada, gunakan cache
-    if (attendancePhotoCache.has(studentId) && lastUpdate && (now - lastUpdate) < 5000) {
+    // Cek cache
+    if (attendancePhotoCache.has(studentId)) {
         return attendancePhotoCache.get(studentId);
     }
     
@@ -47,109 +38,49 @@ function getAttendanceStudentPhotoUrl(studentId, studentName) {
     const userAuth = dbData?.users_auth?.find(u => u.fpId == studentId);
     
     let photoUrl;
-    const timestamp = now;
-    
     if (userAuth && userAuth.photoUrl && userAuth.photoUrl !== 'null' && userAuth.photoUrl !== 'undefined') {
-        // Tambahkan timestamp ke URL untuk bypass cache browser
-        const separator = userAuth.photoUrl.includes('?') ? '&' : '?';
-        photoUrl = userAuth.photoUrl.split('?')[0] + separator + 't=' + timestamp;
+        photoUrl = userAuth.photoUrl;
     } else {
-        // Fallback: avatar inisial nama dengan timestamp
+        // Fallback: avatar inisial nama
         const initial = studentName ? studentName.charAt(0).toUpperCase() : 'U';
-        photoUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(initial)}&background=00bcd4&color=fff&size=100&bold=true&t=${timestamp}`;
+        photoUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(initial)}&background=00bcd4&color=fff&size=100&bold=true`;
     }
     
-    // Simpan ke cache dengan timestamp
+    // Simpan ke cache
     attendancePhotoCache.set(studentId, photoUrl);
-    attendancePhotoTimestampCache.set(studentId, timestamp);
-    
     return photoUrl;
 }
 
 /**
- * Clear cache foto attendance (bisa untuk semua atau specific student)
- * @param {string|number} specificStudentId - Jika disediakan, hanya hapus untuk siswa tertentu
+ * Clear cache foto attendance
  */
-function clearAttendancePhotoCache(specificStudentId = null) {
-    if (specificStudentId) {
-        attendancePhotoCache.delete(specificStudentId);
-        attendancePhotoTimestampCache.delete(specificStudentId);
-        console.log(`🖼️ Attendance photo cache cleared for student ID: ${specificStudentId}`);
-    } else {
-        attendancePhotoCache.clear();
-        attendancePhotoTimestampCache.clear();
-        console.log("🖼️ All attendance photo caches cleared");
-    }
-}
-
-/**
- * Force refresh semua foto di tabel attendance
- */
-function forceRefreshAttendancePhotos() {
-    console.log("🖼️ Force refreshing all attendance photos...");
-    
-    // Bersihkan semua cache
+function clearAttendancePhotoCache() {
     attendancePhotoCache.clear();
-    attendancePhotoTimestampCache.clear();
-    
-    // Refresh tabel
-    if (typeof renderTable === 'function') {
-        renderTable();
-    }
-    
-    // Tampilkan notifikasi
-    if (typeof showToast === 'function') {
-        showToast("🖼️ Foto absensi telah direfresh", "success");
-    }
+    console.log("🖼️ Attendance photo cache cleared");
 }
 
 /**
- * Setup listener untuk update foto di attendance (realtime)
+ * Setup listener untuk update foto di attendance
  */
 function setupAttendancePhotoListener() {
     if (!db) return;
     
-    // Hapus listener lama jika ada
-    if (window._attendancePhotoListener) {
-        db.ref('users_auth').off('child_changed', window._attendancePhotoListener);
-    }
-    
-    window._attendancePhotoListener = (snapshot) => {
+    db.ref('users_auth').on('child_changed', (snapshot) => {
         const userData = snapshot.val();
         if (userData && userData.photoUrl && userData.fpId) {
             console.log(`🖼️ Photo changed for student ID: ${userData.fpId}, clearing attendance cache`);
-            
-            // Hapus cache untuk siswa ini
             attendancePhotoCache.delete(userData.fpId);
-            attendancePhotoTimestampCache.delete(userData.fpId);
-            
-            // Refresh tabel jika sedang aktif
-            if (document.getElementById('tab-attendance')?.classList.contains('active')) {
-                if (typeof renderTable === 'function') {
-                    renderTable();
-                }
-            }
-            
-            // Refresh students table juga
-            if (document.getElementById('tab-students')?.classList.contains('active')) {
-                if (typeof renderStudentsTable === 'function') {
-                    renderStudentsTable();
-                }
+            if (typeof renderTable === 'function') {
+                renderTable();
             }
         }
-    };
-    
-    db.ref('users_auth').on('child_changed', window._attendancePhotoListener);
-    console.log("📸 Attendance photo realtime listener set up");
+    });
 }
 
 /**
- * Modal untuk melihat foto siswa dari absensi (dengan timestamp terbaru)
+ * Modal untuk melihat foto siswa dari absensi
  */
 function showAttendanceStudentPhoto(studentId, studentName, photoUrl) {
-    // Dapatkan URL dengan timestamp terbaru
-    const freshPhotoUrl = getAttendanceStudentPhotoUrl(studentId, studentName);
-    
     const userAuth = dbData?.users_auth?.find(u => u.fpId == studentId);
     const hasAccount = !!userAuth;
     const accountInfo = hasAccount 
@@ -164,9 +95,9 @@ function showAttendanceStudentPhoto(studentId, studentName, photoUrl) {
                     <span onclick="closeModal('modal-attendance-photo')">✖</span>
                 </div>
                 <div style="padding: 20px;">
-                    <img src="${freshPhotoUrl}" 
+                    <img src="${photoUrl}" 
                          style="max-width: 100%; max-height: 60vh; border-radius: 20px; object-fit: contain;"
-                         onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(studentName?.charAt(0) || 'U')}&background=00bcd4&color=fff&size=200&bold=true&t=${Date.now()}'">
+                         onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(studentName?.charAt(0) || 'U')}&background=00bcd4&color=fff&size=200&bold=true'">
                     <p style="margin-top: 15px;">
                         <strong>${escapeHtml(studentName)}</strong><br>
                         <span style="color: var(--text-muted);">ID: ${studentId}</span>
@@ -571,7 +502,7 @@ function updateAttendanceDonutChart() {
     }
 }
 
-// ======================== RENDER TABLE (DENGAN FOTO SISWA YANG DIPERBAIKI) ========================
+// ======================== RENDER TABLE (DENGAN FOTO SISWA) ========================
 
 async function renderTable() {
     console.log("📊 renderTable dipanggil - Total attendance:", dbData.attendance?.length || 0);
@@ -673,12 +604,9 @@ async function renderTable() {
         const outDisplay = row.timeOut ? `<br><span class="text-small" style="color:var(--danger)">🏠 Pulang: ${row.timeOut}</span>` : '';
         const isNew = (Date.now() - new Date(row.timestamp).getTime() < 60000);
         
-        // Ambil foto siswa dengan timestamp terbaru
+        // Ambil foto siswa
         const photoUrl = getAttendanceStudentPhotoUrl(row.studentId, row.nama);
         const studentInitial = row.nama ? row.nama.charAt(0).toUpperCase() : 'U';
-        
-        // Error handler untuk gambar gagal dimuat
-        const onErrorScript = `this.onerror=null; this.src='https://ui-avatars.com/api/?name=${studentInitial}&background=00bcd4&color=fff&size=100&bold=true&t=${Date.now()}'; attendancePhotoCache.delete('${row.studentId}');`;
         
         let statusHtml = '';
         const manual = manualStatusMap[row.studentId];
@@ -708,20 +636,20 @@ async function renderTable() {
                     <img src="${photoUrl}" 
                          class="attendance-student-avatar"
                          style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; cursor: pointer; transition: transform 0.2s;"
-                         onerror="${onErrorScript}"
+                         onerror="this.src='https://ui-avatars.com/api/?name=${studentInitial}&background=00bcd4&color=fff&size=100&bold=true'"
                          onclick="showAttendanceStudentPhoto('${row.studentId}', '${escapeHtml(row.nama)}', this.src)"
                          title="Klik untuk lihat foto">
-                 </div>
-                <td>⏰ ${timeDisplay}<br><span class="text-small">📅 ${row.date}</span>${outDisplay}</div>
-                <td><strong>#${row.studentId}</strong></div>
+                </td>
+                <td>⏰ ${timeDisplay}<br><span class="text-small">📅 ${row.date}</span>${outDisplay}</td>
+                <td><strong>#${row.studentId}</strong></td>
                 <td>${escapeHtml(row.nama)}</div>
                 <td>${row.kelas || '-'}</div>
                 <td>${row.jurusan || '-'}</div>
                 <td>${statusHtml}</div>
                 <td class="role-guru role-admin role-developer">
                     <button class="btn-icon delete" onclick="deleteAttendance('${row.id}')" title="Hapus Data">🗑️</button>
-                 </div>
-            </table>
+                </td>
+            </tr>
         `);
     }
     tbody.innerHTML = rows.join('');
@@ -993,7 +921,7 @@ async function executeSimulateIn() {
         }
         
         // Clear cache foto untuk siswa ini
-        clearAttendancePhotoCache(studentId);
+        attendancePhotoCache.delete(studentId);
         
         closeModal('modal-simulate-in');
         if (typeof renderTable === 'function') setTimeout(() => renderTable(), 500);
@@ -1318,7 +1246,7 @@ function renderFilteredTable(filteredData) {
                     <img src="${photoUrl}" 
                          class="attendance-student-avatar"
                          style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; cursor: pointer;"
-                         onerror="this.src='https://ui-avatars.com/api/?name=${studentInitial}&background=00bcd4&color=fff&size=100&bold=true&t=${Date.now()}'"
+                         onerror="this.src='https://ui-avatars.com/api/?name=${studentInitial}&background=00bcd4&color=fff&size=100&bold=true'"
                          onclick="showAttendanceStudentPhoto('${row.studentId}', '${escapeHtml(row.nama)}', this.src)">
                 </td>
                 <td>⏰ ${row.timeIn || '-'}<br><span class="text-small">📅 ${row.date}</span>${outDisplay}</td>
@@ -1516,14 +1444,6 @@ function cleanupAttendanceUI() {
     attendanceDataReadyListenerAdded = false;
     attendanceRetryCount = 0;
     attendancePhotoCache.clear();
-    attendancePhotoTimestampCache.clear();
-    
-    // Hapus listener Firebase
-    if (window._attendancePhotoListener && db) {
-        db.ref('users_auth').off('child_changed', window._attendancePhotoListener);
-        window._attendancePhotoListener = null;
-    }
-    
     console.log("🧹 Attendance UI cleaned up");
 }
 
@@ -1577,12 +1497,11 @@ window.updateAttendanceDonutChart = updateAttendanceDonutChart;
 window.populateFilters = populateFilters;
 window.populateDateFilter = populateDateFilter;
 window.waitForAttendanceElements = waitForAttendanceElements;
-// Ekspor fungsi foto (baru)
+// Ekspor fungsi foto
 window.getAttendanceStudentPhotoUrl = getAttendanceStudentPhotoUrl;
 window.clearAttendancePhotoCache = clearAttendancePhotoCache;
-window.forceRefreshAttendancePhotos = forceRefreshAttendancePhotos;
 window.showAttendanceStudentPhoto = showAttendanceStudentPhoto;
 // Ekspor fungsi notifikasi
 window.sendParentNotification = sendParentNotification;
 
-console.log("✅ attendance.js V5.1 loaded - Fixed photo cache with timestamp & global integration");
+console.log("✅ attendance.js V5.0 loaded - Dengan integrasi WhatsApp notifikasi, foto siswa di tabel absensi, dan log aktivitas");
