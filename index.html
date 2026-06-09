@@ -1,0 +1,1522 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <meta name="referrer" content="no-referrer">
+    <title>Sistem Absensi IoT - Fingerprint & Real-time</title>
+    <link rel="icon" type="image/png" href="https://i.ibb.co.com/j9dVXQdc/Chat-GPT-Image-11-Mei-2026-10-31-44.png">
+
+    <!-- Google Fonts: Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
+
+    <!-- CSS -->
+    <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="css/layout.css">
+    <link rel="stylesheet" href="css/components.css">
+    <link rel="stylesheet" href="css/modules.css">
+    <link rel="stylesheet" href="css/responsive.css">
+    <link rel="stylesheet" href="css/custom.css">
+    
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+    <!-- Supabase SDK (HARUS sebelum Firebase) -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <!-- Firebase SDK (APP + AUTH + DATABASE + FUNCTIONS) -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-functions-compat.js"></script>
+
+    <!-- QR Code Generator -->
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+    <!-- HTML5 QR Code Scanner -->
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    
+    <style>
+        /* DROPDOWN MENU STYLES - Click to Open */
+        .dropdown-navbar {
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border);
+            padding: 0 20px;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        .dropdown-menu-container {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            padding: 10px 0;
+        }
+        
+        .dropdown {
+            position: relative;
+        }
+        
+        .dropdown-btn {
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            padding: 10px 18px;
+            border-radius: 30px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--text-primary);
+            transition: all 0.2s;
+        }
+        
+        .dropdown-btn:hover {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+        
+        .dropdown-content {
+            position: absolute;
+            top: 110%;
+            left: 0;
+            background: var(--bg-card);
+            min-width: 200px;
+            border-radius: 12px;
+            box-shadow: var(--shadow);
+            overflow: hidden;
+            z-index: 1001;
+            display: none;
+            border: 1px solid var(--border);
+        }
+        
+        .dropdown-content.open {
+            display: block;
+        }
+        
+        .dropdown-content button {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 18px;
+            width: 100%;
+            text-align: left;
+            background: none;
+            border: none;
+            color: var(--text-primary);
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        
+        .dropdown-content button:hover {
+            background: var(--primary);
+            color: white;
+        }
+        
+        /* FLOATING BUTTONS */
+        .floating-chat-btn, 
+        .floating-friends-btn, 
+        .floating-status-btn, 
+        .floating-announcement-btn, 
+        .floating-ai-summary-btn {
+            display: none !important;
+        }
+        
+        /* AI ASSISTANT BUTTON */
+        #aiAssistantBtn {
+            position: fixed;
+            bottom: 100px;
+            right: 20px;
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #00bcd4, #2196f3);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            z-index: 998;
+            border: none;
+            font-size: 28px;
+            transition: transform 0.2s;
+        }
+        
+        #aiAssistantBtn:hover {
+            transform: scale(1.1);
+        }
+        
+        /* AI CHAT MESSAGES */
+        .ai-message {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+        
+        .ai-message.ai-user {
+            flex-direction: row-reverse;
+        }
+        
+        .ai-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #00bcd4, #2196f3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            flex-shrink: 0;
+        }
+        
+        .ai-message.ai-user .ai-avatar {
+            background: var(--primary);
+        }
+        
+        .ai-bubble {
+            background: var(--bg-hover);
+            padding: 10px 15px;
+            border-radius: 18px;
+            max-width: 80%;
+            line-height: 1.5;
+            white-space: pre-wrap;
+        }
+        
+        .ai-message.ai-user .ai-bubble {
+            background: var(--primary);
+            color: white;
+        }
+        
+        .typing-dot {
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #888;
+            margin: 0 2px;
+            animation: typing 1.4s infinite both;
+        }
+        
+        .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+        .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+        
+        @keyframes typing {
+            0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); }
+            40% { opacity: 1; transform: scale(1.2); }
+        }
+        
+        /* AI SUMMARY CARD STYLES */
+        .ai-summary-card {
+            background: linear-gradient(135deg, #667eea, #764ba2) !important;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        
+        .ai-summary-card:hover {
+            transform: scale(1.02);
+        }
+        
+        .ai-summary-card .stat-title-new,
+        .ai-summary-card .stat-number,
+        .ai-summary-card .stat-percent {
+            color: white !important;
+        }
+        
+        .ai-summary-card .stat-number {
+            font-size: 1.2rem !important;
+        }
+        
+        /* AI Summary Modal Content */
+        .ai-summary-content {
+            line-height: 1.6;
+        }
+        
+        .ai-summary-content h2 {
+            color: #667eea;
+            margin-top: 20px;
+            margin-bottom: 10px;
+        }
+        
+        .ai-summary-content h3 {
+            color: #00bcd4;
+            margin-top: 15px;
+            margin-bottom: 8px;
+        }
+        
+        .ai-summary-content ul {
+            margin: 8px 0 8px 20px;
+        }
+        
+        .ai-summary-content li {
+            margin: 4px 0;
+        }
+        
+        .loading-spinner {
+            display: inline-block;
+            width: 40px;
+            height: 40px;
+            border: 4px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top-color: #667eea;
+            animation: spin 1s ease-in-out infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        /* Nav tabs disembunyikan */
+        .nav-tabs {
+            display: none !important;
+        }
+        
+        .header-bar {
+            margin-top: 0 !important;
+        }
+        
+        .dashboard-role-info {
+            margin-bottom: 15px;
+            padding: 10px 15px;
+            background: var(--bg-hover);
+            border-radius: 12px;
+            border-left: 4px solid #00bcd4;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        /* Avatar styles */
+        .student-avatar,
+        .attendance-student-avatar,
+        .rekap-student-avatar,
+        .staff-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            object-fit: cover;
+            transition: transform 0.2s, box-shadow 0.2s;
+            cursor: pointer;
+            border: 2px solid transparent;
+        }
+
+        .student-avatar:hover,
+        .attendance-student-avatar:hover,
+        .rekap-student-avatar:hover {
+            transform: scale(1.1);
+            box-shadow: 0 2px 12px rgba(0, 188, 212, 0.4);
+            border-color: #00bcd4;
+        }
+        
+        .staff-avatar:hover {
+            transform: scale(1.1);
+            box-shadow: 0 2px 12px rgba(255, 152, 0, 0.4);
+            border-color: #ff9800;
+        }
+        
+        /* WhatsApp Button */
+        .btn-wa {
+            background: #25D366;
+            color: white;
+            border: none;
+            border-radius: 30px;
+            padding: 6px 12px;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .btn-wa:hover {
+            background: #128C7E;
+            transform: scale(1.05);
+        }
+        
+        .badge-account {
+            background: #4caf50;
+            color: white;
+            font-size: 9px;
+            padding: 2px 6px;
+            border-radius: 20px;
+            margin-left: 6px;
+            display: inline-block;
+            vertical-align: middle;
+        }
+
+        .badge-no-account {
+            background: #888;
+            color: white;
+            font-size: 9px;
+            padding: 2px 6px;
+            border-radius: 20px;
+            margin-left: 6px;
+            display: inline-block;
+            vertical-align: middle;
+        }
+        
+        .navbar-right {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .navbar-user {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: var(--bg-input);
+            padding: 5px 15px;
+            border-radius: 30px;
+        }
+        
+        .navbar-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            object-fit: cover;
+        }
+        
+        .navbar-logout {
+            background: #ef4444;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 30px;
+            color: white;
+            cursor: pointer;
+            font-weight: 500;
+        }
+        
+        .navbar-logout:hover {
+            background: #dc2626;
+        }
+        
+        /* Theme Toggle Button */
+        #themeToggleBtn {
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            cursor: pointer;
+            padding: 8px 12px;
+            border-radius: 30px;
+            font-size: 1.2rem;
+            transition: all 0.2s;
+            min-width: 44px;
+            min-height: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        #themeToggleBtn:hover {
+            background: var(--primary);
+            transform: scale(1.05);
+        }
+        
+        .dropdown-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 999;
+            display: none;
+        }
+        
+        .dropdown-overlay.active {
+            display: block;
+        }
+        
+        @media (max-width: 768px) {
+            .dropdown-navbar {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .dropdown-menu-container {
+                justify-content: center;
+            }
+            .navbar-right {
+                justify-content: center;
+                padding-bottom: 10px;
+            }
+            #aiAssistantBtn {
+                bottom: 80px;
+                right: 15px;
+                width: 48px;
+                height: 48px;
+                font-size: 24px;
+            }
+        }
+
+        /* Staff Registration Form Styles */
+        .info-box-warning {
+            background: rgba(244, 67, 54, 0.15);
+            padding: 12px;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            border-left: 4px solid #f44336;
+        }
+        .info-box-warning small {
+            color: #ff8888;
+        }
+        .info-box-warning strong {
+            color: #f44336;
+        }
+        .staff-id-required {
+            border-color: #f44336 !important;
+            background-color: rgba(244, 67, 54, 0.05) !important;
+        }
+        .staff-id-hint {
+            color: #f44336;
+            font-size: 11px;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- TOAST NOTIFICATION -->
+    <div id="toast" class="toast">Notifikasi</div>
+    
+    <!-- Overlay untuk menutup dropdown -->
+    <div id="dropdownOverlay" class="dropdown-overlay" onclick="closeAllDropdowns()"></div>
+
+    <!-- AUTH SECTION -->
+    <div id="auth-section">
+        <div id="login-card" class="auth-card">
+            <h2>🔐 Login Sistem</h2>
+            <p class="text-small">Gunakan akun Admin, Guru, atau Developer</p>
+            <form id="loginForm" onsubmit="handleLogin(event)">
+                <div class="form-group"><label>Email</label><input type="email" id="loginEmail" placeholder="contoh@sekolah.sch.id" required></div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <div class="password-container">
+                        <input type="password" id="loginPassword" placeholder="contoh123" required>
+                        <span class="eye-toggle" onclick="togglePassword('loginPassword', this)">
+                            <svg viewBox="0 0 24 24" width="20" height="20"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5-5 5 5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+                        </span>
+                    </div>
+                </div>
+                <button type="submit" id="btnLoginSubmit" class="btn-auth btn-primary">MASUK</button>
+            </form>
+            <div class="auth-toggle"><span onclick="openForgotPasswordModal()">Lupa Password?</span></div>
+            <div class="auth-toggle">Belum punya akun? <span onclick="toggleAuth('register')">Daftar disini</span></div>
+        </div>
+
+        <div id="register-card" class="auth-card" style="display:none;">
+            <h2>📝 Pendaftaran</h2>
+            <p class="text-small">Pilih jenis pendaftaran sesuai role Anda</p>
+            <div class="form-group">
+                <label>Daftar Sebagai:</label>
+                <div style="display:flex; gap:20px; margin-top:5px; flex-wrap:wrap;">
+                    <label><input type="radio" name="regRoleType" value="siswa" checked onchange="toggleRegisterInput()"> 👨‍🎓 Siswa</label>
+                    <label><input type="radio" name="regRoleType" value="staff" onchange="toggleRegisterInput()"> 👥 Staff (Guru/Karyawan)</label>
+                </div>
+            </div>
+            <form id="registerForm" onsubmit="handleRegister(event)">
+                <!-- Group untuk SISWA -->
+                <div class="form-group" id="group-reg-id"><label>🆔 ID Fingerprint</label><input type="text" id="regGeneratedId" placeholder="Masukkan ID Fingerprint Anda"><small class="text-small" style="color:#ff9800;">Masukkan ID Fingerprint yang diberikan oleh guru</small></div>
+                
+                <!-- ========== GROUP UNTUK STAFF (WAJIB INPUT ID) ========== -->
+                <div id="group-reg-staff" style="display: none;">
+                    <div class="info-box-warning">
+                        <small>⚠️ <strong>PENTING UNTUK STAFF:</strong></small><br>
+                        <small>• ID Staff WAJIB diisi sesuai dengan yang tertera pada QR Code</small><br>
+                        <small>• ID Staff yang diinput akan DIVALIDASI dengan kode registrasi</small><br>
+                        <small>• Jika ID Staff salah, registrasi akan ditolak</small>
+                    </div>
+                    <div class="form-group">
+                        <label>🆔 ID Staff <span style="color: #f44336;">*WAJIB</span></label>
+                        <input type="text" id="regStaffId" class="staff-id-required" placeholder="Masukkan ID Staff dari QR Code atau Admin">
+                        <div class="staff-id-hint">⚠️ ID Staff WAJIB diisi dan harus sesuai dengan yang tertera pada QR Code!</div>
+                    </div>
+                    <div class="form-group">
+                        <label>👤 Nama Lengkap (Opsional)</label>
+                        <input type="text" id="regStaffNama" placeholder="Nama Lengkap Staff">
+                        <small class="text-small" style="color:#888;">Akan otomatis terisi jika valid</small>
+                    </div>
+                    <div class="form-group">
+                        <label>📧 Email Staff (Opsional)</label>
+                        <input type="email" id="regStaffEmail" placeholder="email@sekolah.sch.id">
+                        <small class="text-small" style="color:#888;">Akan divalidasi dengan data staff</small>
+                    </div>
+                </div>
+                <!-- ========== END GROUP STAFF ========== -->
+                
+                <div class="form-group"><label>📧 Email</label><input type="email" id="regEmail" placeholder="email@sekolah.sch.id" required></div>
+                <div class="form-group">
+                    <label>🔒 Password</label>
+                    <div class="password-container">
+                        <input type="password" id="regPassword" placeholder="Minimal 6 karakter" required>
+                        <span class="eye-toggle" onclick="togglePassword('regPassword', this)">
+                            <svg viewBox="0 0 24 24" width="20" height="20"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5-5 5 5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+                        </span>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>🔑 Kode Pendaftaran</label>
+                    <div style="display: flex; gap: 10px;">
+                        <input type="text" id="regCode" placeholder="Kode Unik dari Guru/Admin" required style="flex:1;">
+                        <button type="button" class="btn-action btn-secondary" onclick="openQrScanner()" style="padding: 0 15px; white-space: nowrap;">📷 Scan QR</button>
+                    </div>
+                </div>
+                <button type="submit" id="btnRegSubmit" class="btn-auth btn-primary">DAFTAR</button>
+            </form>
+            <div class="auth-toggle">Sudah punya akun? <span onclick="toggleAuth('login')">Login disini</span></div>
+        </div>
+    </div>
+
+    <!-- DASHBOARD SECTION -->
+    <div id="dashboard-section" style="display:none;">
+        
+        <!-- DROPDOWN NAVBAR - Menu di bar atas -->
+        <div class="dropdown-navbar">
+            <div class="dropdown-menu-container">
+                <!-- Menu Utama -->
+                <div class="dropdown" id="dropdownMain">
+                    <button class="dropdown-btn" onclick="toggleDropdown('dropdownMain')">📊 Menu Utama ▼</button>
+                    <div class="dropdown-content" id="dropdownMainContent">
+                        <button onclick="switchTab('dashboard'); closeAllDropdowns()">📊 Dashboard</button>
+                        <button onclick="switchTab('attendance'); closeAllDropdowns()">📋 Absensi Siswa</button>
+                        <!-- Menu untuk ABSENSI STAFF - HANYA untuk Admin/Guru/Developer -->
+                        <button class="role-admin role-guru role-developer" onclick="switchTab('staff-attendance'); closeAllDropdowns()">👥 Absensi Staff</button>
+                        <!-- Menu untuk DATA SISWA - HANYA untuk Admin/Guru/Developer -->
+                        <button class="role-admin role-guru role-developer" onclick="switchTab('students'); closeAllDropdowns()">👨‍🎓 Data Siswa</button>
+                        <!-- Menu untuk DATA STAFF - HANYA untuk Admin/Guru/Developer -->
+                        <button class="role-admin role-guru role-developer" onclick="switchTab('staff'); closeAllDropdowns()">👥 Data Staff</button>
+                        <button onclick="switchTab('rekap'); closeAllDropdowns()">📊 Rekap Absensi</button>
+                        <!-- Menu untuk IZIN ONLINE - HANYA untuk Admin/Guru/Developer -->
+                        <button class="role-admin role-guru role-developer" onclick="goToIzinTab()">📝 Izin Online</button>
+                        <!-- Menu untuk PANDUAN - HANYA untuk Admin/Guru/Developer -->
+                        <button class="role-admin role-guru role-developer" onclick="switchTab('guide'); closeAllDropdowns()">📘 Panduan</button>
+                    </div>
+                </div>
+                
+                <!-- Menu Social (Friends & Chat) -->
+                <div class="dropdown" id="dropdownSocial">
+                    <button class="dropdown-btn" onclick="toggleDropdown('dropdownSocial')">👥 Sosial ▼</button>
+                    <div class="dropdown-content" id="dropdownSocialContent">
+                        <button onclick="switchTab('friends'); closeAllDropdowns()">👥 Teman</button>
+                        <button onclick="switchTab('chat'); closeAllDropdowns()">💬 Chat</button>
+                        <button onclick="openCreateStatusModal(); closeAllDropdowns()">📸 Buat Status</button>
+                    </div>
+                </div>
+                
+                <!-- Menu Pengumuman (Khusus Admin/Guru/Developer) - DISEMBUNYIKAN UNTUK SISWA -->
+                <div class="dropdown" id="dropdownAnnouncement">
+                    <button class="dropdown-btn role-admin role-guru role-developer" onclick="toggleDropdown('dropdownAnnouncement')">📢 Pengumuman ▼</button>
+                    <div class="dropdown-content" id="dropdownAnnouncementContent">
+                        <button onclick="openAnnouncementModal(); closeAllDropdowns()">➕ Buat Pengumuman</button>
+                        <button onclick="switchTab('announcement_list'); closeAllDropdowns()">📋 Daftar Pengumuman</button>
+                    </div>
+                </div>
+                
+                <!-- Manajemen (Admin/Guru/Developer) - DISEMBUNYIKAN UNTUK SISWA -->
+                <div class="dropdown" id="dropdownManage">
+                    <button class="dropdown-btn role-admin role-guru" onclick="toggleDropdown('dropdownManage')">⚙️ Manajemen ▼</button>
+                    <div class="dropdown-content" id="dropdownManageContent">
+                        <button class="role-admin role-guru" onclick="switchTab('users'); closeAllDropdowns()">👥 Manajemen User</button>
+                        <button class="role-admin role-guru role-developer" onclick="switchTab('logs'); closeAllDropdowns()">📋 Log Aktivitas</button>
+                        <button class="role-admin role-guru role-developer" onclick="switchTab('config'); closeAllDropdowns()">⚙️ Pengaturan</button>
+                    </div>
+                </div>
+                
+                <!-- Profil -->
+                <div class="dropdown" id="dropdownProfile">
+                    <button class="dropdown-btn" onclick="toggleDropdown('dropdownProfile')">👤 Profil ▼</button>
+                    <div class="dropdown-content" id="dropdownProfileContent">
+                        <button onclick="openProfileModal(); closeAllDropdowns()">👤 Profil Saya</button>
+                        <button onclick="openChangePasswordModal(); closeAllDropdowns()">🔑 Ganti Password</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="navbar-right">
+                <div class="navbar-user">
+                    <img id="navbarAvatar" class="navbar-avatar" src="" alt="Avatar">
+                    <span id="navbarUserName">User</span>
+                    <span id="navbarUserRole" style="font-size:0.7rem;">SISWA</span>
+                </div>
+                <button id="themeToggleBtn" class="btn-icon" title="Ganti Tema">🌙</button>
+                <button class="navbar-logout" onclick="handleLogout()">🚪 Keluar</button>
+            </div>
+        </div>
+
+        <!-- HEADER BAR dengan efek typing + warna -->
+        <div class="header-bar">
+            <div class="header-left">
+                <img id="headerSchoolLogo" class="school-logo" src="" alt="Logo" style="display: none;">
+                <div>
+                    <div id="schoolNameDisplay" style="margin:0; font-size: 1.8rem; font-weight: 800;">Sistem Absensi IoT</div>
+                    <div style="display:flex; align-items:center; gap: 8px; flex-wrap: wrap; margin-top: 5px;">
+                        <span id="userProfileDisplay">User</span>
+                        <span id="userRoleDisplay" class="role-badge">SISWA</span>
+                        <span id="userClassDisplay" class="class-badge" style="display: none;"></span>
+                    </div>
+                </div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 20px; flex-wrap: wrap;">
+                <div id="clock" class="clock-display">--:--:--</div>
+            </div>
+        </div>
+
+        <!-- ANNOUNCEMENT SECTION -->
+        <div id="announcementContainer" class="announcement-container" style="display: none;">
+            <div class="announcement-header-bar">
+                <h3>📢 Pengumuman</h3>
+                <button class="btn-announcement" onclick="openAnnouncementModal()">➕ Buat Pengumuman</button>
+            </div>
+            <div id="announcementList"></div>
+        </div>
+
+        <!-- STATUS BAR (Untuk semua user) -->
+        <div class="status-bar-container" id="statusBarContainer" style="margin-bottom: 20px;">
+            <div class="status-header">
+                <h4>📸 Status Update</h4>
+                <small class="text-small">Status akan hilang setelah 24 jam</small>
+                <button class="btn-action btn-primary" onclick="openCreateStatusModal()" style="margin-left: auto; padding: 6px 14px; font-size: 0.75rem;">➕ Buat Status</button>
+            </div>
+            <div id="statusBar" class="status-bar-scroll"></div>
+        </div>
+
+        <!-- TAB DASHBOARD -->
+        <div id="tab-dashboard" class="tab-content active">
+            <div class="dashboard-modern-new">
+                <div id="dashboardRoleInfo" style="margin-bottom: 15px;"></div>
+                <div class="stats-grid" id="dashboardStatsGrid">
+                    <div class="stat-card-new"><div class="stat-title-new">Total Siswa</div><div class="stat-number" id="statTotalSiswaNew">0</div><div class="stat-percent positive" id="statTrendSiswa">+0% dari bulan lalu</div></div>
+                    <div class="stat-card-new"><div class="stat-title-new">Hadir Hari Ini</div><div class="stat-number" id="statHadirHariIni">0</div><div class="stat-percent positive" id="statPersenHadir">0% dari total siswa</div></div>
+                    <div class="stat-card-new"><div class="stat-title-new">Tidak Hadir</div><div class="stat-number" id="statTidakHadir">0</div><div class="stat-percent negative" id="statPersenTidakHadir">0% dari total siswa</div></div>
+                    <div class="stat-card-new"><div class="stat-title-new">Terlambat</div><div class="stat-number" id="statTerlambat">0</div><div class="stat-percent neutral" id="statPersenTerlambat">0% dari total siswa</div></div>
+                </div>
+                <div class="dashboard-two-col-new">
+                    <div class="chart-col"><div class="section-title"><span>📊 Statistik Kehadiran (Mingguan)</span></div><div class="weekly-chart-container"><canvas id="weeklyBarChart" height="200"></canvas></div></div>
+                    <div class="class-col"><div class="section-title"><span>🏫 Kehadiran per Kelas</span><small class="text-small">Tertinggi</small></div><div id="classAttendanceList"><div class="class-item"><div class="class-name"><span>Memuat...</span><span>0%</span></div><div class="progress-bar"><div class="progress-fill" style="width:0%"></div></div></div></div></div>
+                </div>
+                <div class="chart-col" style="width:100%"><div class="section-title"><span>📋 Absensi Terbaru</span><button class="btn-link" onclick="switchTab('attendance')">Lihat Semua →</button></div><div id="recentAttendanceList" class="recent-list"><div class="recent-item">Memuat data terbaru...</div></div></div>
+            </div>
+        </div>
+
+        <!-- TAB ATTENDANCE (Absensi Siswa) -->
+        <div id="tab-attendance" class="tab-content">
+            <div class="controls-bar">
+                <div class="filter-group"><label>Kelas:</label><select id="filterKelas" onchange="renderTable()"><option value="all">Semua</option></select></div>
+                <div class="filter-group"><label>Jurusan:</label><select id="filterJurusan" onchange="renderTable()"><option value="all">Semua</option></select></div>
+                <div class="filter-group"><label>Tanggal:</label><select id="filterDate" onchange="renderTable()"><option value="all">Semua</option><option value="today">Hari Ini</option></select></div>
+                <div style="margin-left:auto; display:flex; gap:10px; flex-wrap:wrap;">
+                    <button class="btn-action btn-warning role-admin role-guru" onclick="openAbsenceModal()">📝 Atur Ketidakhadiran</button>
+                    <button class="btn-action btn-primary" onclick="simulateAttendance()">📷 Simulasi Scan Masuk</button>
+                    <button class="btn-action btn-secondary" onclick="simulateAttendanceOut()" style="background:#ff9800;">🏠 Simulasi Scan Pulang</button>
+                    <button class="btn-action btn-info" onclick="openSimulateOutModal()" style="background:#2196f3;">📋 Pilih Siswa Pulang</button>
+                    <!-- TOMBOL DOWNLOAD EXCEL HANYA UNTUK ADMIN/GURU/DEVELOPER -->
+                    <button class="btn-action btn-success role-admin role-guru role-developer" onclick="exportToExcel()">📥 Download Excel</button>
+                </div>
+            </div>
+            <div class="chart-container" style="margin-bottom:20px;"><div style="background:var(--bg-card); border-radius:20px; padding:15px;"><h4 style="margin:0 0 10px 0;">📊 Ringkasan Hari Ini</h4><div style="max-width:250px; margin:0 auto;"><canvas id="attendanceDonutChart" style="max-height:200px;"></canvas></div><div id="todayStatsText" class="text-small text-center" style="margin-top:10px;"></div></div></div>
+            <div class="table-container"><table><thead><tr><th>Foto</th><th>Waktu</th><th>ID FP</th><th>Nama</th><th>Kelas</th><th>Jurusan</th><th>Status</th><th>Aksi</th></tr></thead><tbody id="tbody-attendance"><tr><td colspan="8">Memuat data...<\/td><\/tr></tbody></table></div>
+        </div>
+
+        <!-- TAB STAFF ATTENDANCE (Absensi Staff) -->
+        <div id="tab-staff-attendance" class="tab-content role-admin role-guru role-developer">
+            <div class="controls-bar">
+                <div class="filter-group">
+                    <label>📅 Tanggal:</label>
+                    <select id="filterStaffDate" onchange="renderStaffAttendanceTable()">
+                        <option value="today">📆 Hari Ini</option>
+                    </select>
+                </div>
+                <div style="margin-left:auto; display:flex; gap:10px;">
+                    <button class="btn-action btn-primary" onclick="openSimulateStaffInModal()">📷 Absen Masuk Staff</button>
+                    <button class="btn-action btn-secondary" onclick="openSimulateStaffOutModal()" style="background:#ff9800;">🏠 Absen Pulang Staff</button>
+                    <button class="btn-action btn-success" onclick="exportStaffAttendanceToExcel()">📥 Export Excel</button>
+                </div>
+            </div>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Foto</th>
+                            <th>Waktu</th>
+                            <th>ID</th>
+                            <th>Nama</th>
+                            <th>Jabatan</th>
+                            <th>Status</th>
+                            <th>Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-staff-attendance">
+                        <tr><td colspan="7" style="text-align:center; padding:30px;">⏳ Memuat data...<\/td><\/tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- TAB STUDENTS (Data Siswa) -->
+        <div id="tab-students" class="tab-content role-admin role-guru role-developer">
+            <div class="controls-bar"><div style="display:flex; gap:10px; flex-wrap:wrap; width:100%;"><input type="hidden" id="editMode" value="add"><div class="filter-group"><label>ID FP:</label><input type="number" id="newId" placeholder="ID" style="width:80px;"></div><div class="filter-group"><label>Nama:</label><input type="text" id="newNama" placeholder="Nama Siswa" style="width:200px;"></div><div class="filter-group"><label>Kelas:</label><select id="newKelas"></select></div><div class="filter-group"><label>Jurusan:</label><select id="newJurusan"></select></div><div class="filter-group"><label>Delay:</label><select id="delayUnit"><option value="minutes">Menit</option><option value="hours">Jam</option></select></div><div class="filter-group" id="delayMinutesGroup"><input type="number" id="delayMinutesValue" value="60" style="width:70px;"><span>menit</span></div><div class="filter-group" id="delayHoursGroup" style="display:none;"><select id="delayHoursValue"></select><span>jam</span></div><input type="hidden" id="newDelay" value="60"><button class="btn-action role-guru role-admin" id="btnSaveStudent" onclick="saveStudent()">➕ Simpan Siswa</button><button class="btn-action btn-danger hidden role-guru role-admin" id="btnCancelStudent" onclick="resetStudentForm()">Batal</button></div></div>
+            <div class="controls-bar"><div class="filter-group"><label>Kelas:</label><select id="filterStudentKelas" onchange="renderStudentsTable()"><option value="all">Semua</option></select></div><div class="filter-group"><label>Jurusan:</label><select id="filterStudentJurusan" onchange="renderStudentsTable()"><option value="all">Semua</option></select></div><div class="search-box"><input type="text" id="searchStudentName" placeholder="🔍 Cari nama siswa..." oninput="renderStudentsTable()"></div></div>
+            <div class="table-container"><table><thead><tr><th>Foto</th><th>ID FP</th><th>Nama</th><th>Kelas</th><th>Jurusan</th><th>Delay</th><th>Aksi</th></tr></thead><tbody id="tbody-students"><tr><td colspan="7">Memuat data...<\/td><\/tr></tbody></table></div>
+        </div>
+
+        <!-- TAB STAFF (Data Staff) -->
+        <div id="tab-staff" class="tab-content role-admin role-guru role-developer">
+            <div class="controls-bar">
+                <div style="display:flex; gap:10px; flex-wrap:wrap; width:100%;">
+                    <input type="hidden" id="staffEditMode" value="add">
+                    <div class="filter-group"><label>ID:</label><input type="text" id="staffId" placeholder="ID" style="width:80px;"></div>
+                    <div class="filter-group"><label>Nama:</label><input type="text" id="staffNama" placeholder="Nama Lengkap" style="width:180px;"></div>
+                    <div class="filter-group"><label>Jabatan:</label>
+                        <select id="staffJabatan">
+                            <option value="guru">👨‍🏫 Guru</option>
+                            <option value="kepala_sekolah">👑 Kepala Sekolah</option>
+                            <option value="wakil_kepala">📋 Wakil Kepala</option>
+                            <option value="staff_tu">📁 Staff TU</option>
+                            <option value="pustakawan">📚 Pustakawan</option>
+                            <option value="laboran">🔬 Laboran</option>
+                            <option value="security">🛡️ Security</option>
+                            <option value="kebersihan">🧹 Kebersihan</option>
+                        </select>
+                    </div>
+                    <div class="filter-group"><label>Departemen:</label>
+                        <select id="staffDepartemen">
+                            <option value="">-- Pilih --</option>
+                            <option value="akademik">Akademik</option>
+                            <option value="kesiswaan">Kesiswaan</option>
+                            <option value="humas">Humas</option>
+                            <option value="sapras">Sapras</option>
+                            <option value="kurikulum">Kurikulum</option>
+                        </select>
+                    </div>
+                    <div class="filter-group"><label>No. HP:</label><input type="tel" id="staffNoHp" placeholder="No. HP" style="width:120px;"></div>
+                    <div class="filter-group"><label>Email:</label><input type="email" id="staffEmail" placeholder="Email" style="width:180px;"></div>
+                    <button class="btn-action role-guru role-admin" id="btnSaveStaff" onclick="saveStaff()">➕ Simpan</button>
+                    <button class="btn-action btn-danger hidden" id="btnCancelStaff" onclick="resetStaffForm()">Batal</button>
+                </div>
+            </div>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Foto</th>
+                            <th>ID</th>
+                            <th>Nama</th>
+                            <th>Jabatan</th>
+                            <th>Departemen</th>
+                            <th>No. HP</th>
+                            <th>Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-staff">
+                        <tr><td colspan="7" style="text-align:center; padding:30px;">⏳ Memuat data...<\/td><\/tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- TAB USERS - HANYA 2 PILIHAN GENERATE KODE (SISWA & STAFF) -->
+        <!-- PERUBAHAN PENTING: Hanya Admin dan Developer yang dapat generate kode Guru/Staff -->
+        <div id="tab-users" class="tab-content role-admin role-guru">
+            <div class="controls-bar">
+                <h4>🔑 Generate Kode Pendaftaran</h4>
+            </div>
+            <div class="key-box role-admin role-guru">
+                <div style="flex:1;">
+                    <div style="margin-bottom:10px;">
+                        <label><input type="radio" name="genTarget" value="siswa" checked onchange="toggleGenerateInput()"> 👨‍🎓 Untuk Siswa</label>
+                        <!-- Tombol Staff/Guru HANYA untuk Admin dan Developer -->
+                        <label class="role-admin role-developer" style="display: inline-block;"><input type="radio" name="genTarget" value="staff" onchange="toggleGenerateInput()"> 👥 Untuk Staff (Guru/Karyawan)</label>
+                    </div>
+                    <div id="group-select-siswa">
+                        <select id="selectStudentForCode"><option value="">-- Pilih Siswa --</option></select>
+                    </div>
+                    <div id="group-select-staff" style="display: none;">
+                        <select id="selectStaffForCode" style="width:100%; padding:8px; border-radius:8px; border:1px solid var(--border); background:var(--bg-input); color:var(--text-primary);">
+                            <option value="">-- Pilih Staff --</option>
+                        </select>
+                    </div>
+                    <small class="text-small" id="gen-desc">🔒 Kode akan dikunci ke ID Siswa terpilih.</small>
+                </div>
+                <button class="btn-action btn-secondary" onclick="generateRegistrationCode()">✨ Generate Kode</button>
+            </div>
+            <div id="generatedKeyDisplay" style="display:none;"></div>
+            
+            <h4 class="role-admin role-guru">📋 Daftar Kode Aktif</h4>
+            <div class="table-container role-admin role-guru">
+                <table>
+                    <thead>
+                        <tr><th>Kode</th><th>Status</th><th>Dibuat</th><th>Pengguna</th><th>Aksi</th></tr>
+                    </thead>
+                    <tbody id="tbody-codes"></tbody>
+                </table>
+            </div>
+            
+            <div class="controls-bar role-admin role-guru">
+                <h4>👥 Daftar Pengguna</h4>
+                <div class="search-box">
+                    <input type="text" id="searchUser" placeholder="🔍 Cari user..." oninput="renderUsersTable()">
+                </div>
+            </div>
+            <div class="table-container role-admin role-guru">
+                <table>
+                    <thead>
+                        <tr><th>Foto</th><th>Nama</th><th>Email</th><th>Role</th><th>Detail</th><th>Aksi</th></tr>
+                    </thead>
+                    <tbody id="tbody-users"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- TAB REKAP -->
+        <div id="tab-rekap" class="tab-content"><div class="controls-bar"><div class="filter-group"><label>📅 Periode:</label><select id="rekapPeriod" onchange="loadRekap()"><option value="minggu">Minggu Ini</option><option value="bulan">Bulan Ini</option><option value="semester">Semester Ini</option><option value="custom">Custom Range</option></select></div><div id="customRangeGroup" style="display:none; gap:10px;"><input type="date" id="rekapStartDate"><span>s/d</span><input type="date" id="rekapEndDate"></div><div style="margin-left:auto; display:flex; gap:10px;"><button class="btn-action btn-success" onclick="exportRekapToExcel()">📥 Excel</button><button class="btn-action btn-primary" onclick="exportRekapToPDF()">📄 PDF</button></div></div><div class="chart-container" style="margin-bottom:25px;"><div style="display:flex; flex-wrap:wrap; gap:20px;"><div style="flex:1; min-width:250px;"><canvas id="rekapPieChart" style="max-height:300px;"></canvas><p class="text-small text-center">Distribusi Status</p></div><div style="flex:2; min-width:300px;"><canvas id="rekapBarChart" style="max-height:300px;"></canvas><p class="text-small text-center">Absensi per Hari</p></div></div></div><div class="table-container"></table><thead><tr><th>No</th><th>ID FP</th><th>Nama</th><th>Kelas</th><th>Jurusan</th><th>Total Hari</th><th>Hadir</th><th>Sakit</th><th>Izin</th><th>Alpha</th><th>Persentase</th><th>Status</th></tr></thead><tbody id="rekapTbody"><tr><td colspan="12">Memuat data...<\/td><\/tr></tbody></table></div><div class="rekap-per-siswa-container" id="rekapPerSiswaContainer" style="margin-top:30px; display:none;"><div class="section-title" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:20px;"><span>📋 Detail Rekap Per Siswa</span><div style="display:flex; gap:10px;"><button class="btn-action btn-success" onclick="exportCurrentRekapPerSiswaToExcel()">📥 Export Excel</button><button class="btn-action btn-primary" onclick="exportCurrentRekapPerSiswaToPDF()">📄 Export PDF</button></div></div><div class="rekap-per-siswa-select-wrapper"><select id="rekapPerSiswaSelect"><option value="">-- Pilih Siswa --</option></select></div><div class="rekap-per-siswa-period-wrapper"><div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;"><label style="font-weight:500;">📅 Periode:</label><select id="rekapPerSiswaPeriod"><option value="minggu">📆 Minggu Ini</option><option value="bulan">📅 Bulan Ini</option><option value="semester">📚 Semester Ini</option><option value="tahun">🗓️ Tahun Ini</option><option value="pertama">⭐ Pertama Kali Absensi</option><option value="custom">📅 Custom Range</option></select><div id="rekapPerSiswaCustomRange" style="display:none; gap:10px; align-items:center; flex-wrap:wrap;"><input type="date" id="rekapPerSiswaStartDate"><span>s/d</span><input type="date" id="rekapPerSiswaEndDate"></div><button class="btn-action btn-primary" onclick="loadRekapPerSiswa()">🔍 Tampilkan Rekap</button></div></div><div id="rekapPerSiswaPeriodLabel" class="text-small" style="margin-bottom:15px; color:var(--text-muted); text-align:center;"></div><div id="rekapPerSiswaContent"><div style="text-align:center; padding:40px; color:var(--text-muted);">👈 Pilih siswa, pilih periode, lalu klik "Tampilkan Rekap" untuk melihat detail absensi per siswa</div></div></div></div>
+
+        <!-- TAB FRIENDS -->
+        <div id="tab-friends" class="tab-content">
+            <div class="friends-container">
+                <div class="friends-search-section">
+                    <h4>🔍 Cari Teman</h4>
+                    <div class="search-box" style="display:flex; gap:10px;">
+                        <input type="email" id="searchFriendEmail" placeholder="Cari berdasarkan email..." style="flex:1;">
+                        <button class="btn-action btn-primary" onclick="searchUserByEmail()">Cari</button>
+                    </div>
+                    <div id="searchResult" style="margin-top:10px; display:none;"></div>
+                </div>
+                <hr>
+                <div class="friends-requests-section">
+                    <h4>📨 Permintaan Pertemanan <span id="friendRequestBadge" class="request-badge" style="display:none;">0</span></h4>
+                    <div id="friendRequestsList" class="friends-list"><p class="text-small">Tidak ada permintaan</p></div>
+                </div>
+                <hr>
+                <div class="friends-list-section">
+                    <h4>👥 Daftar Teman <span id="friendsCount" class="count-badge">0</span></h4>
+                    <div id="friendsList" class="friends-list"><p class="text-small">Belum ada teman</p></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB CHAT -->
+        <div id="tab-chat" class="tab-content">
+            <div class="chat-header-info" style="margin-bottom:15px;">
+                <h3>💬 Pesan dengan Teman</h3>
+                <p class="text-small">Hanya bisa chat dengan teman yang sudah terdaftar.</p>
+            </div>
+            <div id="chatPanel" class="chat-panel" style="min-height:500px;">
+                <div class="chat-loading" style="text-align:center; padding:40px; color:var(--text-muted);">⏳ Memuat fitur chat...</div>
+            </div>
+        </div>
+
+        <!-- TAB LOGS -->
+        <div id="tab-logs" class="tab-content role-admin role-guru role-developer">
+            <div class="controls-bar">
+                <div class="filter-group"><label>🔍 Filter Aksi:</label><select id="logActionFilter" onchange="renderLogsTable()"><option value="all">Semua Aksi</option></select></div>
+                <div class="filter-group"><label>📅 Mulai:</label><input type="date" id="logStartDate" onchange="renderLogsTable()"></div>
+                <div class="filter-group"><label>📅 Sampai:</label><input type="date" id="logEndDate" onchange="renderLogsTable()"></div>
+                <button class="btn-action btn-secondary" onclick="renderLogsTable()" style="margin-left:auto;">🔄 Refresh</button>
+            </div>
+            <div class="table-container">
+                <table id="logsTable">
+                    <thead><tr><th>🕒 Waktu</th><th>👤 Pengguna</th><th>🎭 Role</th><th>📌 Aksi</th><th>📝 Detail</th><th>🌐 IP</th></tr></thead>
+                    <tbody id="logsTbody"><tr><td colspan="6" style="text-align:center; padding:40px;">⏳ Memuat log aktivitas...<\/td><\/tr></tbody>
+                </table>
+                <div id="logsPagination" style="display:flex; justify-content:center; gap:10px; margin-top:20px;"></div>
+            </div>
+        </div>
+
+        <!-- TAB CONFIG -->
+        <div id="tab-config" class="tab-content role-admin role-guru role-developer">
+            <div class="guide-container">
+                <h3>⚙️ Pengaturan Sistem</h3>
+                <div class="form-group" id="logoSettingGroup"><label>🏫 Logo Sekolah</label><div style="display:flex; align-items:center; gap:20px; flex-wrap:wrap;"><div class="logo-preview-wrapper" onclick="document.getElementById('logoFileInput').click()" style="cursor:pointer;"><img id="schoolLogoPreview" class="school-logo-preview" src="" alt="Logo"><div class="logo-upload-hint">Klik untuk ganti</div></div><div style="flex:1;"><input type="file" id="logoFileInput" hidden accept="image/*" onchange="uploadSchoolLogo(this)"><button class="btn-action btn-danger role-admin" onclick="removeSchoolLogo()" id="btnRemoveLogo" style="display:none;">🗑️ Hapus</button></div></div></div>
+                <hr><div class="form-group"><label>🏫 Nama Sekolah</label><div style="display:flex; gap:10px;"><input type="text" id="inputSchoolName" placeholder="Nama Sekolah" style="flex:1;"><button class="btn-action btn-primary role-admin" onclick="saveSchoolName()">Simpan</button></div></div>
+                <div class="form-group"><label>📋 Tipe Sekolah</label><div style="display:flex; gap:10px;"><select id="schoolTypeSelect" style="flex:1;"><option value="smp">SMP</option><option value="smk">SMK</option><option value="both">SMP & SMK</option></select><button class="btn-action btn-primary role-admin" id="btnSaveSchoolType" onclick="saveSchoolType()">Simpan</button></div></div>
+                <hr><div id="classesManager"><h4>📚 Daftar Kelas</h4><div id="classesList" style="margin-bottom:10px; min-height:50px;"></div><div style="display:flex; gap:10px; flex-wrap:wrap;"><input type="text" id="newClassInput" placeholder="Contoh: VII A, X RPL" style="flex:2;"><button class="btn-action btn-success role-admin" onclick="addClass()">➕ Tambah</button><button class="btn-action btn-primary role-admin" id="btnSaveClasses" onclick="saveClasses()">💾 Simpan</button></div></div>
+                <div id="majorsManager" style="display:none;"><h4>🎓 Daftar Jurusan (SMK)</h4><div id="majorsList" style="margin-bottom:10px; min-height:50px;"></div><div style="display:flex; gap:10px;"><input type="text" id="newMajorInput" placeholder="Contoh: RPL, TKJ" style="flex:2;"><button class="btn-action btn-success role-admin" onclick="addMajor()">➕ Tambah</button><button class="btn-action btn-primary role-admin" id="btnSaveMajors" onclick="saveMajors()">💾 Simpan</button></div></div>
+                <hr><div class="form-group"><label>⏰ Delay Pulang Global</label><div style="display:flex; gap:10px; flex-wrap:wrap;"><select id="globalDelayUnit"><option value="minutes">Menit</option><option value="hours">Jam</option></select><div id="globalDelayMinutesGroup"><input type="number" id="globalDelayMinutesValue" value="60" style="width:80px;"> menit</div><div id="globalDelayHoursGroup" style="display:none;"><select id="globalDelayHoursValue" style="width:80px;"></select> jam</div><button class="btn-action btn-primary role-admin" onclick="saveGlobalDelay()">Simpan</button></div><div><small>Delay saat ini: <strong id="globalDelayDisplay">60 menit</strong></small></div></div>
+                <hr><h4>⏰ Pengaturan Jam Efektif & Hari Libur</h4>
+                <div class="form-group"><label>🕒 Batas Waktu Terlambat (Jam Masuk)</label><div style="display:flex; gap:10px;"><input type="time" id="lateThresholdInput" value="07:30" style="width:120px;"><span>Siswa yang scan setelah jam ini akan dianggap TERLAMBAT</span></div></div>
+                <div class="form-group"><label>🏠 Minimal Jam Pulang</label><div style="display:flex; gap:10px;"><input type="time" id="minOutTimeInput" value="14:00" style="width:120px;"><span>Scan pulang sebelum jam ini akan mendapat peringatan</span></div></div>
+                <div class="form-group"><label>📅 Hari Libur Mingguan</label><div style="display:flex; gap:15px; flex-wrap:wrap;"><label><input type="checkbox" value="0"> Minggu</label><label><input type="checkbox" value="6"> Sabtu</label><label><input type="checkbox" value="1"> Senin</label><label><input type="checkbox" value="2"> Selasa</label><label><input type="checkbox" value="3"> Rabu</label><label><input type="checkbox" value="4"> Kamis</label><label><input type="checkbox" value="5"> Jumat</label></div></div>
+                <div class="form-group"><label>📆 Tanggal Libur Khusus</label><div style="display:flex; gap:10px;"><input type="date" id="holidayDateInput"><button class="btn-action btn-secondary" onclick="addHolidayDate()">➕ Tambah</button></div><div id="holidayDatesList" style="margin-top:10px;"></div></div>
+                <button class="btn-action btn-primary role-admin" onclick="saveAttendanceSettings()">💾 Simpan Pengaturan</button>
+                <div id="sensorStatusPanel" class="sensor-status-container" style="margin-top:20px; display:none;"><div class="sensor-header"><h4>🔍 STATUS 16 SENSOR FINGERPRINT</h4></div><div id="sensorGrid" class="sensor-grid"></div></div>
+                <div class="key-box role-admin"><div><strong>⚠️ Reset Data</strong><br><small>Hapus semua data</small></div><button class="btn-action btn-danger" onclick="resetSystemData()">Reset Semua</button></div>
+            </div>
+        </div>
+
+        <!-- TAB GUIDE -->
+        <div id="tab-guide" class="tab-content role-admin role-guru role-developer">
+            <div class="guide-container">
+                <h3>📘 Panduan Sistem Absensi Fingerprint</h3>
+                <p class="text-small">Sistem Absensi berbasis sidik jari dengan ESP32 dan real-time monitoring</p>
+                <details open><summary>1. 📝 Pendaftaran Akun</summary><div class="guide-box">
+                    <h4>Cara Mendaftar sebagai Siswa:</h4>
+                    <ol><li>Pastikan Anda sudah terdaftar di database siswa (ID Fingerprint sudah ada)</li><li>Klik "Daftar disini" pada halaman login</li><li>Pilih role "Siswa"</li><li>Masukkan ID Fingerprint yang diberikan guru</li><li>Masukkan Email dan Password (minimal 6 karakter)</li><li>Masukkan Kode Pendaftaran yang diberikan guru (bisa scan QR)</li><li>Klik "DAFTAR" dan tunggu konfirmasi</li></ol>
+                    <h4>Cara Mendaftar sebagai Staff (Guru/Karyawan):</h4>
+                    <ol><li>Klik "Daftar disini" pada halaman login</li><li>Pilih role "Staff"</li><li><strong>WAJIB mengisi ID Staff</strong> sesuai dengan yang tertera pada QR Code atau dari Admin</li><li>ID Staff akan DIVALIDASI dengan kode registrasi</li><li>Masukkan Email dan Password (minimal 6 karakter)</li><li>Masukkan Kode Pendaftaran Staff dari Admin (bisa scan QR)</li><li>Klik "DAFTAR" dan tunggu konfirmasi</li></ol>
+                    <p class="text-small" style="color:#ff9800; margin-top:10px;">⚠️ <strong>Penting:</strong> ID Staff yang diinput akan dicocokkan dengan kode. Jika tidak sesuai, registrasi akan ditolak!</p>
+                </div></details>
+                <details><summary>2. 🔐 Login & Keamanan</summary><div class="guide-box"><h4>Cara Login:</h4><ol><li>Masukkan Email dan Password yang sudah didaftarkan</li><li>Klik tombol "MASUK"</li></ol><h4>Lupa Password?</h4><ol><li>Klik "Lupa Password?" di halaman login</li><li>Masukkan email yang terdaftar</li><li>Klik "Kirim Link"</li></ol></div></details>
+                <details><summary>3. 🤖 AI Assistant (Chat dengan AI)</summary><div class="guide-box"><h4>Perintah yang Didukung:</h4><ul><li><strong>📊 Data Siswa:</strong> "data siswa miftah", "id 1 siapa", "siswa kelas X", "siswa kelas X jurusan RPL"</li><li><strong>📈 Rekap & Statistik:</strong> "rekap miftah", "siswa paling prestasi", "statistik"</li><li><strong>✏️ Manajemen Data (Admin/Guru):</strong> "buat data siswa baru nama Titin id 8 kelas X jurusan Dev", "update siswa id 8 delay 90", "hapus siswa id 8"</li><li><strong>💬 Bantuan:</strong> "bantuan" atau "help"</li></ul><p>Klik tombol 💬 di pojok kanan bawah untuk membuka AI Assistant!</p></div></details>
+                <details><summary>4. 📱 Notifikasi WhatsApp</summary><div class="guide-box"><h4>Notifikasi Otomatis ke Orang Tua:</h4><ul><li>✅ Saat siswa masuk sekolah</li><li>⚠️ Jika siswa terlambat</li><li>🏠 Saat siswa pulang sekolah</li><li>❌ Jika siswa tidak hadir (Alpha)</li></ul><p>Admin/Guru dapat mengatur nomor WhatsApp orang tua di menu Data Siswa.</p></div></details>
+                <details><summary>5. 📝 Izin Online</summary><div class="guide-box"><h4>Cara Mengajukan Izin:</h4><ol><li>Buka tab "Izin Online"</li><li>Klik "Ajukan Izin Baru"</li><li>Pilih jenis izin (Sakit/Keperluan)</li><li>Isi tanggal dan alasan</li><li>Upload surat/dokumen pendukung (opsional)</li><li>Klik "Ajukan Izin"</li></ol><p>Guru/Admin akan menyetujui atau menolak izin yang diajukan.</p></div></details>
+                <details><summary>6. 👥 Manajemen Staff</summary><div class="guide-box"><h4>Cara Mengelola Guru/Karyawan:</h4><ol><li>Buka tab "Data Staff"</li><li>Isi form ID, Nama, Jabatan, dll</li><li>Klik "Simpan" untuk menambah staff</li><li>Klik tombol 👤 untuk membuat akun user untuk staff</li></ol><h4>Absensi Staff:</h4><ol><li>Buka tab "Absensi Staff"</li><li>Klik "Absen Masuk Staff" untuk absen masuk</li><li>Klik "Absen Pulang Staff" untuk absen pulang</li><li>Export data ke Excel jika diperlukan</li></ol></div></details>
+                <div class="guide-footer"><hr><div class="text-small" style="text-align:center;"><p>📱 Sistem Absensi IoT - Fingerprint & Real-time</p><p>Dikembangkan oleh CV Haka Jaya | Versi 6.0 | © 2026</p></div></div>
+            </div>
+        </div>
+        
+        <!-- TAB ANNOUNCEMENT LIST -->
+        <div id="tab-announcement_list" class="tab-content role-admin role-guru role-developer">
+            <div class="guide-container">
+                <h3>📋 Daftar Semua Pengumuman</h3>
+                <div style="margin-bottom:15px;"><button class="btn-action btn-primary" onclick="openAnnouncementModal()">➕ Buat Pengumuman Baru</button></div>
+                <div id="fullAnnouncementList" class="full-announcement-list"><div style="text-align:center; padding:40px;">⏳ Memuat daftar pengumuman...</div></div>
+            </div>
+        </div>
+        
+        <!-- TAB IZIN ONLINE -->
+        <div id="tab-izin" class="tab-content role-admin role-guru role-developer">
+            <div class="izin-container">
+                <div class="izin-header">
+                    <h3>📝 Izin Online</h3>
+                    <p class="text-small">Ajukan izin sakit/keperluan keluarga secara online</p>
+                </div>
+                <div class="izin-actions">
+                    <button class="btn-action btn-primary" onclick="window.openAjukanIzinModal()">➕ Ajukan Izin Baru</button>
+                    <div class="izin-filter">
+                        <button class="filter-btn" onclick="window.filterIzinList('all')">Semua</button>
+                        <button class="filter-btn" onclick="window.filterIzinList('pending')">⏳ Menunggu</button>
+                        <button class="filter-btn" onclick="window.filterIzinList('approved')">✅ Disetujui</button>
+                        <button class="filter-btn" onclick="window.filterIzinList('rejected')">❌ Ditolak</button>
+                    </div>
+                </div>
+                <div id="izinListContainer" class="izin-list">
+                    <div class="loading-spinner-small" style="text-align:center; padding:40px;">⏳ Memuat data izin...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODALS -->
+    <div id="modal-profile" class="modal-overlay"><div class="modal-box"><div class="modal-title"><span>📸 Profil Saya</span><span onclick="closeModal('modal-profile')">✖</span></div><div class="profile-upload-wrapper" onclick="document.getElementById('profileFileInput').click()"><img id="profileImg" class="avatar-lg"><input type="file" id="profileFileInput" hidden accept="image/*" onchange="uploadProfilePhoto(this)"></div><div class="form-group"><input type="text" id="profileNameInput" placeholder="Nama Lengkap"></div><p id="profileEmail"></p><div class="form-group" id="group-subject"><input type="text" id="profileSubject" placeholder="Mata Pelajaran"></div><div class="form-group"><input type="text" id="profileKelas" placeholder="Kelas"></div><div class="form-group"><input type="text" id="profileJurusan" placeholder="Jurusan"></div><div class="modal-actions"><button class="btn-save" onclick="handleUpdateProfileInfo()">💾 Simpan</button><button class="btn-cancel" onclick="closeModal('modal-profile')">Tutup</button></div><hr><div style="text-align:center;"><button class="btn-action" onclick="openChangePasswordModal()">🔑 Ganti Password</button></div></div></div>
+    <div id="modal-change-pass" class="modal-overlay"><div class="modal-box"><div class="modal-title"><span>🔑 Ganti Password</span><span onclick="closeModal('modal-change-pass')">✖</span></div><form onsubmit="handleChangePassword(event)"><div class="form-group"><input type="password" id="cpOld" placeholder="Password Lama" required></div><div class="form-group"><input type="password" id="cpNew" placeholder="Password Baru (min. 6)" required></div><div class="form-group"><input type="password" id="cpConfirm" placeholder="Konfirmasi" required></div><div class="modal-actions"><button type="button" class="btn-cancel" onclick="closeModal('modal-change-pass')">Batal</button><button type="submit" class="btn-save">Simpan</button></div></form></div></div>
+    <div id="modal-forgot" class="modal-overlay"><div class="modal-box"><div class="modal-title"><span>🔐 Reset Password</span><span onclick="closeModal('modal-forgot')">✖</span></div><p>Masukkan email Anda</p><div class="form-group"><input type="email" id="forgotEmail" placeholder="Email"></div><div class="modal-actions"><button class="btn-cancel" onclick="closeModal('modal-forgot')">Batal</button><button class="btn-save" onclick="processForgot()">Kirim Link</button></div></div></div>
+    
+    <!-- MODAL ANNOUNCEMENT -->
+    <div id="modal-announcement" class="modal-overlay"><div class="modal-box"><div class="modal-title"><span>📢 Pengumuman</span><span onclick="closeModal('modal-announcement')">✖</span></div><input type="hidden" id="announcementId"><div class="form-group"><label>📝 Judul Pengumuman</label><input type="text" id="annTitle" placeholder="Masukkan judul pengumuman" class="form-control"></div><div class="form-group"><label>📄 Isi Pengumuman</label><textarea id="annMessage" rows="4" placeholder="Tulis isi pengumuman di sini..." class="form-control"></textarea></div><div class="form-group"><label>🎨 Prioritas</label><select id="annPriority" class="form-control"><option value="low">🔵 Rendah</option><option value="normal" selected>🟢 Normal</option><option value="high">🔴 Penting</option></select></div><div class="form-group"><label>🖼️ Gambar (Opsional)</label><input type="file" id="annImageInput" accept="image/*" onchange="previewAnnouncementImage(this)" class="form-control"><div id="annImagePreviewContainer" style="display:none; margin-top:10px; position:relative;"><img id="annImagePreview" style="max-width:100%; border-radius:12px; max-height:150px; object-fit:cover;"><button type="button" class="btn-icon" onclick="removeAnnouncementImage()" style="position:absolute; top:5px; right:5px; background:rgba(0,0,0,0.6); border-radius:50%; padding:5px;">🗑️</button></div><small class="text-small">Format: JPG, PNG. Maksimal 2MB.</small></div><div class="form-group"><label>⏰ Waktu Berakhir</label><select id="annExpiryType" onchange="toggleExpiryInput()" class="form-control"><option value="none">⏰ Tanpa Batas</option><option value="time">⏱️ Berdasarkan Jam</option><option value="date">📅 Berdasarkan Tanggal</option><option value="both">📅⏱️ Tanggal & Jam</option></select></div><div id="annExpiryDateGroup" class="form-group" style="display:none;"><label>📅 Tanggal Berakhir</label><input type="date" id="annExpiryDate" class="form-control"></div><div id="annExpiryTimeGroup" class="form-group" style="display:none;"><label>⏰ Jam Berakhir</label><input type="time" id="annExpiryTime" class="form-control"></div><div class="modal-actions"><button class="btn-cancel" onclick="closeModal('modal-announcement')">Batal</button><button class="btn-save" onclick="saveAnnouncement()">📢 Simpan Pengumuman</button></div></div></div>
+    
+    <!-- MODAL AI SUMMARY -->
+    <div id="modal-ai-summary" class="modal-overlay"><div class="modal-box" style="max-width: 700px; max-height: 85vh; overflow-y: auto;"><div class="modal-title" style="display: flex; justify-content: space-between; align-items: center;"><span>🤖 AI Summary Absensi</span><span onclick="closeModal('modal-ai-summary')" style="cursor: pointer; font-size: 24px;">✖</span></div><div style="padding: 20px;" id="aiSummaryContent"><div style="text-align: center; padding: 40px;"><div style="font-size: 48px; margin-bottom: 16px;">🚀</div><h3>Memuat analisis...</h3><div class="loading-spinner" style="margin-top: 20px;"></div></div></div><div class="modal-actions" style="padding: 15px; border-top: 1px solid var(--border);"><button class="btn-action btn-success" onclick="exportAISummaryToPDF()" id="aiExportPdfBtn" style="display: none;">📄 Export PDF</button><button class="btn-action btn-secondary" onclick="copyAISummaryToClipboard()" id="aiCopyBtn" style="display: none;">📋 Copy ke Clipboard</button><button class="btn-cancel" onclick="closeModal('modal-ai-summary')">Tutup</button></div></div></div>
+    
+    <!-- MODAL AI ASSISTANT -->
+    <div id="modal-ai-assistant" class="modal-overlay">
+        <div class="modal-box" style="max-width: 600px; width: 90%; height: 80vh; display: flex; flex-direction: column; padding: 0;">
+            <div class="modal-title" style="padding: 15px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
+                <span>🤖 AI Assistant <small style="font-size: 11px; color: #888;" id="aiProviderBadge">Ready</small></span>
+                <span onclick="closeAIAssistantModal()" style="cursor: pointer; font-size: 24px;">✖</span>
+            </div>
+            <div id="aiChatMessages" style="flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 12px;">
+                <div class="ai-message ai-bot">
+                    <div class="ai-avatar">🤖</div>
+                    <div class="ai-bubble">
+                        Halo! Saya asisten AI untuk sistem absensi.<br><br>
+                        Saya bisa membantu:<br>
+                        • 🔍 Mencari data siswa<br>
+                        • 📊 Melihat rekap absensi<br>
+                        • 📈 Menampilkan statistik<br>
+                        • ✏️ Membantu operasional (tambah/edit/hapus data)<br><br>
+                        <strong>Ketik "bantuan" untuk melihat semua perintah!</strong>
+                    </div>
+                </div>
+            </div>
+            <div style="padding: 15px; border-top: 1px solid var(--border); display: flex; gap: 10px;">
+                <input type="text" id="aiChatInput" placeholder="Tanyakan sesuatu... misal: 'data siswa kelas X'" 
+                       style="flex: 1; padding: 12px; border-radius: 30px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary);">
+                <button id="aiSendBtn" style="padding: 12px 20px; border-radius: 30px; background: linear-gradient(135deg, #00bcd4, #2196f3); border: none; color: white; cursor: pointer;">📤 Kirim</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- MODAL PARENT CONTACT (WhatsApp) -->
+    <div id="modal-parent-contact" class="modal-overlay"><div class="modal-box" style="max-width:450px;"><div class="modal-title"><span>📱 WhatsApp Orang Tua</span><span onclick="closeModal('modal-parent-contact')">✖</span></div><div style="padding:20px;"><div class="form-group"><label>👨‍🎓 Siswa</label><input type="text" id="parentStudentName" readonly style="background:var(--bg-hover);"></div><div class="form-group"><label>📱 Nomor WhatsApp Orang Tua</label><input type="tel" id="parentPhoneNumber" placeholder="Contoh: 08123456789 atau 628123456789"><small class="text-small">Format: 08xxxxxxxxx atau 628xxxxxxxxx</small></div><div class="form-group"><label>👤 Hubungan</label><select id="parentRelation"><option value="orang_tua">Orang Tua</option><option value="ayah">Ayah</option><option value="ibu">Ibu</option><option value="wali">Wali</option></select></div><div class="modal-actions"><button class="btn-cancel" onclick="closeModal('modal-parent-contact')">Batal</button><button class="btn-save" onclick="saveParentContactFromModal()">💾 Simpan</button></div></div></div></div>
+    
+    <!-- MODAL AJUKAN IZIN -->
+    <div id="modal-ajukan-izin" class="modal-overlay"><div class="modal-box" style="max-width:550px;"><div class="modal-title"><span>📝 Ajukan Izin</span><span onclick="closeModal('modal-ajukan-izin')">✖</span></div><div style="padding:20px;"><form id="formAjukanIzin" onsubmit="submitIzin(event)"><div class="form-group"><label>📋 Jenis Izin</label><select id="izinType" required><option value="sakit">🤒 Sakit</option><option value="keperluan">📝 Keperluan Keluarga</option></select></div><div class="form-group"><label>📅 Tanggal Mulai</label><input type="date" id="izinStartDate" required></div><div class="form-group"><label>📅 Tanggal Selesai</label><input type="date" id="izinEndDate" required></div><div class="form-group"><label>📝 Alasan / Keterangan</label><textarea id="izinReason" rows="4" placeholder="Jelaskan alasan izin..." required></textarea></div><div class="form-group"><label>📎 Lampiran (Opsional)</label><input type="file" id="izinAttachment" accept=".pdf,.jpg,.jpeg,.png"><small class="text-small">Format: PDF, JPG, PNG. Maksimal 2MB</small><div id="attachmentPreview" style="display:none; margin-top:10px;"><span id="attachmentName"></span><button type="button" class="btn-icon" onclick="clearAttachment()">✖</button></div></div><div class="modal-actions"><button type="button" class="btn-cancel" onclick="closeModal('modal-ajukan-izin')">Batal</button><button type="submit" class="btn-save">📤 Ajukan Izin</button></div></form></div></div></div>
+    
+    <!-- MODAL SIMULASI STAFF IN -->
+    <div id="modal-simulate-staff-in" class="modal-overlay"><div class="modal-box" style="max-width:500px;"><div class="modal-title"><span>📷 Absen Masuk Staff</span><span onclick="closeModal('modal-simulate-staff-in')">✖</span></div><div style="padding:20px;"><div class="form-group"><label>🔍 Cari Staff (Nama atau ID)</label><input type="text" id="simulateStaffSearchInput" placeholder="Ketik nama atau ID staff..."></div><div id="simulateStaffList" style="max-height:200px; overflow-y:auto; border:1px solid var(--border); border-radius:8px; margin-bottom:15px;"></div><input type="hidden" id="selectedStaffId"><input type="hidden" id="selectedStaffName"><input type="hidden" id="selectedStaffJabatan"><div id="simulateStaffWarning" class="text-small" style="color:#ff9800;"></div></div><div class="modal-actions"><button class="btn-cancel" onclick="closeModal('modal-simulate-staff-in')">Batal</button><button class="btn-save" onclick="executeSimulateStaffIn()">✅ Simpan Absen Masuk</button></div></div></div>
+    
+    <!-- MODAL SIMULASI STAFF OUT -->
+    <div id="modal-simulate-staff-out" class="modal-overlay"><div class="modal-box" style="max-width:500px;"><div class="modal-title"><span>🏠 Absen Pulang Staff</span><span onclick="closeModal('modal-simulate-staff-out')">✖</span></div><div style="padding:20px;"><div class="form-group"><label>🔍 Pilih Staff (yang sudah absen masuk)</label><input type="text" id="simulateStaffOutSearchInput" placeholder="Ketik nama atau ID staff..."></div><div id="simulateStaffOutList" style="max-height:200px; overflow-y:auto; border:1px solid var(--border); border-radius:8px; margin-bottom:15px;"></div><input type="hidden" id="selectedStaffOutId"><input type="hidden" id="selectedStaffOutName"><input type="hidden" id="selectedStaffOutTimeIn"></div><div class="modal-actions"><button class="btn-cancel" onclick="closeModal('modal-simulate-staff-out')">Batal</button><button class="btn-save" onclick="executeSimulateStaffOut()">🏠 Simpan Pulang</button></div></div></div>
+    
+    <div id="modal-friends" class="modal-overlay"><div class="modal-box" style="max-width:500px;"><div class="modal-title"><span>👥 Teman</span><span onclick="closeModal('modal-friends')">✖</span></div><div id="friendsPanel"></div></div></div>
+    <div id="modal-chat" class="modal-overlay"><div class="modal-box" style="max-width:800px; height:80vh;"><div class="modal-title"><span>💬 Pesan</span><span onclick="closeModal('modal-chat')">✖</span></div><div id="chatModalPanel" style="height:calc(100% - 60px); overflow:hidden;"><div class="chat-loading" style="text-align:center; padding:40px; color:var(--text-muted);">⏳ Memuat chat...</div></div></div></div>
+    <div id="modal-create-status" class="modal-overlay"><div class="modal-box"><div class="modal-title"><span>📸 Buat Status</span><span onclick="closeModal('modal-create-status')">✖</span></div><div class="form-group"><label>Teks</label><textarea id="statusText" rows="3" placeholder="Apa yang sedang terjadi?"></textarea></div><div class="form-group"><label>Gambar</label><input type="file" id="statusImageInput" accept="image/*" onchange="previewStatusImage(this)"><div id="statusImagePreviewContainer" style="display:none; margin-top:10px;"><img id="statusImagePreview" style="max-width:100%; border-radius:12px;"></div></div><div class="modal-actions"><button class="btn-cancel" onclick="closeModal('modal-create-status')">Batal</button><button class="btn-save" onclick="createStatus()">Upload Status</button></div></div></div>
+    <div id="modal-status-viewer" class="modal-overlay"><div class="modal-box" style="background:#000;"><div id="statusViewerContent"></div></div></div>
+    <div id="modal-absence" class="modal-overlay"><div class="modal-box" style="max-width:700px;"><div class="modal-title"><span>📋 Atur Ketidakhadiran</span><span onclick="closeModal('modal-absence')">✖</span></div><div class="modal-body"><div style="display:flex; gap:10px; flex-wrap:wrap;"><input type="date" id="absenceDate"><select id="absenceKelas"><option value="all">Semua Kelas</option></select><select id="absenceJurusan"><option value="all">Semua Jurusan</option></select><button class="btn-action" onclick="loadAbsenceList()">Tampilkan</button></div><div id="absenceListContainer" style="max-height:55vh; overflow-y:auto;"></div></div><div class="modal-actions"><button class="btn-cancel" onclick="closeModal('modal-absence')">Tutup</button><button class="btn-save" onclick="saveAllAbsenceStatus()">Simpan</button></div></div></div>
+    <div id="modal-qr-scanner" class="modal-overlay"><div class="modal-box" style="max-width:500px;"><div class="modal-title"><span>📷 Scan QR Code</span><span onclick="closeModal('modal-qr-scanner')">✖</span></div><div id="qr-reader" style="width:100%;"></div><div id="qr-reader-results" style="margin-top:10px; text-align:center;"></div><div class="modal-actions"><button class="btn-cancel" onclick="closeModal('modal-qr-scanner')">Tutup</button></div></div></div>
+
+    <!-- SCRIPTS -->
+    <script src="js/config.js"></script>
+    <script src="js/supabase-config.js"></script>
+    <script src="js/db.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/logger.js"></script>
+    <script src="js/whatsapp-notif.js"></script>
+    <script src="js/izin-online.js"></script>
+    <script src="js/staff.js"></script>
+    <script src="js/staff-attendance.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/dashboard.js"></script>
+    <script src="js/chat.js"></script>
+    <script src="js/friends.js"></script>
+    <script src="js/status.js"></script>
+    <script src="js/init.js"></script>
+    <script src="js/attendance.js"></script>
+    <script src="js/students.js"></script>
+    <script src="js/users.js"></script>
+    <script src="js/setting.js"></script>
+    <script src="js/announcement.js"></script>
+    <script src="js/logs.js"></script>
+    <script src="js/main.js"></script>
+    <script src="js/rekap.js"></script>
+    <script src="js/rekap-per-siswa.js"></script>
+    <script src="js/ai-summary.js"></script>
+    <script src="js/ai-assistant.js"></script>
+    <script>
+document.addEventListener('DOMContentLoaded', function () {
+    console.log('🚀 Halaman selesai dimuat');
+
+    setTimeout(() => {
+        if (typeof populateStaffSelectForCode === 'function') {
+            populateStaffSelectForCode();
+            console.log("✅ populateStaffSelectForCode dipanggil otomatis");
+        } else {
+            console.log("❌ populateStaffSelectForCode tidak tersedia");
+
+            const select = document.getElementById('selectStaffForCode');
+
+            if (select) {
+                select.innerHTML = '<option value="">-- Pilih Staff --</option>';
+
+                db.ref('staff').once('value').then(snapshot => {
+                    const staffData = snapshot.val();
+
+                    if (!staffData) return;
+
+                    let count = 0;
+
+                    Object.entries(staffData).forEach(([id, staff]) => {
+                        if (staff.email && staff.nama) {
+
+                            let roleDisplay = '👨‍🏫 Guru';
+
+                            if (staff.jabatan === 'kepala_sekolah')
+                                roleDisplay = '👑 Kepala Sekolah';
+                            else if (staff.jabatan === 'wakil_kepala')
+                                roleDisplay = '👔 Wakil Kepala';
+                            else if (staff.jabatan === 'staff_tu')
+                                roleDisplay = '📋 Staff TU';
+
+                            select.innerHTML += `
+                                <option
+                                    value="${id}"
+                                    data-email="${staff.email}"
+                                    data-role="${staff.jabatan === 'kepala_sekolah' ? 'admin' :
+                                               staff.jabatan === 'wakil_kepala' ? 'wakil_kepala' :
+                                               staff.jabatan === 'staff_tu' ? 'staff_tu' : 'guru'}"
+                                    data-nama="${staff.nama}"
+                                    data-jabatan="${staff.jabatan}">
+                                    ${staff.nama} (${roleDisplay}) - ${staff.email}
+                                </option>
+                            `;
+
+                            count++;
+                        }
+                    });
+
+                    if (count > 0) {
+                        console.log(`✅ ${count} staff berhasil dimuat`);
+
+                        const group = document.getElementById('group-select-staff');
+                        if (group) {
+                            group.style.display = 'block';
+                        }
+                    }
+                });
+            }
+        }
+    }, 1000);
+});
+</script>
+    <!-- School Name Animation (Typing + Color Change) -->
+    <script src="js/school-name-animation.js"></script>
+
+    <script>
+        // ======================== DROPDOWN FUNCTIONS ========================
+        function toggleDropdown(dropdownId) {
+            var dropdown = document.getElementById(dropdownId);
+            if (!dropdown) return;
+            var content = dropdown.querySelector('.dropdown-content');
+            if (!content) return;
+            var isOpen = content.classList.contains('open');
+            closeAllDropdowns();
+            if (!isOpen) {
+                content.classList.add('open');
+                var overlay = document.getElementById('dropdownOverlay');
+                if (overlay) overlay.classList.add('active');
+            }
+        }
+        
+        function closeAllDropdowns() {
+            document.querySelectorAll('.dropdown-content').forEach(function(c) {
+                c.classList.remove('open');
+            });
+            var overlay = document.getElementById('dropdownOverlay');
+            if (overlay) overlay.classList.remove('active');
+        }
+        
+        // ======================== THEME TOGGLE ========================
+        function initTheme() {
+            var savedTheme = localStorage.getItem('theme') || 'dark';
+            applyTheme(savedTheme);
+            
+            var themeToggleBtn = document.getElementById('themeToggleBtn');
+            if (themeToggleBtn) {
+                var newToggleBtn = themeToggleBtn.cloneNode(true);
+                themeToggleBtn.parentNode.replaceChild(newToggleBtn, themeToggleBtn);
+                
+                newToggleBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    var currentTheme = document.body.classList.contains('light-mode') ? 'light' : 'dark';
+                    var newTheme = currentTheme === 'light' ? 'dark' : 'light';
+                    applyTheme(newTheme);
+                });
+            }
+        }
+        
+        function applyTheme(theme) {
+            var isLight = theme === 'light';
+            var toggleBtn = document.getElementById('themeToggleBtn');
+            
+            if (isLight) {
+                document.body.classList.add('light-mode');
+                if (toggleBtn) toggleBtn.innerHTML = '☀️';
+                console.log("🌞 Light mode activated");
+            } else {
+                document.body.classList.remove('light-mode');
+                if (toggleBtn) toggleBtn.innerHTML = '🌙';
+                console.log("🌙 Dark mode activated");
+            }
+            
+            localStorage.setItem('theme', theme);
+            
+            setTimeout(function() {
+                if (typeof window.updateDashboardChart === 'function') window.updateDashboardChart();
+                if (typeof window.updateAttendanceDonutChart === 'function') window.updateAttendanceDonutChart();
+                if (typeof window.loadRekap === 'function' && document.getElementById('tab-rekap') && document.getElementById('tab-rekap').classList.contains('active')) {
+                    window.loadRekap();
+                }
+            }, 100);
+        }
+        
+        function renderFullAnnouncementList() {
+            var container = document.getElementById('fullAnnouncementList');
+            if (!container) return;
+            if (typeof db === 'undefined' || !db) {
+                container.innerHTML = '<div style="text-align:center; padding:40px;">⏳ Menunggu database...</div>';
+                return;
+            }
+            db.ref('announcements/active').once('value', function(snapshot) {
+                var data = snapshot.val();
+                if (!data) { container.innerHTML = '<div style="text-align:center; padding:40px;">📭 Belum ada pengumuman</div>'; return; }
+                var announcements = Object.keys(data).map(function(key) { return { id: key, ...data[key] }; });
+                announcements.sort(function(a, b) { return (b.createdAt || 0) - (a.createdAt || 0); });
+                var html = '<div style="display:flex; flex-direction:column; gap:15px;">';
+                announcements.forEach(function(ann) {
+                    var priorityClass = ann.priority === 'high' ? 'announcement-high' : (ann.priority === 'low' ? 'announcement-low' : 'announcement-normal');
+                    var createdDate = ann.createdAt ? new Date(ann.createdAt).toLocaleString('id-ID') : '-';
+                    var expiryInfo = '';
+                    if (ann.expiryDate) expiryInfo += '📅 Berakhir: ' + ann.expiryDate;
+                    if (ann.expiryTime) expiryInfo += ' ' + ann.expiryTime;
+                    if (!expiryInfo) expiryInfo = '⏰ Tidak terbatas';
+                    var imageHtml = '';
+                    if (ann.imageUrl && ann.imageUrl !== 'null' && ann.imageUrl !== 'undefined') {
+                        imageHtml = '<div style="margin-top:10px;"><img src="' + ann.imageUrl + '" style="max-width:100%; max-height:150px; border-radius:12px; cursor:pointer; object-fit:cover;" onclick="viewAnnouncementImage(\'' + ann.imageUrl + '\')" onerror="this.style.display=\'none\'"></div>';
+                    }
+                    html += '<div class="announcement-item ' + priorityClass + '" style="padding:15px; border-radius:12px; background:var(--bg-hover);">' +
+                        '<div class="announcement-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:10px;">' +
+                            '<span class="announcement-title" style="font-weight:bold; font-size:1.1rem;">📢 ' + escapeHtml(ann.title) + '</span>' +
+                            '<div style="display:flex; gap:8px;"><button class="btn-icon" onclick="editAnnouncement(\'' + ann.id + '\')" title="Edit">✏️</button><button class="btn-icon delete" onclick="deleteAnnouncement(\'' + ann.id + '\')" title="Hapus">🗑️</button></div>' +
+                        '</div>' +
+                        '<div class="announcement-message" style="margin-bottom:10px;">' + escapeHtml(ann.message) + '</div>' +
+                        imageHtml +
+                        '<div class="announcement-footer" style="font-size:0.7rem; color:var(--text-muted); display:flex; gap:15px; flex-wrap:wrap; margin-top:10px;">' +
+                            '<span>👤 ' + escapeHtml(ann.createdBy || 'Admin') + '</span>' +
+                            '<span>📅 ' + createdDate + '</span>' +
+                            '<span>' + expiryInfo + '</span>' +
+                            '<span>' + (ann.priority === 'high' ? '🔴 Penting' : (ann.priority === 'low' ? '🔵 Rendah' : '🟢 Normal')) + '</span>' +
+                        '</div>' +
+                    '</div>';
+                });
+                html += '</div>';
+                container.innerHTML = html;
+            }).catch(function(err) {
+                console.error("Error loading announcements:", err);
+                container.innerHTML = '<div style="text-align:center; padding:40px;">❌ Gagal memuat pengumuman</div>';
+            });
+        }
+        
+        function escapeHtml(str) { if (!str) return ''; return str.replace(/[&<>]/g, function(m) { return m === '&' ? '&amp;' : m === '<' ? '&lt;' : '&gt;'; }); }
+        
+        // ======================= WHATSAPP FUNCTIONS =======================
+        async function saveParentContactFromModal() {
+            const studentId = document.getElementById('parentStudentName').getAttribute('data-id');
+            const studentName = document.getElementById('parentStudentName').value;
+            const phoneNumber = document.getElementById('parentPhoneNumber').value.trim();
+            const relation = document.getElementById('parentRelation').value;
+            
+            if (!phoneNumber) {
+                showToast('Masukkan nomor WhatsApp!', 'error');
+                return;
+            }
+            
+            if (typeof window.saveParentContact === 'function') {
+                await window.saveParentContact(studentId, studentName, phoneNumber, relation);
+                closeModal('modal-parent-contact');
+            } else {
+                showToast('Fungsi saveParentContact tidak tersedia', 'error');
+            }
+        }
+        
+        window.openParentContactModal = function(studentId, studentName) {
+            const modal = document.getElementById('modal-parent-contact');
+            if (modal) {
+                document.getElementById('parentStudentName').value = studentName;
+                document.getElementById('parentStudentName').setAttribute('data-id', studentId);
+                document.getElementById('parentPhoneNumber').value = '';
+                document.getElementById('parentRelation').value = 'orang_tua';
+                modal.classList.add('open');
+            }
+        };
+        
+        // ======================= STAFF FUNCTIONS =======================
+        window.openSimulateStaffInModal = function() {
+            if (typeof window.openSimulateStaffInModal === 'function') {
+                window.openSimulateStaffInModal();
+            }
+        };
+        
+        window.openSimulateStaffOutModal = function() {
+            if (typeof window.openSimulateStaffOutModal === 'function') {
+                window.openSimulateStaffOutModal();
+            }
+        };
+        
+        window.exportStaffAttendanceToExcel = function() {
+            if (typeof window.exportStaffAttendanceToExcel === 'function') {
+                window.exportStaffAttendanceToExcel();
+            }
+        };
+        
+        // ======================= IZIN FUNCTIONS =======================
+        function goToIzinTab() {
+            console.log('📝 Membuka tab Izin Online...');
+            if (typeof switchTab === 'function') {
+                switchTab('izin');
+            }
+            closeAllDropdowns();
+            
+            setTimeout(function() {
+                if (typeof window.filterIzinList === 'function') {
+                    console.log('🔄 Reset filter ke "all" untuk menampilkan semua izin');
+                    window.filterIzinList('all');
+                } else {
+                    console.log('⚠️ filterIzinList belum siap, mencoba lagi...');
+                    setTimeout(function() {
+                        if (typeof window.filterIzinList === 'function') {
+                            window.filterIzinList('all');
+                        }
+                    }, 500);
+                }
+            }, 300);
+        }
+        
+        // ======================= TOGGLE GENERATE INPUT (HANYA 2 PILIHAN: SISWA & STAFF) =======================
+        function toggleGenerateInput() {
+            const typeRadio = document.querySelector('input[name="genTarget"]:checked');
+            if (!typeRadio) return;
+            const type = typeRadio.value;
+            const selectGroupSiswa = document.getElementById('group-select-siswa');
+            const selectGroupStaff = document.getElementById('group-select-staff');
+            const desc = document.getElementById('gen-desc');
+            
+            if (type === 'siswa') {
+                if (selectGroupSiswa) selectGroupSiswa.style.display = 'block';
+                if (selectGroupStaff) selectGroupStaff.style.display = 'none';
+                if (desc) desc.innerText = '🔒 Kode akan dikunci ke ID Siswa terpilih.';
+                if (typeof populateStudentSelectForCode === 'function') {
+                    populateStudentSelectForCode();
+                }
+            } else if (type === 'staff') {
+                if (selectGroupSiswa) selectGroupSiswa.style.display = 'none';
+                if (selectGroupStaff) selectGroupStaff.style.display = 'block';
+                if (desc) desc.innerText = '🔒 Kode akan dikunci ke Staff yang dipilih. WAJIB input ID Staff saat registrasi!';
+                if (typeof populateStaffSelectForCode === 'function') {
+                    populateStaffSelectForCode();
+                }
+            } else {
+                if (selectGroupSiswa) selectGroupSiswa.style.display = 'none';
+                if (selectGroupStaff) selectGroupStaff.style.display = 'none';
+                if (desc) desc.innerText = '🔓 Kode bebas digunakan.';
+            }
+        }
+        
+        // ======================= TOGGLE REGISTER INPUT (HANYA 2 PILIHAN: SISWA & STAFF) =======================
+        function toggleRegisterInput() {
+            const typeRadio = document.querySelector('input[name="regRoleType"]:checked');
+            if (!typeRadio) return;
+            const type = typeRadio.value;
+            
+            const idGroup = document.getElementById('group-reg-id');
+            const staffGroup = document.getElementById('group-reg-staff');
+            const codeInput = document.getElementById('regCode');
+            
+            // Sembunyikan semua group
+            if (idGroup) idGroup.style.display = 'none';
+            if (staffGroup) staffGroup.style.display = 'none';
+            
+            if (type === 'siswa') {
+                if (idGroup) {
+                    idGroup.style.display = 'block';
+                    const idHint = idGroup.querySelector('.text-small');
+                    if (idHint) idHint.textContent = 'Masukkan ID Fingerprint yang diberikan oleh guru';
+                }
+                if (codeInput) codeInput.placeholder = '🔑 Kode Unik (Siswa)';
+            } 
+            else if (type === 'staff') {
+                if (staffGroup) staffGroup.style.display = 'block';
+                if (codeInput) codeInput.placeholder = '🔑 Kode Unik (Staff/Guru)';
+                
+                // Set required untuk ID Staff
+                const staffIdInput = document.getElementById('regStaffId');
+                if (staffIdInput) staffIdInput.required = true;
+            }
+        }
+        
+        var originalSwitchTab = window.switchTab;
+        if (originalSwitchTab) {
+            window.switchTab = function(tabId) {
+                originalSwitchTab(tabId);
+                if (tabId === 'announcement_list') { setTimeout(renderFullAnnouncementList, 100); }
+                if (tabId === 'chat') { setTimeout(function() { if (typeof forceRenderChat === 'function') forceRenderChat(); }, 100); }
+                if (tabId === 'friends') { setTimeout(function() { if (typeof loadFriendRequests === 'function') loadFriendRequests(); if (typeof loadFriendsList === 'function') loadFriendsList(); }, 100); }
+                if (tabId === 'izin') { 
+                    setTimeout(function() { 
+                        if (typeof window.renderIzinTab === 'function') {
+                            window.renderIzinTab();
+                            setTimeout(function() {
+                                if (typeof window.filterIzinList === 'function') {
+                                    console.log('🔄 Memanggil filterIzinList("all") dari switchTab');
+                                    window.filterIzinList('all');
+                                }
+                            }, 200);
+                        }
+                    }, 100);
+                }
+                if (tabId === 'staff') { setTimeout(function() { if (typeof renderStaffTable === 'function') renderStaffTable(); }, 100); }
+                if (tabId === 'staff-attendance') { setTimeout(function() { if (typeof renderStaffAttendanceTable === 'function') renderStaffAttendanceTable(); }, 100); }
+            };
+        }
+        
+        function closeAIAssistantModal() {
+            var modal = document.getElementById('modal-ai-assistant');
+            if (modal) modal.classList.remove('open');
+            if (typeof window.closeAIAssistantModal === 'function') window.closeAIAssistantModal();
+        }
+        
+        function openAIAssistantModal() {
+            if (typeof window.openAIAssistantModal === 'function') window.openAIAssistantModal();
+            else {
+                var modal = document.getElementById('modal-ai-assistant');
+                if (modal) modal.classList.add('open');
+            }
+        }
+        
+        // ======================= DOM READY ========================
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log("DOM Ready - Initializing...");
+            
+            var dh = document.getElementById('delayHoursValue');
+            if(dh && dh.children.length===0) for(var i=1;i<=24;i++) dh.innerHTML+='<option value="'+i+'">'+i+' Jam</option>';
+            var gh = document.getElementById('globalDelayHoursValue');
+            if(gh && gh.children.length===0) for(var j=1;j<=24;j++) gh.innerHTML+='<option value="'+j+'">'+j+'</option>';
+            
+            var dm = document.getElementById('delayMinutesValue');
+            if(dm && !dm._listenerAdded) { dm.addEventListener('input',function(){var h=document.getElementById('newDelay');if(h)h.value=this.value;}); dm._listenerAdded=true; }
+            var dh2 = document.getElementById('delayHoursValue');
+            if(dh2 && !dh2._listenerAdded) { dh2.addEventListener('change',function(){var h=document.getElementById('newDelay');if(h)h.value=this.value*60;}); dh2._listenerAdded=true; }
+            var du = document.getElementById('delayUnit');
+            if(du && !du._listenerAdded) { du.addEventListener('change',function(){if(typeof toggleDelayInput==='function') toggleDelayInput();}); du._listenerAdded=true; }
+            var gdm = document.getElementById('globalDelayMinutesValue');
+            if(gdm && !gdm._listenerAdded) { gdm.addEventListener('input',function(){var h=document.getElementById('globalDelayHidden');if(h)h.value=this.value;}); gdm._listenerAdded=true; }
+            var gdh2 = document.getElementById('globalDelayHoursValue');
+            if(gdh2 && !gdh2._listenerAdded) { gdh2.addEventListener('change',function(){var h=document.getElementById('globalDelayHidden');if(h)h.value=this.value*60;}); gdh2._listenerAdded=true; }
+            var gdu = document.getElementById('globalDelayUnit');
+            if(gdu && !gdu._listenerAdded) { gdu.addEventListener('change',function(){if(typeof toggleGlobalDelayInput==='function') toggleGlobalDelayInput();}); gdu._listenerAdded=true; }
+            setTimeout(function(){ if(typeof toggleDelayInput==='function') toggleDelayInput(); if(typeof toggleGlobalDelayInput==='function') toggleGlobalDelayInput(); },100);
+            
+            var periodSelect=document.getElementById('rekapPeriod'), customRangeGroup=document.getElementById('customRangeGroup');
+            if(periodSelect && customRangeGroup) {
+                var today=new Date(), startDate=new Date(); startDate.setDate(today.getDate()-30);
+                var startInput=document.getElementById('rekapStartDate'), endInput=document.getElementById('rekapEndDate');
+                if(startInput && !startInput.value) startInput.value=startDate.toISOString().split('T')[0];
+                if(endInput && !endInput.value) endInput.value=today.toISOString().split('T')[0];
+                function toggleCustomRange(){ customRangeGroup.style.display=periodSelect.value==='custom'?'flex':'none'; }
+                periodSelect.addEventListener('change',toggleCustomRange); toggleCustomRange();
+            }
+            
+            setTimeout(function() { initTheme(); }, 50);
+            
+            setTimeout(function() {
+                if (typeof initRekapPerSiswa === 'function') { initRekapPerSiswa(); }
+                if (typeof initAISummary === 'function') { initAISummary(); }
+                if (typeof initAIAssistant === 'function') { initAIAssistant(); }
+                if (typeof initChatSystem === 'function' && !window._chatInitialized) { window._chatInitialized = true; initChatSystem(); }
+                if (typeof initFriendsSystem === 'function' && !window._friendsInitialized) { window._friendsInitialized = true; initFriendsSystem(); }
+                if (typeof initStatusSystem === 'function' && !window._statusInitialized) { window._statusInitialized = true; initStatusSystem(); }
+                if (typeof initIzinOnline === 'function' && !window._izinInitialized) { window._izinInitialized = true; initIzinOnline(); }
+                if (typeof initStaffSystem === 'function' && !window._staffInitialized) { window._staffInitialized = true; initStaffSystem(); }
+                if (typeof initStaffAttendance === 'function' && !window._staffAttendanceInitialized) { window._staffAttendanceInitialized = true; initStaffAttendance(); }
+            }, 1500);
+        });
+        
+        function showToast(msg,type){ var t=document.getElementById('toast'); if(t){ t.textContent=msg; t.style.borderLeftColor=type==='error'?'#f44336':'#00bcd4'; t.className='toast show'; setTimeout(function(){ t.className=t.className.replace('show',''); },3000); } }
+        function closeModal(id){ var m=document.getElementById(id); if(m) m.classList.remove('open'); }
+        function toggleFriendsModal() { var modal = document.getElementById('modal-friends'); if(modal) { modal.classList.add('open'); if(typeof renderFriendsPanel === 'function') renderFriendsPanel(); } }
+        function openChatModal() { var modal = document.getElementById('modal-chat'); if(modal) { modal.classList.add('open'); if(typeof renderChatInterface === 'function') renderChatInterface('chatModalPanel'); } }
+        function openAISummaryModal() { if(typeof window.openAISummaryModal === 'function') window.openAISummaryModal(); }
+        
+        window.showToast=showToast; window.closeModal=closeModal;
+        window.toggleDropdown=toggleDropdown; window.closeAllDropdowns=closeAllDropdowns;
+        window.renderFullAnnouncementList=renderFullAnnouncementList;
+        window.toggleFriendsModal=toggleFriendsModal; window.openChatModal=openChatModal;
+        window.openAISummaryModal=openAISummaryModal; window.openAIAssistantModal=openAIAssistantModal;
+        window.closeAIAssistantModal=closeAIAssistantModal;
+        window.initTheme=initTheme; window.applyTheme=applyTheme;
+        window.saveParentContactFromModal=saveParentContactFromModal;
+        window.goToIzinTab = goToIzinTab;
+        window.toggleGenerateInput = toggleGenerateInput;
+        window.toggleRegisterInput = toggleRegisterInput;
+    </script>
+
+    <div class="branding-footer"><img src="https://i.ibb.co.com/j9dVXQdc/Chat-GPT-Image-11-Mei-2026-10-31-44.png" alt="Logo" class="branding-logo"><span class="branding-text">Dikembangkan oleh CV Haka Jaya</span></div>
+</body>
+</html>
