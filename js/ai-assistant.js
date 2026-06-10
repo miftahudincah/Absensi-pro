@@ -1,11 +1,17 @@
-// ai-assistant.js - VERSION 5.1 (FIXED: CHANGE USER ROLE - REAL ACTION)
+// ai-assistant.js - VERSION 5.2 (FIXED: SUPER ADMIN ACCESS RESTRICTION)
 // Asisten AI SUPER POWERFULL dengan Groq API + Action Executor
 // Fitur LENGKAP dengan aksi nyata ke database:
 // - CRUD siswa lengkap (tambah, edit, hapus via chat) - REAL
-// - Manajemen pengaturan sekolah (nama, tipe, kelas, jurusan) - REAL
-// - Manajemen delay global - REAL
-// - Manajemen user (ubah role, hapus user, reset password) - REAL (khusus admin/dev)
+// - Manajemen pengaturan sekolah (nama, tipe, kelas, jurusan) - REAL (HANYA SUPER ADMIN)
+// - Manajemen delay global - REAL (HANYA SUPER ADMIN)
+// - Manajemen user (ubah role, hapus user, reset password) - REAL (khusus super admin)
 // - Dan masih banyak lagi!
+// 
+// PERUBAHAN V5.2:
+// - Menambahkan hasSuperAdminAccess() untuk fitur pengaturan sistem
+// - Super Admin = Developer + Admin (Kepala Sekolah)
+// - Guru TIDAK bisa mengubah: nama sekolah, delay global, kelas, jurusan, tipe sekolah, batas terlambat
+// - Guru TETAP bisa: CRUD siswa, buat pengumuman, lihat data/rekap
 // ============================================================================
 
 // ======================= KONFIGURASI API =======================
@@ -44,6 +50,41 @@ let systemDataCache = {
 // Pending actions untuk konfirmasi
 let pendingDeleteConfirmation = null;
 let pendingAction = null;
+
+// ======================= ACCESS CONTROL FUNCTIONS =======================
+
+/**
+ * Cek akses SUPER ADMIN (Developer dan Kepala Sekolah/Admin)
+ * SUPER ADMIN dapat mengubah pengaturan sistem (nama sekolah, delay, kelas, jurusan, dll)
+ */
+function hasSuperAdminAccess() {
+    if (!currentUser) return false;
+    return ['admin', 'developer'].includes(currentUser.role);
+}
+
+/**
+ * Cek akses ADMIN/GURU/DEVELOPER (untuk CRUD siswa)
+ */
+function hasTeacherOrHigherAccess() {
+    if (!currentUser) return false;
+    return ['admin', 'guru', 'developer'].includes(currentUser.role);
+}
+
+/**
+ * Cek akses ADMIN/DEVELOPER (untuk kelola user)
+ */
+function hasAdminAccess() {
+    if (!currentUser) return false;
+    return ['admin', 'developer'].includes(currentUser.role);
+}
+
+/**
+ * Cek apakah user dapat menghapus user (hanya super admin)
+ */
+function canDeleteUser() {
+    if (!currentUser) return false;
+    return ['admin', 'developer'].includes(currentUser.role);
+}
 
 // ======================= UTILITY FUNCTIONS =======================
 
@@ -106,16 +147,6 @@ function formatMarkdown(text) {
     return text;
 }
 
-function hasAdminAccess() {
-    if (!currentUser) return false;
-    return ['admin', 'guru', 'developer'].includes(currentUser.role);
-}
-
-function canDeleteUser() {
-    if (!currentUser) return false;
-    return ['admin', 'developer'].includes(currentUser.role);
-}
-
 // ======================= INTENT PARSING =======================
 
 function parseProfessionalIntent(command) {
@@ -141,9 +172,9 @@ function parseProfessionalIntent(command) {
         return { intent: 'help', confidence: 0.99 };
     }
     
-    // MANAJEMEN USER - UBAH ROLE (khusus admin/dev) - DIPERBAIKI
+    // MANAJEMEN USER - UBAH ROLE (khusus super admin)
     const roleMatch = command.match(/(?:ubah role|set role|change role|ubah peran|ganti role)\s+(?:akun|user)?\s*["']?([A-Za-z0-9@.]+)["']?\s+(?:menjadi|jadi|to)\s+["']?([A-Za-z]+)["']?/i);
-    if (roleMatch && (currentUser?.role === 'admin' || currentUser?.role === 'developer')) {
+    if (roleMatch && hasAdminAccess()) {
         console.log("🔧 Detected role change intent:", roleMatch[1], "->", roleMatch[2]);
         return { intent: 'change_user_role', userIdentifier: roleMatch[1], newRole: roleMatch[2].toLowerCase(), confidence: 0.95 };
     }
@@ -175,7 +206,7 @@ function parseProfessionalIntent(command) {
         return { intent: 'delete_student', need_id: true };
     }
     
-    // MANAJEMEN NAMA SEKOLAH
+    // MANAJEMEN NAMA SEKOLAH - HANYA SUPER ADMIN
     if (lowerCommand.match(/ubah nama sekolah|ganti nama sekolah|set nama sekolah|nama sekolah menjadi|nama sekolah baru/i)) {
         const newNameMatch = command.match(/(?:menjadi|jadi|menjadi)\s+["']?([A-Za-z0-9\s]+)["']?/i);
         if (newNameMatch && newNameMatch[1]) {
@@ -184,7 +215,7 @@ function parseProfessionalIntent(command) {
         return { intent: 'change_school_name', need_name: true };
     }
     
-    // MANAJEMEN DELAY GLOBAL
+    // MANAJEMEN DELAY GLOBAL - HANYA SUPER ADMIN
     if (lowerCommand.match(/delay global|ubah delay global|set delay global|global delay/i)) {
         const delayMatch = command.match(/(\d+)\s*(?:menit|minute|minutes|jam|hour|hours)?/i);
         if (delayMatch) {
@@ -195,7 +226,7 @@ function parseProfessionalIntent(command) {
         return { intent: 'update_global_delay', need_value: true };
     }
     
-    // MANAJEMEN KELAS
+    // MANAJEMEN KELAS - HANYA SUPER ADMIN
     if (lowerCommand.match(/tambah kelas|buat kelas|add class|tambah kelas baru/i)) {
         const classNameMatch = command.match(/(?:kelas|class)\s+["']?([A-Z0-9\s]+)["']?/i);
         if (classNameMatch && classNameMatch[1]) {
@@ -212,7 +243,7 @@ function parseProfessionalIntent(command) {
         return { intent: 'remove_class', need_name: true };
     }
     
-    // MANAJEMEN JURUSAN
+    // MANAJEMEN JURUSAN - HANYA SUPER ADMIN
     if (lowerCommand.match(/tambah jurusan|buat jurusan|add major|tambah jurusan baru/i)) {
         const majorMatch = command.match(/(?:jurusan|major)\s+["']?([A-Za-z0-9\s]+)["']?/i);
         if (majorMatch && majorMatch[1]) {
@@ -229,7 +260,7 @@ function parseProfessionalIntent(command) {
         return { intent: 'remove_major', need_name: true };
     }
     
-    // MANAJEMEN TIPE SEKOLAH
+    // MANAJEMEN TIPE SEKOLAH - HANYA SUPER ADMIN
     if (lowerCommand.match(/tipe sekolah|ubah tipe sekolah|set tipe sekolah|school type/i)) {
         const typeMatch = command.match(/(smp|smk|both)/i);
         if (typeMatch) {
@@ -238,7 +269,7 @@ function parseProfessionalIntent(command) {
         return { intent: 'change_school_type', need_type: true };
     }
     
-    // MANAJEMEN BATAS TERLAMBAT
+    // MANAJEMEN BATAS TERLAMBAT - HANYA SUPER ADMIN
     if (lowerCommand.match(/batas terlambat|ubah batas terlambat|late threshold/i)) {
         const timeMatch = command.match(/(\d{1,2}):(\d{2})/);
         if (timeMatch) {
@@ -247,19 +278,19 @@ function parseProfessionalIntent(command) {
         return { intent: 'update_late_threshold', need_time: true };
     }
     
-    // RESET PASSWORD USER (khusus admin/dev)
+    // RESET PASSWORD USER (khusus super admin)
     const resetPassMatch = command.match(/(?:reset password|reset pass)\s+(?:user|akun)?\s*["']?([A-Za-z0-9@.]+)["']?/i);
-    if (resetPassMatch && (currentUser?.role === 'admin' || currentUser?.role === 'developer')) {
+    if (resetPassMatch && hasAdminAccess()) {
         return { intent: 'reset_user_password', email: resetPassMatch[1], confidence: 0.94 };
     }
     
-    // HAPUS USER (khusus admin/dev)
+    // HAPUS USER (khusus super admin)
     const deleteUserMatch = command.match(/(?:hapus user|delete user|remove user)\s+["']?([A-Za-z\s]+)["']?/i);
-    if (deleteUserMatch && (currentUser?.role === 'admin' || currentUser?.role === 'developer')) {
+    if (deleteUserMatch && hasAdminAccess()) {
         return { intent: 'delete_user', userName: deleteUserMatch[1].trim(), confidence: 0.92 };
     }
     
-    // BUAT PENGUMUMAN
+    // BUAT PENGUMUMAN - Guru BOLEH
     const announcementMatch = command.match(/(?:buat pengumuman|tambah pengumuman|add announcement)\s+["']?([^"']+)["']?\s+(?:dengan isi|isi|content)?\s+["']?([^"']+)["']?/i);
     if (announcementMatch && lowerCommand.match(/pengumuman|announcement/)) {
         return { intent: 'create_announcement', title: announcementMatch[1], message: announcementMatch[2] || '', confidence: 0.91 };
@@ -390,7 +421,7 @@ function getProfessionalGreeting() {
     const userName = currentUser?.nama || 'Pengguna';
     let roleText = '';
     switch(currentUser?.role) {
-        case 'admin': roleText = 'Administrator'; break;
+        case 'admin': roleText = 'Kepala Sekolah'; break;
         case 'guru': roleText = 'Guru'; break;
         case 'developer': roleText = 'Developer'; break;
         default: roleText = 'Siswa';
@@ -404,7 +435,7 @@ function getProfessionalGreeting() {
            `• 📊 **Lihat rekap absensi** - "rekap Ani" atau "statistik kehadiran"\n` +
            `• ✏️ **Kelola data siswa** - "tambah siswa nama Toni id 7 kelas X jurusan RPL"\n` +
            `• 🏆 **Lihat peringkat** - "siapa siswa terbaik?"\n` +
-           `• ⚙️ **Kelola pengaturan** - "ubah nama sekolah menjadi SMK Taruna" atau "tambah kelas X A"\n` +
+           `• ⚙️ **Kelola pengaturan** (Admin/Developer saja) - "ubah nama sekolah menjadi SMK Taruna" atau "tambah kelas X A"\n` +
            `• 👥 **Kelola user** (Admin/Developer) - "ubah role zaki5go@gmail.com menjadi siswa"\n` +
            `• 📢 **Buat pengumuman** - "buat pengumuman Libur dengan isi Besok libur nasional"\n\n` +
            `💬 Ada yang bisa saya bantu, ${roleText} ${escapeHtml(userName)}?`;
@@ -419,7 +450,7 @@ function getProfessionalIntroduction() {
            `Saya adalah **Asisten AI Super Powerfull** untuk Sistem Absensi Berbasis Fingerprint ESP32.\n\n` +
            `**⚡ Kemampuan Utama (REAL ACTION):**\n` +
            `✅ **Manajemen Data Siswa** - Tambah, edit, hapus, cari data siswa (Langsung ke database)\n` +
-           `✅ **Manajemen Pengaturan** - Nama sekolah, delay global, kelas, jurusan (Langsung ke database)\n` +
+           `✅ **Manajemen Pengaturan** (Admin/Developer) - Nama sekolah, delay global, kelas, jurusan (Langsung ke database)\n` +
            `✅ **Manajemen User** (Admin/Developer) - Ubah role, reset password, hapus user\n` +
            `✅ **Manajemen Pengumuman** - Buat dan kelola pengumuman\n` +
            `✅ **Analisis Absensi** - Rekap, statistik, perbandingan, prediksi tren\n` +
@@ -437,7 +468,7 @@ function getAboutSystem() {
            `4. **Rekap Absensi** - Laporan lengkap per periode\n` +
            `5. **Pengumuman** - Broadcast informasi dengan timer\n` +
            `6. **Sosial Media Internal** - Status, Chat, Teman\n` +
-           `7. **Multi-role User** - Admin, Guru, Developer, Siswa\n` +
+           `7. **Multi-role User** - Admin (Kepala Sekolah), Guru, Developer, Siswa\n` +
            `8. **Log Aktivitas** - Audit trail semua operasi\n` +
            `9. **AI Assistant** - Saya! Yang siap membantu kapan saja\n\n` +
            `**📊 Data Real-time:**\n` +
@@ -466,7 +497,7 @@ function getProfessionalHelp() {
            `| Reset password | "reset password budi@sekolah.sch.id" |\n` +
            `| Hapus user | "hapus user Budi" |\n\n` +
            
-           `### 🔹 MANAJEMEN SISWA (CRUD - REAL ACTION)\n` +
+           `### 🔹 MANAJEMEN SISWA (CRUD - GURU & ADMIN/DEVELOPER)\n` +
            `| Perintah | Contoh |\n` +
            `|----------|--------|\n` +
            `| Tambah siswa | "tambah siswa nama Budi id 5 kelas X jurusan RPL" |\n` +
@@ -474,7 +505,7 @@ function getProfessionalHelp() {
            `| Hapus siswa | "hapus siswa id 5" |\n` +
            `| Cari siswa | "data siswa Budi" atau "id 5 siapa?" |\n\n` +
            
-           `### 🔹 PENGATURAN SEKOLAH (REAL ACTION)\n` +
+           `### 🔹 PENGATURAN SEKOLAH (HANYA ADMIN/DEVELOPER)\n` +
            `| Perintah | Contoh |\n` +
            `|----------|--------|\n` +
            `| Ubah nama sekolah | "ubah nama sekolah menjadi SMK Taruna" |\n` +
@@ -486,7 +517,7 @@ function getProfessionalHelp() {
            `| Tipe sekolah | "ubah tipe sekolah menjadi smk" |\n` +
            `| Batas terlambat | "ubah batas terlambat menjadi 07:15" |\n\n` +
            
-           `### 🔹 PENGUMUMAN (REAL ACTION)\n` +
+           `### 🔹 PENGUMUMAN (GURU & ADMIN/DEVELOPER)\n` +
            `| Perintah | Contoh |\n` +
            `|----------|--------|\n` +
            `| Buat pengumuman | "buat pengumuman Libur dengan isi Besok libur nasional" |\n\n` +
@@ -502,12 +533,12 @@ function getProfessionalHelp() {
            `✨ **Tips:** Gunakan bahasa natural, AI akan memahami maksud Anda!`;
 }
 
-// ======================= MANAJEMEN USER (KHUSUS ADMIN/DEVELOPER) =======================
+// ======================= MANAJEMEN USER (KHUSUS SUPER ADMIN) =======================
 
 async function changeUserRoleAction(data) {
-    // Cek akses
-    if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'developer')) {
-        return "⛔ **Akses Ditolak!**\n\nFitur ubah role user hanya untuk **Admin dan Developer**.\n\nRole Anda saat ini: " + (currentUser?.role || 'tidak diketahui');
+    // Cek akses - hanya super admin
+    if (!hasAdminAccess()) {
+        return "⛔ **Akses Ditolak!**\n\nFitur ubah role user hanya untuk **Kepala Sekolah (Admin) dan Developer**.\n\nRole Anda saat ini: " + (currentUser?.role || 'tidak diketahui');
     }
     
     if (data.need_data) {
@@ -556,7 +587,7 @@ async function changeUserRoleAction(data) {
     }
     
     const oldRole = targetUser.role;
-    const roleNames = { siswa: 'Siswa', guru: 'Guru', admin: 'Admin' };
+    const roleNames = { siswa: 'Siswa', guru: 'Guru', admin: 'Kepala Sekolah' };
     
     try {
         // Update role di Firebase
@@ -582,11 +613,12 @@ async function changeUserRoleAction(data) {
     }
 }
 
-// ======================= MANAJEMEN PENGATURAN =======================
+// ======================= MANAJEMEN PENGATURAN (HANYA SUPER ADMIN) =======================
 
 async function changeSchoolName(data) {
-    if (!hasAdminAccess()) {
-        return "⛔ **Akses Ditolak!**\n\nFitur ubah nama sekolah hanya untuk **Admin, Guru, dan Developer**.";
+    // HANYA SUPER ADMIN yang bisa mengubah nama sekolah
+    if (!hasSuperAdminAccess()) {
+        return "⛔ **Akses Ditolak!**\n\nFitur ubah nama sekolah hanya untuk **Kepala Sekolah (Admin) dan Developer**.\n\nRole Anda saat ini: " + (currentUser?.role || 'tidak diketahui');
     }
     
     if (data.need_name) {
@@ -627,8 +659,9 @@ async function changeSchoolName(data) {
 }
 
 async function updateGlobalDelay(data) {
-    if (!hasAdminAccess()) {
-        return "⛔ **Akses Ditolak!**\n\nFitur ini hanya untuk **Admin, Guru, dan Developer**.";
+    // HANYA SUPER ADMIN yang bisa mengubah delay global
+    if (!hasSuperAdminAccess()) {
+        return "⛔ **Akses Ditolak!**\n\nFitur ubah delay global hanya untuk **Kepala Sekolah (Admin) dan Developer**.\n\nRole Anda saat ini: " + (currentUser?.role || 'tidak diketahui');
     }
     
     if (data.need_value) {
@@ -662,8 +695,9 @@ async function updateGlobalDelay(data) {
 }
 
 async function addClassAction(data) {
-    if (!hasAdminAccess()) {
-        return "⛔ **Akses Ditolak!**\n\nFitur ini hanya untuk **Admin, Guru, dan Developer**.";
+    // HANYA SUPER ADMIN yang bisa menambah kelas
+    if (!hasSuperAdminAccess()) {
+        return "⛔ **Akses Ditolak!**\n\nFitur tambah kelas hanya untuk **Kepala Sekolah (Admin) dan Developer**.\n\nRole Anda saat ini: " + (currentUser?.role || 'tidak diketahui');
     }
     
     if (data.need_name) {
@@ -717,8 +751,9 @@ async function addClassAction(data) {
 }
 
 async function removeClassAction(data) {
-    if (!hasAdminAccess()) {
-        return "⛔ **Akses Ditolak!**\n\nFitur ini hanya untuk **Admin, Guru, dan Developer**.";
+    // HANYA SUPER ADMIN yang bisa menghapus kelas
+    if (!hasSuperAdminAccess()) {
+        return "⛔ **Akses Ditolak!**\n\nFitur hapus kelas hanya untuk **Kepala Sekolah (Admin) dan Developer**.\n\nRole Anda saat ini: " + (currentUser?.role || 'tidak diketahui');
     }
     
     if (data.need_name) {
@@ -769,8 +804,9 @@ async function removeClassAction(data) {
 }
 
 async function addMajorAction(data) {
-    if (!hasAdminAccess()) {
-        return "⛔ **Akses Ditolak!**\n\nFitur ini hanya untuk **Admin, Guru, dan Developer**.";
+    // HANYA SUPER ADMIN yang bisa menambah jurusan
+    if (!hasSuperAdminAccess()) {
+        return "⛔ **Akses Ditolak!**\n\nFitur tambah jurusan hanya untuk **Kepala Sekolah (Admin) dan Developer**.\n\nRole Anda saat ini: " + (currentUser?.role || 'tidak diketahui');
     }
     
     if (data.need_name) {
@@ -821,8 +857,9 @@ async function addMajorAction(data) {
 }
 
 async function removeMajorAction(data) {
-    if (!hasAdminAccess()) {
-        return "⛔ **Akses Ditolak!**\n\nFitur ini hanya untuk **Admin, Guru, dan Developer**.";
+    // HANYA SUPER ADMIN yang bisa menghapus jurusan
+    if (!hasSuperAdminAccess()) {
+        return "⛔ **Akses Ditolak!**\n\nFitur hapus jurusan hanya untuk **Kepala Sekolah (Admin) dan Developer**.\n\nRole Anda saat ini: " + (currentUser?.role || 'tidak diketahui');
     }
     
     if (data.need_name) {
@@ -873,8 +910,9 @@ async function removeMajorAction(data) {
 }
 
 async function changeSchoolTypeAction(data) {
-    if (!hasAdminAccess()) {
-        return "⛔ **Akses Ditolak!**\n\nFitur ini hanya untuk **Admin, Guru, dan Developer**.";
+    // HANYA SUPER ADMIN yang bisa mengubah tipe sekolah
+    if (!hasSuperAdminAccess()) {
+        return "⛔ **Akses Ditolak!**\n\nFitur ubah tipe sekolah hanya untuk **Kepala Sekolah (Admin) dan Developer**.\n\nRole Anda saat ini: " + (currentUser?.role || 'tidak diketahui');
     }
     
     if (data.need_type) {
@@ -918,8 +956,9 @@ async function changeSchoolTypeAction(data) {
 }
 
 async function updateLateThreshold(data) {
-    if (!hasAdminAccess()) {
-        return "⛔ **Akses Ditolak!**\n\nFitur ini hanya untuk **Admin, Guru, dan Developer**.";
+    // HANYA SUPER ADMIN yang bisa mengubah batas terlambat
+    if (!hasSuperAdminAccess()) {
+        return "⛔ **Akses Ditolak!**\n\nFitur ubah batas terlambat hanya untuk **Kepala Sekolah (Admin) dan Developer**.\n\nRole Anda saat ini: " + (currentUser?.role || 'tidak diketahui');
     }
     
     if (data.need_time) {
@@ -949,8 +988,9 @@ async function updateLateThreshold(data) {
 }
 
 async function resetUserPasswordAction(data) {
+    // HANYA SUPER ADMIN yang bisa reset password user lain
     if (!hasAdminAccess()) {
-        return "⛔ **Akses Ditolak!**\n\nFitur ini hanya untuk **Admin, Guru, dan Developer**.";
+        return "⛔ **Akses Ditolak!**\n\nFitur reset password hanya untuk **Kepala Sekolah (Admin) dan Developer**.\n\nRole Anda saat ini: " + (currentUser?.role || 'tidak diketahui');
     }
     
     const email = data.email;
@@ -976,8 +1016,9 @@ async function resetUserPasswordAction(data) {
 }
 
 async function deleteUserAction(data) {
+    // HANYA SUPER ADMIN yang bisa hapus user
     if (!canDeleteUser()) {
-        return "⛔ **Akses Ditolak!**\n\nFitur hapus user hanya untuk **Admin dan Developer**.";
+        return "⛔ **Akses Ditolak!**\n\nFitur hapus user hanya untuk **Kepala Sekolah (Admin) dan Developer**.\n\nRole Anda saat ini: " + (currentUser?.role || 'tidak diketahui');
     }
     
     const users = systemDataCache.usersAuth || [];
@@ -1001,8 +1042,9 @@ async function deleteUserAction(data) {
 }
 
 async function createAnnouncementAction(data) {
-    if (!hasAdminAccess()) {
-        return "⛔ **Akses Ditolak!**\n\nFitur ini hanya untuk **Admin, Guru, dan Developer**.";
+    // GURU, ADMIN, DEVELOPER bisa buat pengumuman
+    if (!hasTeacherOrHigherAccess()) {
+        return "⛔ **Akses Ditolak!**\n\nFitur buat pengumuman hanya untuk **Guru, Admin (Kepala Sekolah), dan Developer**.\n\nRole Anda saat ini: " + (currentUser?.role || 'tidak diketahui');
     }
     
     if (!data.title) {
@@ -1032,11 +1074,12 @@ async function createAnnouncementAction(data) {
     }
 }
 
-// ======================= CRUD SISWA VIA AI =======================
+// ======================= CRUD SISWA VIA AI (GURU BOLEH) =======================
 
 async function addStudentViaAI(data) {
-    if (!hasAdminAccess()) {
-        return "⛔ **Akses Ditolak!**\n\nFitur tambah siswa hanya untuk **Admin, Guru, dan Developer**.";
+    // GURU, ADMIN, DEVELOPER bisa tambah siswa
+    if (!hasTeacherOrHigherAccess()) {
+        return "⛔ **Akses Ditolak!**\n\nFitur tambah siswa hanya untuk **Guru, Admin (Kepala Sekolah), dan Developer**.\n\nRole Anda saat ini: " + (currentUser?.role || 'tidak diketahui');
     }
     
     if (data.need_data) {
@@ -1070,8 +1113,9 @@ async function addStudentViaAI(data) {
 }
 
 async function updateStudentViaAI(data) {
-    if (!hasAdminAccess()) {
-        return "⛔ **Akses Ditolak!**";
+    // GURU, ADMIN, DEVELOPER bisa update siswa
+    if (!hasTeacherOrHigherAccess()) {
+        return "⛔ **Akses Ditolak!**\n\nFitur update siswa hanya untuk **Guru, Admin (Kepala Sekolah), dan Developer**.";
     }
     
     if (data.need_data) {
@@ -1097,8 +1141,9 @@ async function updateStudentViaAI(data) {
 }
 
 async function deleteStudentViaAI(data) {
-    if (!hasAdminAccess()) {
-        return "⛔ **Akses Ditolak!**";
+    // GURU, ADMIN, DEVELOPER bisa hapus siswa
+    if (!hasTeacherOrHigherAccess()) {
+        return "⛔ **Akses Ditolak!**\n\nFitur hapus siswa hanya untuk **Guru, Admin (Kepala Sekolah), dan Developer**.";
     }
     
     if (data.need_id) {
@@ -1590,8 +1635,8 @@ function generateFallbackProfessional(message) {
 • 📊 **Rekap** - "rekap absensi Ani", "statistik"
 • ✏️ **Kelola** - "tambah siswa ...", "hapus siswa id 5"
 • 🏆 **Peringkat** - "siswa terbaik", "top 10"
-• ⚙️ **Pengaturan** - "ubah nama sekolah menjadi SMK Taruna"
-• 👥 **User** (Admin/Dev) - "ubah role Budi menjadi admin"
+• ⚙️ **Pengaturan** (Admin/Developer) - "ubah nama sekolah menjadi SMK Taruna"
+• 👥 **User** (Admin/Developer) - "ubah role Budi menjadi admin"
 • 📢 **Pengumuman** - "buat pengumuman Libur dengan isi ..."
 
 💬 **Ketik "bantuan"** untuk panduan lengkap.`;
@@ -1821,13 +1866,17 @@ function closeAIAssistantModal() {
 function initAIAssistant() {
     if (aiAssistantInitialized) return;
     
-    if (!currentUser || !hasAdminAccess()) {
+    // AI Assistant tersedia untuk Admin, Guru, dan Developer
+    // Tapi fitur pengaturan sistem dibatasi di fungsi masing-masing
+    if (!currentUser || !hasTeacherOrHigherAccess()) {
         console.log("🔒 AI Assistant: Akses ditolak untuk role:", currentUser?.role);
         return;
     }
     
     aiAssistantInitialized = true;
-    console.log("🤖 AI Assistant v5.1 initialized - Super Powerfull with REAL ACTIONS!");
+    console.log("🤖 AI Assistant v5.2 initialized - Super Powerfull with REAL ACTIONS!");
+    console.log("   - Super Admin (Admin/Developer): akses penuh termasuk pengaturan sistem");
+    console.log("   - Guru: akses CRUD siswa, pengumuman, dan data (TIDAK bisa ubah pengaturan sistem)");
     
     addAIAssistantButton();
     setInterval(() => updateSystemDataCache(), 30000);
@@ -1841,11 +1890,18 @@ window.addEventListener('uiReady', (e) => {
 });
 
 window.addEventListener('dataReady', () => {
-    if (currentUser && hasAdminAccess() && !aiAssistantInitialized) initAIAssistant();
+    if (currentUser && hasTeacherOrHigherAccess() && !aiAssistantInitialized) initAIAssistant();
 });
 
 window.initAIAssistant = initAIAssistant;
 window.openAIAssistantModal = openAIAssistantModal;
 window.closeAIAssistantModal = closeAIAssistantModal;
 
-console.log("✅ ai-assistant.js V5.1 loaded - SUPER POWERFULL AI with REAL DATABASE ACTIONS!");
+// Ekspor fungsi access control untuk digunakan modul lain
+window.hasSuperAdminAccess = hasSuperAdminAccess;
+window.hasTeacherOrHigherAccess = hasTeacherOrHigherAccess;
+window.hasAdminAccess = hasAdminAccess;
+
+console.log("✅ ai-assistant.js V5.2 loaded - SUPER POWERFULL AI with REAL DATABASE ACTIONS!");
+console.log("   🔒 Fitur pengaturan sistem (nama sekolah, delay, kelas, jurusan, tipe sekolah, batas terlambat) hanya untuk SUPER ADMIN (Admin/Developer)");
+console.log("   ✅ Guru tetap bisa: CRUD siswa, buat pengumuman, lihat data/rekap");

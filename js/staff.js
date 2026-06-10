@@ -1,6 +1,6 @@
-// staff.js - VERSION 2.11 (DENGAN NOTIFIKASI WHATSAPP UNTUK STAFF & PERBAIKAN CLOSE MODAL)
-// Manajemen Data Guru/Karyawan - Terintegrasi dengan users_auth (role guru)
-// Fitur WhatsApp: Simpan nomor staff, test kirim pesan, dan notifikasi otomatis
+// staff.js - VERSION 3.2 (FIXED PHOTO SYNC)
+// Manajemen Data Guru/Karyawan dengan Sinkronisasi penuh ke Akun User
+// PERBAIKAN: Foto profil sekarang benar-benar sinkron dari akun user
 // ============================================================================
 
 let staffDataReadyListenerAdded = false;
@@ -24,53 +24,269 @@ function canManageStaff() {
     return (window.currentUser.role === 'admin' || window.currentUser.role === 'guru' || window.currentUser.role === 'developer');
 }
 
-// ======================= CEK APAKAH MENU STAFF VISIBLE ========================
 function isStaffMenuVisible() {
     if (!window.currentUser) return false;
     return (window.currentUser.role === 'admin' || window.currentUser.role === 'guru' || window.currentUser.role === 'developer');
 }
 
-// ======================= FUNGSI FOTO STAFF ========================
-function getStaffPhotoUrl(staffId, staffName) {
+// ======================= FUNGSI FOTO STAFF DENGAN SYNC YANG BENAR ========================
+function getStaffPhotoUrl(staffId, staffName, staffEmail = null) {
     if (!staffId) {
         const initial = staffName ? staffName.charAt(0).toUpperCase() : 'G';
         return `https://ui-avatars.com/api/?name=${encodeURIComponent(initial)}&background=ff9800&color=fff&size=100&bold=true`;
     }
     
+    // Cek cache dulu
     if (staffPhotoCache.has(staffId)) {
         return staffPhotoCache.get(staffId);
     }
     
+    let photoUrl = null;
     let userAuth = null;
+    
+    // STRATEGI 1: Cari user auth berdasarkan staffId
     if (window.dbData && window.dbData.users_auth) {
-        userAuth = window.dbData.users_auth.find(u => u.staffId == staffId || u.uid == staffId);
+        userAuth = window.dbData.users_auth.find(u => u.staffId == staffId);
+        
+        // STRATEGI 2: Cari berdasarkan uid
         if (!userAuth) {
-            userAuth = window.dbData.users_auth.find(u => u.email === staffId);
+            userAuth = window.dbData.users_auth.find(u => u.uid == staffId);
+        }
+        
+        // STRATEGI 3: Cari berdasarkan email
+        if (!userAuth && staffEmail) {
+            userAuth = window.dbData.users_auth.find(u => u.email === staffEmail);
+        }
+        
+        // STRATEGI 4: Cari berdasarkan nama (fallback terakhir)
+        if (!userAuth && staffName) {
+            userAuth = window.dbData.users_auth.find(u => u.nama === staffName);
         }
     }
     
-    let photoUrl;
-    if (userAuth && userAuth.photoUrl && userAuth.photoUrl !== 'null' && userAuth.photoUrl !== 'undefined') {
+    // Jika ada user auth, ambil foto dari akun
+    if (userAuth && userAuth.photoUrl && userAuth.photoUrl !== 'null' && userAuth.photoUrl !== 'undefined' && userAuth.photoUrl !== '') {
         photoUrl = userAuth.photoUrl;
-    } else {
-        const initial = staffName ? staffName.charAt(0).toUpperCase() : 'G';
-        photoUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(initial)}&background=ff9800&color=fff&size=100&bold=true`;
+        // Tambahkan timestamp untuk bypass cache browser
+        const separator = photoUrl.includes('?') ? '&' : '?';
+        photoUrl = photoUrl + separator + 't=' + Date.now();
+        console.log(`📸 Staff ${staffName} (${staffId}) using photo from user account: ${userAuth.email}`);
     }
     
+    // Fallback ke avatar inisial jika tidak ada foto
+    if (!photoUrl) {
+        const initial = staffName ? staffName.charAt(0).toUpperCase() : 'G';
+        photoUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(initial)}&background=ff9800&color=fff&size=100&bold=true`;
+        console.log(`📸 Staff ${staffName} (${staffId}) using avatar fallback (no account photo)`);
+    }
+    
+    // Simpan ke cache
     staffPhotoCache.set(staffId, photoUrl);
     return photoUrl;
 }
 
-// ======================= NOTIFIKASI WHATSAPP UNTUK STAFF ========================
+/**
+ * Refresh foto untuk staff tertentu (paksa ambil dari Firebase)
+ */
+async function refreshStaffPhoto(staffId) {
+    if (!staffId) return;
+    
+    // Hapus cache lama
+    staffPhotoCache.delete(staffId);
+    
+    try {
+        // Ambil data user auth terbaru dari Firebase
+        let userAuth = null;
+        
+        // Cari berdasarkan staffId
+        const snapshotByStaffId = await db.ref('users_auth').orderByChild('staffId').equalTo(staffId).once('value');
+        if (snapshotByStaffId.exists()) {
+            const entries = Object.entries(snapshotByStaffId.val());
+            if (entries.length > 0) {
+                userAuth = { uid: entries[0][0], ...entries[0][1] };
+            }
+        }
+        
+        // Cari berdasarkan uid
+        if (!userAuth) {
+            const snapshotByUid = await db.ref(`users_auth/${staffId}`).once('value');
+            if (snapshotByUid.exists()) {
+                userAuth = { uid: staffId, ...snapshotByUid.val() };
+            }
+        }
+        
+        if (userAuth && userAuth.photoUrl) {
+            // Update foto di node staff
+            await db.ref(`staff/${staffId}/photoUrl`).set(userAuth.photoUrl);
+            await db.ref(`staff/${staffId}/syncedAt`).set(firebase.database.ServerValue.TIMESTAMP);
+            console.log(`✅ Staff ${staffId} photo refreshed from user account`);
+        }
+        
+        // Refresh tampilan
+        if (document.getElementById('tab-staff')?.classList.contains('active')) {
+            renderStaffTable();
+        }
+        
+    } catch (error) {
+        console.error(`Error refreshing staff photo for ${staffId}:`, error);
+    }
+}
+
+// ======================= SINKRONISASI DATA STAFF DARI AKUN USER ========================
+/**
+ * Sinkronkan data staff dari user auth
+ * Memastikan data staff selalu up-to-date dengan akun user
+ */
+async function syncStaffFromUserAccount(staffId, userId = null) {
+    if (!staffId) return null;
+    
+    try {
+        let userAuth = null;
+        
+        // Cari user berdasarkan staffId atau userId
+        if (window.dbData && window.dbData.users_auth) {
+            userAuth = window.dbData.users_auth.find(u => u.staffId == staffId);
+            if (!userAuth && userId) {
+                userAuth = window.dbData.users_auth.find(u => u.uid === userId);
+            }
+        }
+        
+        // Jika tidak ditemukan di cache, ambil dari Firebase
+        if (!userAuth) {
+            const snapshot = await db.ref('users_auth').orderByChild('staffId').equalTo(staffId).once('value');
+            if (snapshot.exists()) {
+                const entries = Object.entries(snapshot.val());
+                if (entries.length > 0) {
+                    userAuth = { uid: entries[0][0], ...entries[0][1] };
+                }
+            }
+        }
+        
+        if (!userAuth && userId) {
+            const snapshot = await db.ref(`users_auth/${userId}`).once('value');
+            if (snapshot.exists()) {
+                userAuth = { uid: userId, ...snapshot.val() };
+            }
+        }
+        
+        if (userAuth) {
+            // Update data staff dari akun user
+            const staffUpdates = {};
+            
+            if (userAuth.nama) staffUpdates.nama = userAuth.nama;
+            if (userAuth.email) staffUpdates.email = userAuth.email;
+            if (userAuth.photoUrl) staffUpdates.photoUrl = userAuth.photoUrl;
+            if (userAuth.noHp) staffUpdates.noHp = userAuth.noHp;
+            
+            if (userAuth.role === 'guru' || userAuth.role === 'admin' || userAuth.role === 'wakil_kepala' || userAuth.role === 'staff_tu') {
+                const roleToJabatan = {
+                    'admin': 'kepala_sekolah',
+                    'wakil_kepala': 'wakil_kepala',
+                    'staff_tu': 'staff_tu',
+                    'guru': 'guru'
+                };
+                if (!staffUpdates.jabatan) staffUpdates.jabatan = roleToJabatan[userAuth.role] || 'guru';
+            }
+            staffUpdates.userId = userAuth.uid;
+            staffUpdates.syncedAt = firebase.database.ServerValue.TIMESTAMP;
+            
+            // Simpan ke node staff
+            await db.ref(`staff/${staffId}`).update(staffUpdates);
+            
+            // Clear cache foto
+            staffPhotoCache.delete(staffId);
+            
+            console.log(`🔄 Staff ${staffId} synced from user account: ${userAuth.nama}`);
+            return staffUpdates;
+        }
+    } catch (error) {
+        console.error(`Error syncing staff ${staffId}:`, error);
+    }
+    
+    return null;
+}
 
 /**
- * Kirim notifikasi WhatsApp ke staff (Guru/Karyawan)
- * @param {string} staffId - ID staff
- * @param {string} staffName - Nama staff
- * @param {string} type - Jenis notifikasi ('check_in', 'check_out')
- * @param {string} time - Waktu kejadian
- * @param {string} date - Tanggal (opsional)
+ * Sinkronkan semua staff dari akun user
+ * Dipanggil saat inisialisasi atau saat data user berubah
  */
+async function syncAllStaffFromUserAccounts() {
+    console.log("🔄 Syncing all staff from user accounts...");
+    
+    if (!window.dbData || !window.dbData.users_auth) {
+        console.log("⏳ Users auth data not ready yet");
+        return;
+    }
+    
+    // Ambil semua user dengan role guru, admin, wakil_kepala, staff_tu
+    const staffUsers = window.dbData.users_auth.filter(u => 
+        ['guru', 'admin', 'wakil_kepala', 'staff_tu', 'developer'].includes(u.role)
+    );
+    
+    console.log(`📋 Found ${staffUsers.length} users with staff roles`);
+    
+    let syncedCount = 0;
+    
+    for (const user of staffUsers) {
+        let staffId = user.staffId;
+        
+        // Jika tidak ada staffId, coba cari berdasarkan email atau uid di node staff
+        if (!staffId) {
+            const staffSnapshot = await db.ref('staff').once('value');
+            const staffData = staffSnapshot.val();
+            
+            if (staffData) {
+                const existingStaff = Object.entries(staffData).find(([id, data]) => 
+                    data.email === user.email || data.userId === user.uid
+                );
+                if (existingStaff) {
+                    staffId = existingStaff[0];
+                }
+            }
+        }
+        
+        // Jika masih tidak ada staffId, buat staffId baru berdasarkan uid atau email
+        if (!staffId) {
+            staffId = user.uid;
+        }
+        
+        // Update data staff
+        const staffUpdates = {
+            id: staffId,
+            nama: user.nama,
+            email: user.email,
+            jabatan: user.role === 'admin' ? 'kepala_sekolah' : 
+                     (user.role === 'wakil_kepala' ? 'wakil_kepala' :
+                     (user.role === 'staff_tu' ? 'staff_tu' : 
+                     (user.role === 'developer' ? 'developer' : 'guru'))),
+            departemen: user.departemen || '-',
+            noHp: user.noHp || '-',
+            userId: user.uid,
+            photoUrl: user.photoUrl || null,
+            syncedAt: firebase.database.ServerValue.TIMESTAMP
+        };
+        
+        try {
+            await db.ref(`staff/${staffId}`).update(staffUpdates);
+            syncedCount++;
+            
+            // Clear cache foto
+            staffPhotoCache.delete(staffId);
+        } catch (error) {
+            console.error(`Error syncing staff ${staffId}:`, error);
+        }
+    }
+    
+    console.log(`✅ Synced ${syncedCount} staff from user accounts`);
+    
+    // Refresh staff list
+    staffListLoaded = false;
+    if (document.getElementById('tab-staff')?.classList.contains('active')) {
+        renderStaffTable();
+    }
+}
+
+// ======================= NOTIFIKASI WHATSAPP UNTUK STAFF ========================
 async function sendStaffWhatsAppNotification(staffId, staffName, type, time, date = null) {
     if (typeof window.WHATSAPP_CONFIG === 'undefined' || !window.WHATSAPP_CONFIG.enabled) {
         console.log('📱 WhatsApp notification disabled for staff');
@@ -96,8 +312,9 @@ async function sendStaffWhatsAppNotification(staffId, staffName, type, time, dat
             }
         }
         
+        // Cari dari users_auth
         if (!phoneNumber && window.dbData && window.dbData.users_auth) {
-            const userAuth = window.dbData.users_auth.find(u => u.uid === staffId || u.staffId === staffId);
+            const userAuth = window.dbData.users_auth.find(u => u.staffId == staffId || u.uid == staffId);
             if (userAuth && userAuth.noHp) {
                 phoneNumber = userAuth.noHp;
             }
@@ -178,7 +395,14 @@ async function saveStaffContact(staffId, staffName, phoneNumber, relation = 'sta
             updatedAt: firebase.database.ServerValue.TIMESTAMP
         });
         
+        // Update juga di node staff dan users_auth
         await db.ref(`staff/${staffId}/noHp`).set(formattedNumber);
+        
+        // Update di users_auth jika ada
+        const userAuth = window.dbData?.users_auth?.find(u => u.staffId == staffId);
+        if (userAuth) {
+            await db.ref(`users_auth/${userAuth.uid}/noHp`).set(formattedNumber);
+        }
         
         if (window.showToast) window.showToast(`✅ Nomor WhatsApp ${staffName} berhasil disimpan!`, 'success');
         
@@ -204,11 +428,7 @@ async function getStaffContact(staffId) {
     }
 }
 
-// ======================= FUNGSI CLOSE MODAL (DIPERBAIKI) ========================
-
-/**
- * Menutup modal staff contact
- */
+// ======================= FUNGSI CLOSE MODAL ========================
 function closeStaffContactModal() {
     const modal = document.getElementById('modal-staff-contact');
     if (modal) {
@@ -222,9 +442,6 @@ function closeStaffContactModal() {
     }
 }
 
-/**
- * Menutup modal staff photo
- */
 function closeStaffPhotoModal() {
     const modal = document.getElementById('modal-staff-photo');
     if (modal) {
@@ -238,7 +455,6 @@ function closeStaffPhotoModal() {
     }
 }
 
-// Override window.closeModal untuk menangani modal staff
 if (typeof window.closeModal === 'function') {
     const originalCloseModal = window.closeModal;
     window.closeModal = function(modalId) {
@@ -271,7 +487,6 @@ if (typeof window.closeModal === 'function') {
 }
 
 // ======================= MODAL STAFF CONTACT ========================
-
 function openStaffContactModal(staffId, staffName) {
     const modalId = 'modal-staff-contact';
     let existingModal = document.getElementById(modalId);
@@ -330,12 +545,10 @@ function openStaffContactModal(staffId, staffName) {
         `;
         document.body.insertAdjacentHTML('beforeend', modalHtml);
         
-        // Tambahkan event listener untuk tombol close
         document.querySelectorAll('.close-staff-modal').forEach(btn => {
             btn.addEventListener('click', closeStaffContactModal);
         });
         
-        // Tutup modal jika klik di luar area modal
         const modalOverlay = document.getElementById(modalId);
         if (modalOverlay) {
             modalOverlay.addEventListener('click', function(e) {
@@ -345,7 +558,6 @@ function openStaffContactModal(staffId, staffName) {
             });
         }
         
-        // Tutup modal dengan tombol ESC
         const escHandler = function(e) {
             if (e.key === 'Escape') {
                 closeStaffContactModal();
@@ -511,7 +723,7 @@ function resetStaffFilters() {
     clearSearch();
 }
 
-// ======================= AMBIL DATA STAFF ========================
+// ======================= AMBIL DATA STAFF DENGAN SYNC ========================
 async function getStaffList(forceRefresh = false) {
     if (!forceRefresh && staffListLoaded && staffListCache.length > 0) {
         console.log("📋 Using cached staff list:", staffListCache.length);
@@ -536,40 +748,123 @@ async function getStaffList(forceRefresh = false) {
         
         if (staffData) {
             Object.keys(staffData).forEach(key => {
-                staffMap.set(key, { ...staffData[key], source: 'staff', id: key });
+                const staff = { ...staffData[key], source: 'staff', id: key };
+                
+                // Cek apakah ada user auth yang terhubung
+                let userAuth = null;
+                if (window.dbData && window.dbData.users_auth) {
+                    userAuth = window.dbData.users_auth.find(u => u.staffId == key || u.uid == staff.userId);
+                    if (!userAuth && staff.email) {
+                        userAuth = window.dbData.users_auth.find(u => u.email === staff.email);
+                    }
+                    if (!userAuth && staff.nama) {
+                        userAuth = window.dbData.users_auth.find(u => u.nama === staff.nama);
+                    }
+                }
+                
+                // Sinkronkan data dari user auth
+                if (userAuth) {
+                    if (userAuth.nama && (!staff.nama || staff.nama !== userAuth.nama)) staff.nama = userAuth.nama;
+                    if (userAuth.email && (!staff.email || staff.email !== userAuth.email)) staff.email = userAuth.email;
+                    if (userAuth.photoUrl) staff.photoUrl = userAuth.photoUrl;
+                    if (userAuth.noHp && (!staff.noHp || staff.noHp === '-')) staff.noHp = userAuth.noHp;
+                    if (!staff.userId) staff.userId = userAuth.uid;
+                    
+                    // Map role ke jabatan
+                    if (userAuth.role === 'admin') staff.jabatan = 'kepala_sekolah';
+                    else if (userAuth.role === 'wakil_kepala') staff.jabatan = 'wakil_kepala';
+                    else if (userAuth.role === 'staff_tu') staff.jabatan = 'staff_tu';
+                    else if (userAuth.role === 'developer') staff.jabatan = 'developer';
+                    else if (userAuth.role === 'guru' && (!staff.jabatan || staff.jabatan === '-')) staff.jabatan = 'guru';
+                    
+                    staff.fromUserAuth = true;
+                    staff.userAccount = userAuth;
+                }
+                
+                staffMap.set(key, staff);
             });
             console.log(`📁 Found ${Object.keys(staffData).length} staff from 'staff' node`);
         }
         
         const users = window.dbData?.users_auth || [];
-        const guruUsers = users.filter(u => u.role === 'guru' || u.role === 'developer');
+        const guruUsers = users.filter(u => ['guru', 'admin', 'wakil_kepala', 'staff_tu', 'developer'].includes(u.role));
         
-        console.log(`👥 Found ${guruUsers.length} users with role guru/developer`);
+        console.log(`👥 Found ${guruUsers.length} users with staff roles`);
         
         for (const user of guruUsers) {
-            const existingStaff = staffMap.get(user.uid) || staffMap.get(user.staffId);
+            // Cari staff berdasarkan userId, staffId, email, atau nama
+            let existingStaff = null;
+            let staffId = null;
+            
+            // Cari berdasarkan userId
+            if (user.uid) {
+                existingStaff = staffMap.get(user.uid);
+                if (existingStaff) staffId = user.uid;
+            }
+            
+            // Cari berdasarkan staffId
+            if (!existingStaff && user.staffId) {
+                existingStaff = staffMap.get(user.staffId);
+                if (existingStaff) staffId = user.staffId;
+            }
+            
+            // Cari berdasarkan email
+            if (!existingStaff && user.email) {
+                for (const [id, staff] of staffMap.entries()) {
+                    if (staff.email === user.email) {
+                        existingStaff = staff;
+                        staffId = id;
+                        break;
+                    }
+                }
+            }
+            
+            // Cari berdasarkan nama
+            if (!existingStaff && user.nama) {
+                for (const [id, staff] of staffMap.entries()) {
+                    if (staff.nama === user.nama) {
+                        existingStaff = staff;
+                        staffId = id;
+                        break;
+                    }
+                }
+            }
             
             if (!existingStaff) {
-                staffMap.set(user.uid, {
-                    id: user.uid,
+                // Buat staff baru dari user auth
+                staffId = user.uid;
+                staffMap.set(staffId, {
+                    id: staffId,
                     nama: user.nama || user.email?.split('@')[0] || 'Unknown',
-                    jabatan: user.role === 'developer' ? 'Developer' : 'Guru',
+                    jabatan: user.role === 'admin' ? 'kepala_sekolah' : 
+                             (user.role === 'wakil_kepala' ? 'wakil_kepala' :
+                             (user.role === 'staff_tu' ? 'staff_tu' :
+                             (user.role === 'developer' ? 'developer' : 'guru'))),
                     departemen: user.departemen || '-',
                     noHp: user.noHp || '-',
                     email: user.email,
                     userId: user.uid,
+                    photoUrl: user.photoUrl || null,
                     source: 'user_auth',
-                    fromUserAuth: true
+                    fromUserAuth: true,
+                    userAccount: user
                 });
             } else if (existingStaff.source === 'staff' && !existingStaff.userId) {
                 existingStaff.userId = user.uid;
                 existingStaff.email = existingStaff.email || user.email;
-                window.firebase.database().ref(`staff/${existingStaff.id}/userId`).set(user.uid)
-                    .catch(e => console.warn("Update staff userId failed:", e));
-                if (!existingStaff.email && user.email) {
-                    window.firebase.database().ref(`staff/${existingStaff.id}/email`).set(user.email)
-                        .catch(e => console.warn("Update staff email failed:", e));
-                }
+                if (user.photoUrl && !existingStaff.photoUrl) existingStaff.photoUrl = user.photoUrl;
+                if (user.nama && existingStaff.nama !== user.nama) existingStaff.nama = user.nama;
+                if (user.noHp && (!existingStaff.noHp || existingStaff.noHp === '-')) existingStaff.noHp = user.noHp;
+                existingStaff.userAccount = user;
+                
+                // Update ke Firebase
+                window.firebase.database().ref(`staff/${staffId}`).update({
+                    userId: user.uid,
+                    email: existingStaff.email,
+                    nama: existingStaff.nama,
+                    photoUrl: existingStaff.photoUrl,
+                    noHp: existingStaff.noHp
+                }).catch(e => console.warn("Update staff failed:", e));
             }
         }
         
@@ -588,11 +883,11 @@ async function getStaffList(forceRefresh = false) {
     staffListCache = staffList;
     staffListLoaded = true;
     
-    console.log(`✅ Staff list loaded: ${staffList.length} staff total`);
+    console.log(`✅ Staff list loaded: ${staffList.length} staff total (${staffList.filter(s => s.fromUserAuth).length} from user auth)`);
     return staffList;
 }
 
-// ======================= RENDER TABEL STAFF ========================
+// ======================= RENDER TABEL STAFF (DENGAN FOTO YANG BENAR) ========================
 async function renderStaffTable() {
     console.log("👥 renderStaffTable dipanggil");
     
@@ -600,8 +895,10 @@ async function renderStaffTable() {
         console.log("🔒 Staff table hidden for role:", window.currentUser?.role);
         const tbody = document.getElementById('tbody-staff');
         if (tbody) {
-            tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:30px;">
-                🔒 Anda tidak memiliki akses ke halaman ini.
+            tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:40px;">
+                <div style="font-size: 48px; margin-bottom: 16px;">🔒</div>
+                <h3>Akses Terbatas</h3>
+                <p style="color: var(--text-muted);">Anda tidak memiliki akses ke halaman ini.</p>
             <\/td><\/tr>`;
         }
         return;
@@ -629,19 +926,17 @@ async function renderStaffTable() {
                 let table = tableContainer.querySelector('table');
                 if (!table) {
                     table = document.createElement('table');
-                    table.style.width = '100%';
-                    table.style.borderCollapse = 'collapse';
+                    table.style.cssText = 'width:100%; border-collapse:collapse;';
                     table.innerHTML = `
                         <thead>
-                            <tr>
-                                <th style="padding:12px;">Foto</th>
-                                <th style="padding:12px;">ID</th>
-                                <th style="padding:12px;">Nama</th>
-                                <th style="padding:12px;">Jabatan</th>
-                                <th style="padding:12px;">Departemen</th>
-                                <th style="padding:12px;">No. HP</th>
-                                <th style="padding:12px;">Email</th>
-                                <th style="padding:12px;">Aksi</th>
+                            <tr style="background:var(--bg-hover); border-bottom: 2px solid var(--border);">
+                                <th style="padding:14px 12px; text-align:left; font-weight:600;">Foto</th>
+                                <th style="padding:14px 12px; text-align:left; font-weight:600;">ID</th>
+                                <th style="padding:14px 12px; text-align:left; font-weight:600;">Nama Staff</th>
+                                <th style="padding:14px 12px; text-align:left; font-weight:600;">Jabatan</th>
+                                <th style="padding:14px 12px; text-align:left; font-weight:600;">Departemen</th>
+                                <th style="padding:14px 12px; text-align:left; font-weight:600;">Kontak</th>
+                                <th style="padding:14px 12px; text-align:left; font-weight:600;">Aksi</th>
                             </tr>
                         </thead>
                         <tbody id="tbody-staff"></tbody>
@@ -660,22 +955,35 @@ async function renderStaffTable() {
         return;
     }
     
-    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:30px;">
-        <div style="display:inline-block; width:30px; height:30px; border:3px solid var(--border); border-top-color:#00bcd4; border-radius:50%; animation: spin 1s linear infinite;"></div>
-        <div style="margin-top:10px;">⏳ Memuat data staff...</div>
-    <\/td><\/tr>`;
+    // Tampilkan loading skeleton
+    tbody.innerHTML = `
+        <tr>
+            <td colspan="7" style="text-align:center; padding:40px;">
+                <div style="display:inline-block; width:36px; height:36px; border:3px solid var(--border); border-top-color:#00bcd4; border-radius:50%; animation: spin 1s linear infinite;"></div>
+                <div style="margin-top:12px; color: var(--text-muted);">⏳ Memuat data staff...</div>
+            </td>
+        </tr>
+    `;
     
     try {
         const staffList = await getStaffList(true);
         
         if (!staffList || staffList.length === 0) {
-            tbody.innerHTML = `<td><td colspan="8" style="text-align:center; padding:30px;">
-                📭 Belum ada data guru/karyawan.<br><br>
-                <div style="margin-top:15px;">
-                    <button onclick="openAddStaffForm()" style="padding:8px 20px; background:#00bcd4; border:none; border-radius:20px; color:white; cursor:pointer;">➕ Tambah Staff Baru</button>
-                </div>
-                <small style="display:block; margin-top:15px;">💡 Tips: Tambah user dengan role "Guru" di Manajemen User juga akan muncul di sini</small>
-            <\/td><\/tr>`;
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="7" style="text-align:center; padding:60px 20px;">
+                        <div style="font-size: 48px; margin-bottom: 16px;">📭</div>
+                        <h3 style="margin-bottom: 8px;">Belum Ada Data Staff</h3>
+                        <p style="color: var(--text-muted); margin-bottom: 20px;">Silakan tambah guru/karyawan melalui form di atas.</p>
+                        <button onclick="openAddStaffForm()" style="padding:10px 24px; background:#00bcd4; border:none; border-radius:30px; color:white; cursor:pointer; font-weight:500;">
+                            ➕ Tambah Staff Baru
+                        </button>
+                        <div style="margin-top: 16px;">
+                            <small style="color: var(--text-muted);">💡 Tips: Tambah user dengan role "Guru" di Manajemen User juga akan muncul di sini</small>
+                        </div>
+                    </div>
+                </tr>
+            `;
             updateStaffStatistics(staffList || []);
             return;
         }
@@ -683,10 +991,18 @@ async function renderStaffTable() {
         const filteredStaff = filterStaffList(staffList);
         
         if (filteredStaff.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:30px;">
-                🔍 Tidak ada data yang sesuai dengan filter yang dipilih.<br><br>
-                <button onclick="resetStaffFilters()" style="padding:8px 20px; background:#00bcd4; border:none; border-radius:20px; color:white; cursor:pointer;">Reset Filter</button>
-            <\/td><\/tr>`;
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="7" style="text-align:center; padding:60px 20px;">
+                        <div style="font-size: 48px; margin-bottom: 16px;">🔍</div>
+                        <h3 style="margin-bottom: 8px;">Tidak Ada Data yang Sesuai</h3>
+                        <p style="color: var(--text-muted); margin-bottom: 20px;">Tidak ditemukan staff dengan filter atau pencarian yang dipilih.</p>
+                        <button onclick="resetStaffFilters()" style="padding:10px 24px; background:#00bcd4; border:none; border-radius:30px; color:white; cursor:pointer; font-weight:500;">
+                            🔄 Reset Filter
+                        </button>
+                    </div>
+                </tr>
+            `;
             updateStaffStatistics(staffList);
             return;
         }
@@ -696,73 +1012,135 @@ async function renderStaffTable() {
         const canManageWhatsApp = window.currentUser && (window.currentUser.role === 'admin' || window.currentUser.role === 'developer');
         
         for (const staff of filteredStaff) {
-            const photoUrl = getStaffPhotoUrl(staff.id, staff.nama);
+            // Gunakan foto dari akun user jika ada
+            const photoUrl = getStaffPhotoUrl(staff.id, staff.nama, staff.email);
             const initial = staff.nama ? staff.nama.charAt(0).toUpperCase() : 'G';
             const safeId = escapeHtmlStaff(String(staff.id));
             const safeNama = escapeHtmlStaff(staff.nama);
             
             let hasAccount = false;
+            let userAccountInfo = null;
             if (window.dbData && window.dbData.users_auth) {
-                hasAccount = !!(staff.userId || staff.fromUserAuth || 
-                    window.dbData.users_auth.some(u => u.uid === staff.id || u.staffId === staff.id || u.email === staff.email));
+                const userAuth = window.dbData.users_auth.find(u => u.staffId == staff.id || u.uid == staff.id || u.email === staff.email || u.nama === staff.nama);
+                hasAccount = !!userAuth;
+                userAccountInfo = userAuth;
             }
             
+            // Badge Akun dengan tooltip
             const accountBadge = hasAccount 
-                ? '<span style="background:#4caf50; color:white; font-size:9px; padding:2px 6px; border-radius:12px; margin-left:5px;">✓ Berakun</span>' 
-                : '<span style="background:#ff9800; color:white; font-size:9px; padding:2px 6px; border-radius:12px; margin-left:5px;">❌ Belum Berakun</span>';
+                ? `<span style="background:#4caf50; color:white; font-size:10px; padding:3px 8px; border-radius:20px; margin-left:6px;" title="Email akun: ${userAccountInfo?.email || '-'}">✓ Berakun</span>` 
+                : '<span style="background:#ff9800; color:white; font-size:10px; padding:3px 8px; border-radius:20px; margin-left:6px;" title="Belum memiliki akun login">❌ Belum Berakun</span>';
             
+            // Badge WhatsApp
             let hasWhatsApp = false;
-            if (staff.noHp && staff.noHp !== '-') hasWhatsApp = true;
+            let whatsAppNumber = staff.noHp && staff.noHp !== '-' ? staff.noHp : null;
+            if (!whatsAppNumber && userAccountInfo && userAccountInfo.noHp) {
+                whatsAppNumber = userAccountInfo.noHp;
+            }
+            hasWhatsApp = !!whatsAppNumber;
             
             const waBadge = hasWhatsApp 
-                ? '<span style="background:#25D366; color:white; font-size:9px; padding:2px 6px; border-radius:12px; margin-left:5px;" title="Nomor WhatsApp tersimpan">📱 WA</span>' 
+                ? `<span style="background:#25D366; color:white; font-size:10px; padding:3px 8px; border-radius:20px; margin-left:6px;" title="Nomor WhatsApp: ${whatsAppNumber}">📱 WA</span>` 
                 : '';
             
+            // Jabatan dengan icon
+            let jabatanIcon = '👨‍🏫';
+            let jabatanDisplay = staff.jabatan || '-';
+            if (jabatanDisplay === 'kepala_sekolah') { jabatanIcon = '👑'; jabatanDisplay = 'Kepala Sekolah'; }
+            else if (jabatanDisplay === 'wakil_kepala') { jabatanIcon = '👔'; jabatanDisplay = 'Wakil Kepala'; }
+            else if (jabatanDisplay === 'staff_tu') { jabatanIcon = '📋'; jabatanDisplay = 'Staff TU'; }
+            else if (jabatanDisplay === 'guru') { jabatanIcon = '👨‍🏫'; jabatanDisplay = 'Guru'; }
+            else if (jabatanDisplay === 'pustakawan') { jabatanIcon = '📚'; jabatanDisplay = 'Pustakawan'; }
+            else if (jabatanDisplay === 'laboran') { jabatanIcon = '🔬'; jabatanDisplay = 'Laboran'; }
+            else if (jabatanDisplay === 'security') { jabatanIcon = '🛡️'; jabatanDisplay = 'Security'; }
+            else if (jabatanDisplay === 'kebersihan') { jabatanIcon = '🧹'; jabatanDisplay = 'Kebersihan'; }
+            else if (jabatanDisplay === 'developer') { jabatanIcon = '👨‍💻'; jabatanDisplay = 'Developer'; }
+            
+            // Informasi kontak (prioritaskan dari akun user)
+            let kontakHtml = '';
+            let displayPhone = staff.noHp && staff.noHp !== '-' ? staff.noHp : (userAccountInfo?.noHp || '-');
+            let displayEmail = staff.email && staff.email !== '-' ? staff.email : (userAccountInfo?.email || '-');
+            
+            if (displayPhone && displayPhone !== '-') {
+                kontakHtml += `<div style="display:flex; align-items:center; gap:4px; margin-bottom:4px;"><span style="font-size:14px;">📱</span> <span style="font-size:13px;">${escapeHtmlStaff(displayPhone)}</span></div>`;
+            }
+            if (displayEmail && displayEmail !== '-') {
+                kontakHtml += `<div style="display:flex; align-items:center; gap:4px;"><span style="font-size:14px;">✉️</span> <span style="font-size:13px;">${escapeHtmlStaff(displayEmail)}</span></div>`;
+            }
+            if (!kontakHtml) {
+                kontakHtml = '<span style="color: var(--text-muted); font-size:12px;">-</span>';
+            }
+            
+            // Source badge
+            const sourceBadge = staff.source === 'user_auth' || staff.fromUserAuth
+                ? '<div><span style="background:#2196f3; color:white; font-size:9px; padding:2px 6px; border-radius:12px;" title="Data diambil dari akun user">👥 Dari Akun User</span></div>' 
+                : '<div><span style="background:#ff9800; color:white; font-size:9px; padding:2px 6px; border-radius:12px;" title="Data ditambahkan manual">📁 Data Manual</span></div>';
+            
+            // Action buttons
             let actionButtons = '';
             if (canEdit) {
                 const isFromUserAuth = staff.source === 'user_auth' || staff.fromUserAuth;
                 
                 if (!isFromUserAuth) {
                     actionButtons = `
-                        <td style="white-space: nowrap; padding:8px;">
-                            <button onclick="editStaff('${safeId}')" title="Edit" style="background:#2196f3; border:none; border-radius:8px; padding:5px 10px; margin:0 2px; cursor:pointer; color:white;">✏️</button>
-                            <button onclick="deleteStaff('${safeId}', '${safeNama}')" title="Hapus" style="background:#f44336; border:none; border-radius:8px; padding:5px 10px; margin:0 2px; cursor:pointer; color:white;">🗑️</button>
-                            ${!hasAccount ? `<button onclick="createStaffUserAccount('${safeId}', '${safeNama}', '${escapeHtmlStaff(staff.email || '')}')" title="Buat Akun User" style="background:#4caf50; border:none; border-radius:8px; padding:5px 10px; margin:0 2px; cursor:pointer; color:white;">👤</button>` : ''}
-                            ${canManageWhatsApp ? `<button onclick="openStaffContactModal('${safeId}', '${safeNama}')" title="Set WhatsApp" style="background:#25D366; border:none; border-radius:8px; padding:5px 10px; margin:0 2px; cursor:pointer; color:white;">📱</button>` : ''}
-                        <\/td>
+                        <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                            <button onclick="editStaff('${safeId}')" class="staff-action-btn edit" title="Edit Staff">✏️</button>
+                            <button onclick="deleteStaff('${safeId}', '${safeNama}')" class="staff-action-btn delete" title="Hapus Staff">🗑️</button>
+                            ${!hasAccount ? `<button onclick="createStaffUserAccount('${safeId}', '${safeNama}', '${escapeHtmlStaff(displayEmail)}')" class="staff-action-btn create-account" title="Buat Akun User">👤</button>` : ''}
+                            ${canManageWhatsApp ? `<button onclick="openStaffContactModal('${safeId}', '${safeNama}')" class="staff-action-btn whatsapp" title="Set WhatsApp">📱</button>` : ''}
+                            ${hasAccount && userAccountInfo?.photoUrl ? `<button onclick="refreshStaffPhoto('${safeId}')" class="staff-action-btn refresh" title="Refresh Foto">🔄</button>` : ''}
+                        </div>
                     `;
                 } else {
                     actionButtons = `
-                        <td style="white-space: nowrap; padding:8px;">
-                            <button onclick="viewUserAccount('${safeId}')" title="Lihat Akun" style="background:#00bcd4; border:none; border-radius:8px; padding:5px 10px; margin:0 2px; cursor:pointer; color:white;">👁️</button>
-                            <button onclick="deleteUserAccount('${safeId}', '${safeNama}')" title="Hapus Akun" style="background:#f44336; border:none; border-radius:8px; padding:5px 10px; margin:0 2px; cursor:pointer; color:white;">🗑️</button>
-                            ${canManageWhatsApp ? `<button onclick="openStaffContactModal('${safeId}', '${safeNama}')" title="Set WhatsApp" style="background:#25D366; border:none; border-radius:8px; padding:5px 10px; margin:0 2px; cursor:pointer; color:white;">📱</button>` : ''}
-                        <\/td>
+                        <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                            <button onclick="viewUserAccount('${staff.userId || safeId}')" class="staff-action-btn view" title="Lihat Akun">👁️</button>
+                            <button onclick="deleteUserAccount('${staff.userId || safeId}', '${safeNama}')" class="staff-action-btn delete" title="Hapus Akun">🗑️</button>
+                            ${canManageWhatsApp ? `<button onclick="openStaffContactModal('${safeId}', '${safeNama}')" class="staff-action-btn whatsapp" title="Set WhatsApp">📱</button>` : ''}
+                            <button onclick="refreshStaffPhoto('${safeId}')" class="staff-action-btn refresh" title="Refresh Foto">🔄</button>
+                        </div>
                     `;
                 }
             } else {
-                actionButtons = '<td style="padding:8px;">-<\/td>';
+                actionButtons = '<span style="color: var(--text-muted);">-</span>';
             }
             
-            const sourceBadge = staff.source === 'user_auth' 
-                ? '<br><small style="color:#4caf50;">(Dari Akun User)</small>' 
-                : '';
-            
             tbody.innerHTML += `
-                <tr style="border-bottom: 1px solid var(--border);">
-                    <td style="text-align:center; padding:8px;">
-                        <img src="${photoUrl}" 
-                             style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; cursor: pointer;"
-                             onerror="this.src='https://ui-avatars.com/api/?name=${initial}&background=ff9800&color=fff&size=100&bold=true'"
-                             onclick="showStaffPhotoModal('${safeId}', '${safeNama}', this.src)">
-                    <\/td>
-                    <td style="padding:8px;"><strong>${safeId}</strong>${sourceBadge}<\/td>
-                    <td style="padding:8px;">${safeNama} ${accountBadge} ${waBadge}<\/td>
-                    <td style="padding:8px;">${escapeHtmlStaff(staff.jabatan || '-')}<\/td>
-                    <td style="padding:8px;">${escapeHtmlStaff(staff.departemen || '-')}<\/td>
-                    <td style="padding:8px;">${escapeHtmlStaff(staff.noHp || '-')}<\/td>
-                    <td style="padding:8px;">${escapeHtmlStaff(staff.email || '-')}<\/td>
-                    ${actionButtons}
+                <tr style="border-bottom: 1px solid var(--border); transition: background 0.2s;" onmouseover="this.style.backgroundColor='var(--bg-hover)'" onmouseout="this.style.backgroundColor='transparent'">
+                    <td style="padding:12px;">
+                        <div style="display:flex; justify-content:center;">
+                            <img src="${photoUrl}" 
+                                 class="staff-avatar"
+                                 style="width: 44px; height: 44px; border-radius: 50%; object-fit: cover; cursor: pointer; border: 2px solid #ff9800;"
+                                 onerror="this.src='https://ui-avatars.com/api/?name=${initial}&background=ff9800&color=fff&size=100&bold=true'"
+                                 onclick="showStaffPhotoModal('${safeId}', '${safeNama}', this.src)">
+                        </div>
+                    </div>
+                    <td style="padding:12px;">
+                        <strong style="font-family: monospace; font-size: 14px;">${safeId}</strong>
+                        ${sourceBadge}
+                    </div>
+                    <td style="padding:12px;">
+                        <div style="font-weight: 600; font-size: 15px;">${safeNama}</div>
+                        <div style="display:flex; gap:4px; margin-top:4px; flex-wrap:wrap;">${accountBadge} ${waBadge}</div>
+                    </div>
+                    <td style="padding:12px;">
+                        <div style="display:flex; align-items:center; gap:6px;">
+                            <span style="font-size: 18px;">${jabatanIcon}</span>
+                            <span>${escapeHtmlStaff(jabatanDisplay)}</span>
+                        </div>
+                    </div>
+                    <td style="padding:12px;">
+                        <span style="background: var(--bg-input); padding:4px 10px; border-radius:20px; font-size:12px;">
+                            ${escapeHtmlStaff(staff.departemen || '-')}
+                        </span>
+                    </div>
+                    <td style="padding:12px;">
+                        ${kontakHtml}
+                    </div>
+                    <td style="padding:12px; text-align:center;">
+                        ${actionButtons}
+                    </div>
                 </tr>
             `;
         }
@@ -772,10 +1150,18 @@ async function renderStaffTable() {
         
     } catch (err) {
         console.error("❌ Error in renderStaffTable:", err);
-        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:30px; color:#f44336;">
-            ❌ Gagal memuat data: ${err.message}<br>
-            <button onclick="renderStaffTable()" style="margin-top:10px; padding:8px 20px; border-radius:20px; border:none; background:#00bcd4; color:white; cursor:pointer;">🔄 Coba Lagi</button>
-        <\/td><\/tr>`;
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="7" style="text-align:center; padding:60px 20px;">
+                    <div style="font-size: 48px; margin-bottom: 16px;">❌</div>
+                    <h3 style="margin-bottom: 8px; color: #f44336;">Gagal Memuat Data</h3>
+                    <p style="color: var(--text-muted); margin-bottom: 20px;">${escapeHtmlStaff(err.message)}</p>
+                    <button onclick="renderStaffTable()" style="padding:10px 24px; background:#00bcd4; border:none; border-radius:30px; color:white; cursor:pointer; font-weight:500;">
+                        🔄 Coba Lagi
+                    </button>
+                  </div>
+            </tr>
+        `;
     }
 }
 
@@ -790,7 +1176,7 @@ function updateStaffStatistics(staffList, filteredCount = null) {
             if (filterButtons) {
                 statsContainer = document.createElement('div');
                 statsContainer.id = 'staffStats';
-                statsContainer.style.marginBottom = '15px';
+                statsContainer.style.marginBottom = '20px';
                 filterButtons.insertAdjacentElement('afterend', statsContainer);
             }
         }
@@ -800,23 +1186,42 @@ function updateStaffStatistics(staffList, filteredCount = null) {
     const total = staffList.length;
     const displayCount = filteredCount !== null ? filteredCount : total;
     let withAccount = 0;
+    let syncedCount = 0;
+    
     if (window.dbData && window.dbData.users_auth) {
         withAccount = staffList.filter(s => s.userId || s.fromUserAuth || 
-            window.dbData.users_auth.some(u => u.uid === s.id || u.staffId === s.id)).length;
+            window.dbData.users_auth.some(u => u.uid === s.id || u.staffId === s.id || u.email === s.email || u.nama === s.nama)).length;
+        syncedCount = staffList.filter(s => s.fromUserAuth || window.dbData.users_auth.some(u => u.staffId == s.id)).length;
     }
     const withoutAccount = total - withAccount;
-    const fromUserAuth = staffList.filter(s => s.source === 'user_auth').length;
-    const fromStaffNode = staffList.filter(s => s.source === 'staff').length;
+    const fromUserAuth = staffList.filter(s => s.source === 'user_auth' || s.fromUserAuth).length;
+    const fromStaffNode = staffList.filter(s => s.source === 'staff' && !s.fromUserAuth).length;
     
     const filterInfo = (displayCount !== total) ? `<span style="color:#00bcd4;"> (Menampilkan ${displayCount} dari ${total})</span>` : '';
     
     statsContainer.innerHTML = `
-        <div style="display:flex; gap:15px; flex-wrap:wrap; padding:12px; background:var(--bg-hover); border-radius:12px;">
-            <div>👥 <strong>Total:</strong> ${total}${filterInfo}</div>
-            <div>✅ <strong style="color:#4caf50;">Berakun:</strong> ${withAccount}</div>
-            <div>❌ <strong style="color:#f44336;">Belum Berakun:</strong> ${withoutAccount}</div>
-            <div>📋 <strong>Dari User:</strong> ${fromUserAuth}</div>
-            <div>📁 <strong>Dari Staff:</strong> ${fromStaffNode}</div>
+        <div style="display:flex; gap:20px; flex-wrap:wrap; padding:16px 20px; background: var(--bg-card); border-radius:16px; border:1px solid var(--border);">
+            <div style="display:flex; align-items:center; gap:8px;">
+                <span style="font-size:20px;">👥</span>
+                <div><strong style="font-size:18px;">${total}</strong><br><span style="font-size:11px; color:var(--text-muted);">Total Staff</span></div>
+                ${filterInfo}
+            </div>
+            <div style="display:flex; align-items:center; gap:8px;">
+                <span style="font-size:20px;">✅</span>
+                <div><strong style="font-size:18px; color:#4caf50;">${withAccount}</strong><br><span style="font-size:11px; color:var(--text-muted);">Sudah Berakun</span></div>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px;">
+                <span style="font-size:20px;">❌</span>
+                <div><strong style="font-size:18px; color:#f44336;">${withoutAccount}</strong><br><span style="font-size:11px; color:var(--text-muted);">Belum Berakun</span></div>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px;">
+                <span style="font-size:20px;">👥</span>
+                <div><strong style="font-size:18px; color:#2196f3;">${fromUserAuth}</strong><br><span style="font-size:11px; color:var(--text-muted);">Terintegrasi Akun</span></div>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px;">
+                <span style="font-size:20px;">📁</span>
+                <div><strong style="font-size:18px; color:#ff9800;">${fromStaffNode}</strong><br><span style="font-size:11px; color:var(--text-muted);">Data Manual</span></div>
+            </div>
         </div>
     `;
 }
@@ -826,6 +1231,20 @@ function showStaffPhotoModal(staffId, staffName, photoUrl) {
     const modalId = 'modal-staff-photo';
     const existingModal = document.getElementById(modalId);
     if (existingModal) existingModal.remove();
+    
+    // Cari informasi akun untuk ditampilkan
+    let userAccountInfo = null;
+    if (window.dbData && window.dbData.users_auth) {
+        userAccountInfo = window.dbData.users_auth.find(u => u.staffId == staffId || u.uid == staffId || u.email === staffId || u.nama === staffName);
+    }
+    
+    const accountInfo = userAccountInfo 
+        ? `<div style="margin-top: 12px; padding: 10px; background: rgba(76, 175, 80, 0.1); border-radius: 12px;">
+            <small>✅ Akun terhubung: <strong>${escapeHtmlStaff(userAccountInfo.email || '-')}</strong></small><br>
+            <small>👤 Nama akun: <strong>${escapeHtmlStaff(userAccountInfo.nama || '-')}</strong></small>
+            ${userAccountInfo.photoUrl ? `<small>📸 Foto profil: <strong>Tersedia</strong></small>` : '<small>📸 Foto profil: <strong>Belum diupload</strong></small>'}
+           </div>`
+        : '<div style="margin-top: 12px; padding: 10px; background: rgba(255, 152, 0, 0.1); border-radius: 12px;"><small>⚠️ Staff ini belum memiliki akun user. Klik tombol 👤 untuk membuat akun.</small></div>';
     
     const modalHtml = `
         <div id="${modalId}" class="modal-overlay open" style="display:flex; align-items:center; justify-content:center; z-index:10000;">
@@ -840,6 +1259,12 @@ function showStaffPhotoModal(staffId, staffName, photoUrl) {
                         <strong>${escapeHtmlStaff(staffName)}</strong><br>
                         <span style="color: var(--text-muted);">ID: ${staffId}</span>
                     </p>
+                    ${accountInfo}
+                    <div style="margin-top: 12px;">
+                        <button onclick="refreshStaffPhoto('${staffId}')" class="btn-action btn-primary" style="background: #00bcd4; border: none; padding: 6px 16px; border-radius: 20px; color: white; cursor: pointer;">
+                            🔄 Refresh Foto
+                        </button>
+                    </div>
                 </div>
                 <div class="modal-actions" style="padding:15px 20px; border-top:1px solid var(--border);">
                     <button class="btn-cancel close-staff-photo-modal" style="padding:8px 20px; border-radius:20px; border:none; cursor:pointer;">Tutup</button>
@@ -871,6 +1296,12 @@ function openAddStaffForm() {
     }
     resetStaffForm();
     document.getElementById('staffId')?.focus();
+    
+    // Scroll ke form
+    const formElement = document.querySelector('#tab-staff .controls-bar');
+    if (formElement) {
+        formElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
 }
 
 function saveStaff() {
@@ -907,11 +1338,13 @@ function saveStaff() {
         departemen: departemen || '-',
         noHp: noHp || '-',
         email: email || '',
-        updatedAt: window.firebase.database.ServerValue.TIMESTAMP
+        updatedAt: firebase.database.ServerValue.TIMESTAMP
     };
     
     if (mode === 'add') {
-        staffData.createdAt = window.firebase.database.ServerValue.TIMESTAMP;
+        staffData.createdAt = firebase.database.ServerValue.TIMESTAMP;
+        
+        // Cek apakah sudah ada staff dengan ID yang sama
         window.firebase.database().ref(`staff/${id}`).once('value').then((snapshot) => {
             if (snapshot.exists()) {
                 if (window.showToast) window.showToast("❌ ID sudah ada!", "error");
@@ -981,6 +1414,12 @@ function editStaff(id) {
         
         if (window.showToast) window.showToast(`✏️ Edit mode: ${staff.nama}`, "info");
         document.getElementById('staffNama').focus();
+        
+        // Scroll ke form
+        const formElement = document.querySelector('#tab-staff .controls-bar');
+        if (formElement) {
+            formElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
     });
 }
 
@@ -1094,11 +1533,18 @@ async function createStaffUserAccount(staffId, staffName, staffEmail) {
             nama: staffName,
             role: 'guru',
             staffId: staffId,
-            registeredAt: window.firebase.database.ServerValue.TIMESTAMP
+            registeredAt: firebase.database.ServerValue.TIMESTAMP
         };
         
         await window.firebase.database().ref(`users_auth/${user.uid}`).set(userData);
         await window.firebase.database().ref(`staff/${staffId}/userId`).set(user.uid);
+        
+        // Sync data dari staff ke user
+        const staffSnapshot = await window.firebase.database().ref(`staff/${staffId}`).once('value');
+        const staffData = staffSnapshot.val();
+        if (staffData && staffData.noHp) {
+            await window.firebase.database().ref(`users_auth/${user.uid}/noHp`).set(staffData.noHp);
+        }
         
         if (window.showToast) window.showToast(`✅ Akun berhasil dibuat!`, "success");
         
@@ -1106,6 +1552,8 @@ async function createStaffUserAccount(staffId, staffName, staffEmail) {
             window.logActivity('create_staff_account', `Buat akun user untuk staff ${staffName}`);
         }
         
+        // Clear cache
+        staffPhotoCache.delete(staffId);
         staffListLoaded = false;
         setTimeout(() => renderStaffTable(), 500);
         if (typeof window.renderUsersTable === 'function') window.renderUsersTable();
@@ -1183,6 +1631,67 @@ async function deleteUserAccount(userId, userName) {
     }
 }
 
+// ======================= SETUP REAL-TIME SYNC LISTENERS ========================
+function setupStaffSyncListeners() {
+    if (!window.firebase) return;
+    
+    // Listener untuk perubahan di users_auth
+    window.firebase.database().ref('users_auth').on('child_changed', (snapshot) => {
+        const userData = snapshot.val();
+        if (userData && ['guru', 'admin', 'wakil_kepala', 'staff_tu', 'developer'].includes(userData.role)) {
+            console.log(`🔄 User ${userData.nama} updated, syncing staff data...`);
+            
+            // Cari staff yang terhubung
+            const staffId = userData.staffId || userData.uid;
+            if (staffId) {
+                // Update data staff
+                const staffUpdates = {
+                    nama: userData.nama,
+                    email: userData.email,
+                    noHp: userData.noHp || '-',
+                    photoUrl: userData.photoUrl || null,
+                    updatedAt: firebase.database.ServerValue.TIMESTAMP
+                };
+                
+                // Map role ke jabatan jika perlu
+                if (userData.role === 'admin') staffUpdates.jabatan = 'kepala_sekolah';
+                else if (userData.role === 'wakil_kepala') staffUpdates.jabatan = 'wakil_kepala';
+                else if (userData.role === 'staff_tu') staffUpdates.jabatan = 'staff_tu';
+                else if (userData.role === 'developer') staffUpdates.jabatan = 'developer';
+                else if (userData.role === 'guru') staffUpdates.jabatan = 'guru';
+                
+                window.firebase.database().ref(`staff/${staffId}`).update(staffUpdates)
+                    .then(() => {
+                        // Clear cache
+                        staffPhotoCache.delete(staffId);
+                        staffListLoaded = false;
+                        if (document.getElementById('tab-staff')?.classList.contains('active')) {
+                            renderStaffTable();
+                        }
+                    })
+                    .catch(err => console.warn("Error syncing staff from user:", err));
+            }
+        }
+    });
+    
+    // Listener khusus untuk perubahan foto profil user
+    window.firebase.database().ref('users_auth').on('child_changed', (snapshot) => {
+        const userData = snapshot.val();
+        if (userData && userData.photoUrl) {
+            const staffId = userData.staffId || userData.uid;
+            if (staffId) {
+                console.log(`📸 Photo changed for staff ${staffId}, clearing cache...`);
+                staffPhotoCache.delete(staffId);
+                if (document.getElementById('tab-staff')?.classList.contains('active')) {
+                    setTimeout(() => renderStaffTable(), 100);
+                }
+            }
+        }
+    });
+    
+    console.log("✅ Staff sync listeners set up");
+}
+
 // ======================= INITIALIZATION ========================
 function initStaffSystem() {
     if (staffInitialized) {
@@ -1190,7 +1699,7 @@ function initStaffSystem() {
         return;
     }
     
-    console.log("👥 Initializing Staff system...");
+    console.log("👥 Initializing Staff system with full sync...");
     
     if (!window.currentUser) {
         console.log("⏳ Waiting for currentUser...");
@@ -1215,6 +1724,12 @@ function initStaffSystem() {
     
     addStaffTab();
     setupStaffListeners();
+    setupStaffSyncListeners();
+    
+    // Sync all staff from user accounts
+    setTimeout(() => {
+        syncAllStaffFromUserAccounts();
+    }, 2000);
     
     setTimeout(() => {
         console.log("📊 First render of staff table");
@@ -1255,57 +1770,73 @@ function addStaffTab() {
     if (dashboardSection && !document.getElementById('tab-staff')) {
         const staffTabHtml = `
             <div id="tab-staff" class="tab-content role-admin role-guru role-developer">
-                <div class="info-banner" style="background: var(--bg-hover); padding: 12px 16px; border-radius: 12px; margin-bottom: 15px; border-left: 4px solid #00bcd4;">
-                    <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
-                        <span style="font-size: 24px;">💡</span>
+                <!-- Info Banner -->
+                <div class="info-banner" style="background: linear-gradient(135deg, var(--bg-hover), var(--bg-card)); padding: 16px 20px; border-radius: 16px; margin-bottom: 20px; border-left: 4px solid #00bcd4;">
+                    <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
+                        <span style="font-size: 32px;">💡</span>
                         <div>
-                            <strong>Info:</strong> Data staff diambil dari dua sumber:
-                            <ul style="margin: 5px 0 0 20px; font-size: 12px;">
-                                <li>👥 <strong>Manajemen User</strong> - User dengan role <strong>Guru</strong> akan otomatis muncul</li>
-                                <li>📁 <strong>Data Staff</strong> - Data yang ditambahkan manual melalui form di bawah</li>
-                            </ul>
+                            <strong style="font-size: 15px;">Info Data Staff</strong>
+                            <div style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">
+                                Data staff diambil dari dua sumber: 
+                                <strong>Manajemen User</strong> (role Guru) dan <strong>Data Staff</strong> (manual).
+                                Data akan otomatis tersinkronisasi dengan akun user masing-masing.
+                            </div>
                         </div>
                     </div>
                 </div>
                 
-                <div class="filter-buttons">
-                    <button class="filter-btn active" data-filter="all" onclick="window.setStaffFilter('all')">📋 Semua Data</button>
-                    <button class="filter-btn" data-filter="withAccount" onclick="window.setStaffFilter('withAccount')">✅ Sudah Berakun</button>
-                    <button class="filter-btn" data-filter="withoutAccount" onclick="window.setStaffFilter('withoutAccount')">❌ Belum Berakun</button>
-                    <button class="filter-btn" data-filter="fromStaff" onclick="window.setStaffFilter('fromStaff')">📁 Dari Data Staff</button>
-                    <button class="filter-btn" data-filter="fromUser" onclick="window.setStaffFilter('fromUser')">👥 Dari Akun User</button>
+                <!-- Filter Buttons -->
+                <div class="filter-buttons" style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px;">
+                    <button class="filter-btn active" data-filter="all" onclick="window.setStaffFilter('all')" style="padding: 8px 18px; border-radius: 30px; border: none; cursor: pointer; transition: all 0.2s;">📋 Semua Data</button>
+                    <button class="filter-btn" data-filter="withAccount" onclick="window.setStaffFilter('withAccount')" style="padding: 8px 18px; border-radius: 30px; border: none; cursor: pointer; transition: all 0.2s;">✅ Sudah Berakun</button>
+                    <button class="filter-btn" data-filter="withoutAccount" onclick="window.setStaffFilter('withoutAccount')" style="padding: 8px 18px; border-radius: 30px; border: none; cursor: pointer; transition: all 0.2s;">❌ Belum Berakun</button>
+                    <button class="filter-btn" data-filter="fromStaff" onclick="window.setStaffFilter('fromStaff')" style="padding: 8px 18px; border-radius: 30px; border: none; cursor: pointer; transition: all 0.2s;">📁 Dari Data Staff</button>
+                    <button class="filter-btn" data-filter="fromUser" onclick="window.setStaffFilter('fromUser')" style="padding: 8px 18px; border-radius: 30px; border: none; cursor: pointer; transition: all 0.2s;">👥 Dari Akun User</button>
                 </div>
                 
-                <div class="search-bar">
-                    <div class="search-input-wrapper">
-                        <input type="text" id="staffSearchInput" class="search-input" placeholder="🔍 Cari staff..." onkeyup="if(event.key === 'Enter') window.searchStaff()">
-                        <button class="search-clear-btn" onclick="window.clearSearch()">✖</button>
+                <!-- Search Bar -->
+                <div class="search-bar" style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
+                    <div class="search-input-wrapper" style="flex: 1; position: relative;">
+                        <input type="text" id="staffSearchInput" class="search-input" placeholder="🔍 Cari staff berdasarkan nama, ID, jabatan, atau email..." 
+                               style="width: 100%; padding: 12px 40px 12px 16px; border-radius: 30px; border: 1px solid var(--border); background: var(--bg-input); color: var(--text-primary);"
+                               onkeyup="if(event.key === 'Enter') window.searchStaff()">
+                        <button class="search-clear-btn" onclick="window.clearSearch()" style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; font-size: 16px; color: #888;">✖</button>
                     </div>
-                    <button class="search-btn" onclick="window.searchStaff()">Cari</button>
-                    <button class="reset-btn" onclick="window.resetStaffFilters()">Reset</button>
+                    <button class="search-btn" onclick="window.searchStaff()" style="padding: 10px 24px; border-radius: 30px; border: none; background: #00bcd4; color: white; cursor: pointer; font-weight: 500;">🔍 Cari</button>
+                    <button class="reset-btn" onclick="window.resetStaffFilters()" style="padding: 10px 24px; border-radius: 30px; border: none; background: #f44336; color: white; cursor: pointer; font-weight: 500;">🔄 Reset</button>
                 </div>
                 
+                <!-- Statistics -->
                 <div id="staffStats"></div>
                 
-                <div class="controls-bar">
-                    <div style="display:flex; gap:10px; flex-wrap:wrap; width:100%;">
+                <!-- Form Tambah/Edit Staff -->
+                <div class="controls-bar" style="background: var(--bg-card); border-radius: 20px; padding: 20px; margin-bottom: 24px; border: 1px solid var(--border);">
+                    <div style="display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end;">
                         <input type="hidden" id="staffEditMode" value="add">
-                        <div class="filter-group"><label>ID:</label><input type="text" id="staffId" placeholder="ID" style="width:80px; padding:8px; border-radius:8px; border:1px solid var(--border);"></div>
-                        <div class="filter-group"><label>Nama:</label><input type="text" id="staffNama" placeholder="Nama Lengkap" style="width:180px; padding:8px; border-radius:8px; border:1px solid var(--border);"></div>
-                        <div class="filter-group"><label>Jabatan:</label>
-                            <select id="staffJabatan" style="padding:8px; border-radius:8px; border:1px solid var(--border);">
+                        <div class="filter-group" style="display: flex; flex-direction: column; gap: 4px;">
+                            <label style="font-size: 12px; font-weight: 500;">ID</label>
+                            <input type="text" id="staffId" placeholder="ID" style="width: 100px; padding: 10px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg-input);">
+                        </div>
+                        <div class="filter-group" style="display: flex; flex-direction: column; gap: 4px;">
+                            <label style="font-size: 12px; font-weight: 500;">Nama Lengkap</label>
+                            <input type="text" id="staffNama" placeholder="Nama" style="width: 180px; padding: 10px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg-input);">
+                        </div>
+                        <div class="filter-group" style="display: flex; flex-direction: column; gap: 4px;">
+                            <label style="font-size: 12px; font-weight: 500;">Jabatan</label>
+                            <select id="staffJabatan" style="padding: 10px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg-input);">
                                 <option value="guru">👨‍🏫 Guru</option>
                                 <option value="kepala_sekolah">👑 Kepala Sekolah</option>
-                                <option value="wakil_kepala">📋 Wakil Kepala</option>
-                                <option value="staff_tu">📁 Staff TU</option>
+                                <option value="wakil_kepala">👔 Wakil Kepala</option>
+                                <option value="staff_tu">📋 Staff TU</option>
                                 <option value="pustakawan">📚 Pustakawan</option>
                                 <option value="laboran">🔬 Laboran</option>
                                 <option value="security">🛡️ Security</option>
                                 <option value="kebersihan">🧹 Kebersihan</option>
                             </select>
                         </div>
-                        <div class="filter-group"><label>Departemen:</label>
-                            <select id="staffDepartemen" style="padding:8px; border-radius:8px; border:1px solid var(--border);">
+                        <div class="filter-group" style="display: flex; flex-direction: column; gap: 4px;">
+                            <label style="font-size: 12px; font-weight: 500;">Departemen</label>
+                            <select id="staffDepartemen" style="padding: 10px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg-input);">
                                 <option value="">-- Pilih --</option>
                                 <option value="akademik">Akademik</option>
                                 <option value="kesiswaan">Kesiswaan</option>
@@ -1314,36 +1845,92 @@ function addStaffTab() {
                                 <option value="kurikulum">Kurikulum</option>
                             </select>
                         </div>
-                        <div class="filter-group"><label>No. HP:</label><input type="tel" id="staffNoHp" placeholder="No. HP" style="width:120px; padding:8px; border-radius:8px; border:1px solid var(--border);"></div>
-                        <div class="filter-group"><label>Email:</label><input type="email" id="staffEmail" placeholder="Email" style="width:180px; padding:8px; border-radius:8px; border:1px solid var(--border);"></div>
-                        <button class="btn-action role-guru role-admin" id="btnSaveStaff" onclick="window.saveStaff()" style="background:#00bcd4; border:none; border-radius:8px; padding:8px 20px; color:white; cursor:pointer;">➕ Simpan</button>
-                        <button class="btn-action btn-danger hidden" id="btnCancelStaff" onclick="window.resetStaffForm()" style="display:none; background:#f44336; border:none; border-radius:8px; padding:8px 20px; color:white; cursor:pointer;">Batal</button>
+                        <div class="filter-group" style="display: flex; flex-direction: column; gap: 4px;">
+                            <label style="font-size: 12px; font-weight: 500;">No. HP</label>
+                            <input type="tel" id="staffNoHp" placeholder="No. HP" style="width: 130px; padding: 10px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg-input);">
+                        </div>
+                        <div class="filter-group" style="display: flex; flex-direction: column; gap: 4px;">
+                            <label style="font-size: 12px; font-weight: 500;">Email</label>
+                            <input type="email" id="staffEmail" placeholder="Email" style="width: 180px; padding: 10px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg-input);">
+                        </div>
+                        <div class="filter-group" style="display: flex; gap: 8px;">
+                            <button class="btn-action role-guru role-admin" id="btnSaveStaff" onclick="window.saveStaff()" style="background: #00bcd4; border: none; border-radius: 30px; padding: 10px 24px; color: white; cursor: pointer; font-weight: 500;">➕ Simpan Staff</button>
+                            <button class="btn-action btn-danger hidden" id="btnCancelStaff" onclick="window.resetStaffForm()" style="display: none; background: #f44336; border: none; border-radius: 30px; padding: 10px 24px; color: white; cursor: pointer; font-weight: 500;">✖ Batal</button>
+                        </div>
                     </div>
                 </div>
                 
-                <div class="table-container" style="overflow-x:auto;">
+                <!-- Tabel Staff -->
+                <div class="table-container" style="overflow-x: auto; border-radius: 16px; border: 1px solid var(--border);">
                     <table style="width:100%; border-collapse:collapse;">
                         <thead>
-                            <tr style="background:var(--bg-hover);">
-                                <th style="padding:12px; text-align:left;">Foto</th>
-                                <th style="padding:12px; text-align:left;">ID</th>
-                                <th style="padding:12px; text-align:left;">Nama</th>
-                                <th style="padding:12px; text-align:left;">Jabatan</th>
-                                <th style="padding:12px; text-align:left;">Departemen</th>
-                                <th style="padding:12px; text-align:left;">No. HP</th>
-                                <th style="padding:12px; text-align:left;">Email</th>
-                                <th style="padding:12px; text-align:left;">Aksi</th>
+                            <tr style="background: var(--bg-hover); border-bottom: 2px solid var(--border);">
+                                <th style="padding: 14px 12px; text-align: left;">Foto</th>
+                                <th style="padding: 14px 12px; text-align: left;">ID</th>
+                                <th style="padding: 14px 12px; text-align: left;">Nama Staff</th>
+                                <th style="padding: 14px 12px; text-align: left;">Jabatan</th>
+                                <th style="padding: 14px 12px; text-align: left;">Departemen</th>
+                                <th style="padding: 14px 12px; text-align: left;">Kontak</th>
+                                <th style="padding: 14px 12px; text-align: left;">Aksi</th>
                             </tr>
                         </thead>
                         <tbody id="tbody-staff">
-                            <tr><td colspan="8" style="text-align:center; padding:30px;">⏳ Memuat data...<\/td><\/tr>
+                            <tr><td colspan="7" style="text-align:center; padding:40px;">⏳ Memuat data...<\/td><\/tr>
                         </tbody>
                     </table>
                 </div>
             </div>
         `;
+        
+        // Tambahkan CSS untuk tombol aksi
+        const style = document.createElement('style');
+        style.textContent = `
+            .staff-action-btn {
+                width: 34px;
+                height: 34px;
+                border-radius: 10px;
+                border: none;
+                cursor: pointer;
+                font-size: 16px;
+                transition: all 0.2s;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+            }
+            .staff-action-btn.edit { background: #2196f3; color: white; }
+            .staff-action-btn.edit:hover { background: #1976d2; transform: scale(1.05); }
+            .staff-action-btn.delete { background: #f44336; color: white; }
+            .staff-action-btn.delete:hover { background: #d32f2f; transform: scale(1.05); }
+            .staff-action-btn.create-account { background: #4caf50; color: white; }
+            .staff-action-btn.create-account:hover { background: #388e3c; transform: scale(1.05); }
+            .staff-action-btn.whatsapp { background: #25D366; color: white; }
+            .staff-action-btn.whatsapp:hover { background: #128C7E; transform: scale(1.05); }
+            .staff-action-btn.view { background: #00bcd4; color: white; }
+            .staff-action-btn.view:hover { background: #0097a7; transform: scale(1.05); }
+            .staff-action-btn.refresh { background: #9c27b0; color: white; }
+            .staff-action-btn.refresh:hover { background: #7b1fa2; transform: scale(1.05); }
+            
+            .filter-btn {
+                transition: all 0.2s;
+            }
+            .filter-btn:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            }
+            .filter-btn.active {
+                background: #00bcd4 !important;
+                color: white !important;
+            }
+            
+            @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
+        `;
+        document.head.appendChild(style);
+        
         dashboardSection.insertAdjacentHTML('beforeend', staffTabHtml);
-        console.log("✅ Staff tab content added");
+        console.log("✅ Staff tab content added with full sync support");
     }
 }
 
@@ -1372,83 +1959,6 @@ function escapeHtmlStaff(str) {
     return String(str).replace(/[&<>]/g, m => m === '&' ? '&amp;' : m === '<' ? '&lt;' : '&gt;');
 }
 
-// Tambahkan CSS animation untuk spinner jika belum ada
-if (!document.querySelector('#staff-spinner-style')) {
-    const style = document.createElement('style');
-    style.id = 'staff-spinner-style';
-    style.textContent = `
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        
-        .filter-btn {
-            transition: all 0.3s ease;
-            padding: 8px 16px;
-            margin: 0 4px;
-            border-radius: 20px;
-            cursor: pointer;
-            border: none;
-        }
-        
-        .filter-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-        }
-        
-        .search-bar {
-            display: flex;
-            gap: 10px;
-            margin: 15px 0;
-            flex-wrap: wrap;
-        }
-        
-        .search-input-wrapper {
-            flex: 1;
-            position: relative;
-        }
-        
-        .search-input {
-            width: 100%;
-            padding: 10px 35px 10px 15px;
-            border-radius: 30px;
-            border: 1px solid var(--border);
-            background: var(--bg-input);
-            color: var(--text-primary);
-        }
-        
-        .search-clear-btn {
-            position: absolute;
-            right: 10px;
-            top: 50%;
-            transform: translateY(-50%);
-            background: none;
-            border: none;
-            cursor: pointer;
-            font-size: 16px;
-            color: #888;
-        }
-        
-        .search-btn, .reset-btn {
-            padding: 8px 20px;
-            border-radius: 30px;
-            border: none;
-            cursor: pointer;
-        }
-        
-        .search-btn {
-            background: #00bcd4;
-            color: white;
-        }
-        
-        .reset-btn {
-            background: #f44336;
-            color: white;
-        }
-    `;
-    document.head.appendChild(style);
-}
-
 // ======================= EKSPOR KE GLOBAL =======================
 window.initStaffSystem = initStaffSystem;
 window.renderStaffTable = renderStaffTable;
@@ -1468,18 +1978,20 @@ window.setStaffFilter = setStaffFilter;
 window.searchStaff = searchStaff;
 window.clearSearch = clearSearch;
 window.resetStaffFilters = resetStaffFilters;
-// Ekspor fungsi WhatsApp staff
 window.sendStaffWhatsAppNotification = sendStaffWhatsAppNotification;
 window.saveStaffContact = saveStaffContact;
 window.getStaffContact = getStaffContact;
 window.openStaffContactModal = openStaffContactModal;
 window.saveStaffContactFromModal = saveStaffContactFromModal;
 window.testSendStaffWhatsApp = testSendStaffWhatsApp;
-// Ekspor fungsi close modal
 window.closeStaffContactModal = closeStaffContactModal;
 window.closeStaffPhotoModal = closeStaffPhotoModal;
+window.syncStaffFromUserAccount = syncStaffFromUserAccount;
+window.syncAllStaffFromUserAccounts = syncAllStaffFromUserAccounts;
+window.setupStaffSyncListeners = setupStaffSyncListeners;
+window.refreshStaffPhoto = refreshStaffPhoto;
 
-console.log("✅ staff.js V2.11 loaded - Dengan notifikasi WhatsApp untuk staff & perbaikan close modal menggunakan event listener");
+console.log("✅ staff.js V3.2 loaded - FIXED PHOTO SYNC! Foto staff sekarang benar-benar sinkron dari akun user");
 
 // Auto-initialize when DOM ready
 if (document.readyState === 'loading') {

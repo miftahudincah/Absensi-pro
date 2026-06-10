@@ -1,12 +1,6 @@
-// logs.js - VERSION 2.0 (DENGAN ROLE BARU: WAKIL KEPALA SEKOLAH & STAFF TU)
+// logs.js - VERSION 2.1 (DENGAN TOMBOL HAPUS PER BARIS UNTUK DEVELOPER & KEPALA SEKOLAH)
 // Manajemen Log Aktivitas dengan filter berdasarkan role
-// Role yang didukung:
-// - Developer: lihat semua log
-// - Admin (Kepala Sekolah): lihat semua log
-// - Wakil Kepala Sekolah: lihat semua log (read-only)
-// - Staff TU: lihat log terbatas (hanya log yang relevan dengan tugasnya)
-// - Guru: lihat semua log
-// - Siswa: hanya log milik sendiri
+// Fitur BARU: Hapus log satu per satu (hanya untuk Developer & Kepala Sekolah)
 // ============================================================================
 
 let logsListener = null;
@@ -16,9 +10,6 @@ let currentLogsPage = 1;
 
 // ======================= ROLE HELPER FUNCTIONS ========================
 
-/**
- * Mendapatkan display name role
- */
 function getRoleDisplayName(role) {
     const names = {
         developer: 'Developer',
@@ -31,9 +22,6 @@ function getRoleDisplayName(role) {
     return names[role] || role.toUpperCase();
 }
 
-/**
- * Mendapatkan icon untuk role
- */
 function getRoleIcon(role) {
     const icons = {
         developer: '👨‍💻',
@@ -47,10 +35,16 @@ function getRoleIcon(role) {
 }
 
 /**
- * Cek apakah user dapat melihat log
- * - Siswa: hanya log sendiri
- * - Staff TU: log terbatas (tidak termasuk aksi sensitif)
- * - Guru/Wakil/Admin/Developer: semua log
+ * Cek apakah user dapat menghapus log
+ * Hanya Developer dan Kepala Sekolah (Admin) yang bisa
+ */
+function canDeleteLogs(role) {
+    const deleteRoles = ['developer', 'admin'];
+    return deleteRoles.includes(role);
+}
+
+/**
+ * Cek apakah user dapat melihat semua log
  */
 function canViewAllLogs(role) {
     const allAccessRoles = ['admin', 'developer', 'wakil_kepala', 'guru'];
@@ -59,7 +53,6 @@ function canViewAllLogs(role) {
 
 /**
  * Cek apakah user dapat melihat log sensitif
- * - Staff TU tidak boleh melihat log sensitif (delete user, reset system, dll)
  */
 function canViewSensitiveLogs(role) {
     const sensitiveRoles = ['admin', 'developer', 'wakil_kepala'];
@@ -72,7 +65,7 @@ function canViewSensitiveLogs(role) {
 function filterSensitiveActionsForStaffTU(logs) {
     const sensitiveActions = [
         'delete_user', 'reset_system', 'update_user_role', 
-        'delete_announcement', 'reset_user_password'
+        'delete_announcement', 'reset_user_password', 'delete_log'
     ];
     return logs.filter(log => !sensitiveActions.includes(log.action));
 }
@@ -92,12 +85,12 @@ function getAllowedActionsForFilter(role) {
         'delete_chat_message', 'clear_chat',
         'upload_profile_photo', 'save_school_name', 'upload_school_logo', 'remove_school_logo',
         'update_global_delay', 'save_classes', 'save_majors', 'update_school_type',
-        'export_attendance_excel', 'export_rekap_excel', 'export_rekap_pdf', 'forgot_password'
+        'export_attendance_excel', 'export_rekap_excel', 'export_rekap_pdf', 'forgot_password',
+        'delete_log'  // Aksi hapus log
     ];
     
     if (role === 'staff_tu') {
-        // Staff TU tidak bisa melihat aksi sensitif
-        const sensitiveActions = ['delete_user', 'reset_system', 'update_user_role', 'delete_announcement'];
+        const sensitiveActions = ['delete_user', 'reset_system', 'update_user_role', 'delete_announcement', 'delete_log'];
         return allActions.filter(a => !sensitiveActions.includes(a));
     }
     
@@ -118,7 +111,6 @@ function initLogsSystem() {
     if (startInput && !startInput.value) startInput.value = startDate.toISOString().split('T')[0];
     if (endInput && !endInput.value) endInput.value = endDate.toISOString().split('T')[0];
     
-    // Populate action filter dropdown berdasarkan role
     populateActionFilter();
     
     if (logsListener) {
@@ -138,9 +130,6 @@ function initLogsSystem() {
     });
 }
 
-/**
- * Populate action filter dropdown berdasarkan role user
- */
 function populateActionFilter() {
     const actionFilter = document.getElementById('logActionFilter');
     if (!actionFilter) return;
@@ -150,7 +139,6 @@ function populateActionFilter() {
     
     actionFilter.innerHTML = '<option value="all">📌 Semua Aksi</option>';
     
-    // Group actions by category
     const actionCategories = {
         '🔐 Autentikasi': ['login', 'logout', 'register', 'forgot_password'],
         '📢 Pengumuman': ['create_announcement', 'update_announcement', 'delete_announcement'],
@@ -161,7 +149,8 @@ function populateActionFilter() {
         '👥 Pertemanan': ['send_friend_request', 'accept_friend_request', 'reject_friend_request', 'remove_friend'],
         '💬 Chat': ['delete_chat_message', 'clear_chat'],
         '⚙️ Pengaturan': ['upload_profile_photo', 'save_school_name', 'upload_school_logo', 'remove_school_logo', 'update_global_delay', 'save_classes', 'save_majors', 'update_school_type'],
-        '📊 Ekspor': ['export_rekap_excel', 'export_rekap_pdf']
+        '📊 Ekspor': ['export_rekap_excel', 'export_rekap_pdf'],
+        '🗑️ Manajemen Log': ['delete_log']
     };
     
     for (const [category, actions] of Object.entries(actionCategories)) {
@@ -198,15 +187,12 @@ async function renderLogsTable() {
         
         // FILTER BERDASARKAN ROLE
         if (currentUser.role === 'siswa') {
-            // Siswa hanya melihat log milik sendiri
             filteredLogs = filteredLogs.filter(log => log.userId === currentUser.uid);
         } else if (currentUser.role === 'staff_tu') {
-            // Staff TU: lihat semua log kecuali aksi sensitif
             filteredLogs = filterSensitiveActionsForStaffTU(filteredLogs);
         }
-        // Admin, Wakil Kepala Sekolah, Guru, Developer: lihat semua (tidak perlu filter tambahan)
         
-        // Filter berdasarkan aksi (jika ada)
+        // Filter berdasarkan aksi
         const actionFilter = document.getElementById('logActionFilter')?.value;
         if (actionFilter && actionFilter !== 'all') {
             filteredLogs = filteredLogs.filter(log => log.action === actionFilter);
@@ -239,6 +225,9 @@ async function renderLogsTable() {
             return;
         }
         
+        // CEK APAKAH USER BISA HAPUS LOG
+        const canDelete = canDeleteLogs(currentUser.role);
+        
         let html = '';
         for (const log of paginatedLogs) {
             const time = log.timestamp ? new Date(log.timestamp).toLocaleString('id-ID') : '-';
@@ -249,7 +238,6 @@ async function renderLogsTable() {
             if (log.userRole === 'wakil_kepala') roleClass = 'role-wakil-kepala';
             if (log.userRole === 'staff_tu') roleClass = 'role-staff-tu';
             
-            // Highlight untuk aksi penting
             let rowClass = '';
             if (log.action === 'delete_user' || log.action === 'reset_system') {
                 rowClass = 'log-critical';
@@ -259,21 +247,35 @@ async function renderLogsTable() {
                 rowClass = 'log-delete';
             }
             
+            // Tombol hapus (hanya untuk Developer & Kepala Sekolah)
+            let deleteButton = '';
+            if (canDelete) {
+                deleteButton = `
+                    <button class="btn-icon delete-log-btn" 
+                            onclick="deleteSingleLog('${log.id}')" 
+                            title="Hapus log ini"
+                            style="background: #f44336; border: none; border-radius: 8px; padding: 5px 10px; margin-left: 8px; cursor: pointer; color: white; font-size: 12px;">
+                        🗑️
+                    </button>
+                `;
+            }
+            
             html += `
-                <tr class="${rowClass}" style="border-bottom: 1px solid var(--border);">
+                <tr class="${rowClass}" style="border-bottom: 1px solid var(--border);" data-log-id="${log.id}">
                     <td style="white-space: nowrap; padding: 12px 8px;">${time}</td>
                     <td style="padding: 12px 8px;"><strong>${escapeHtmlLog(log.userName || log.userId)}</strong></td>
                     <td style="padding: 12px 8px;"><span class="role-badge ${roleClass}">${roleIcon} ${roleDisplay}</span></td>
                     <td style="padding: 12px 8px;">${actionIcon} ${formatActionName(log.action)}</td>
                     <td style="padding: 12px 8px; max-width: 400px; word-break: break-word;">${escapeHtmlLog(log.details || '-')}</td>
-                    <td style="padding: 12px 8px;"><small>${log.ipAddress || '-'}</small></td>
+                    <td style="padding: 12px 8px;">
+                        <small>${log.ipAddress || '-'}</small>
+                        ${deleteButton}
+                    </td>
                 </tr>
             `;
         }
         tbody.innerHTML = html;
         renderPagination(totalPages);
-        
-        // Update judul dengan jumlah log
         updateLogsCount(filteredLogs.length);
         
     } catch (err) {
@@ -283,12 +285,160 @@ async function renderLogsTable() {
 }
 
 /**
- * Update judul dengan jumlah log
+ * Hapus satu log berdasarkan ID
+ * Hanya Developer dan Kepala Sekolah (Admin) yang bisa
+ * @param {string} logId - ID log yang akan dihapus
  */
+async function deleteSingleLog(logId) {
+    if (!currentUser) {
+        showToast("Anda harus login!", "error");
+        return;
+    }
+    
+    if (!canDeleteLogs(currentUser.role)) {
+        showToast("⛔ Hanya Developer dan Kepala Sekolah yang dapat menghapus log!", "error");
+        return;
+    }
+    
+    // Cari data log untuk ditampilkan di konfirmasi
+    const logToDelete = currentLogsData.find(log => log.id === logId);
+    if (!logToDelete) {
+        showToast("❌ Log tidak ditemukan!", "error");
+        return;
+    }
+    
+    const logTime = logToDelete.timestamp ? new Date(logToDelete.timestamp).toLocaleString('id-ID') : 'Waktu tidak diketahui';
+    const logAction = formatActionName(logToDelete.action);
+    const logUser = logToDelete.userName || logToDelete.userId || 'Unknown';
+    
+    if (!confirm(`⚠️ HAPUS LOG\n\nApakah Anda yakin ingin menghapus log ini?\n\n📅 Waktu: ${logTime}\n👤 Pengguna: ${logUser}\n📌 Aksi: ${logAction}\n📝 Detail: ${(logToDelete.details || '-').substring(0, 100)}\n\nLog akan dihapus PERMANEN dari database dan tidak dapat dikembalikan!\n\nTINDAKAN INI TIDAK DAPAT DIBATALKAN!`)) {
+        return;
+    }
+    
+    // Tampilkan loading pada tombol yang diklik
+    const buttons = document.querySelectorAll(`.delete-log-btn[onclick="deleteSingleLog('${logId}')"]`);
+    buttons.forEach(btn => {
+        btn.disabled = true;
+        btn.innerHTML = '⏳';
+        btn.style.opacity = '0.5';
+    });
+    
+    try {
+        // Hapus dari Firebase
+        await db.ref(`logs/${logId}`).remove();
+        
+        showToast(`✅ Log berhasil dihapus!`, "success");
+        
+        // Catat aktivitas penghapusan log
+        if (typeof logActivity === 'function') {
+            const roleDisplay = getRoleDisplayName(currentUser.role);
+            await logActivity('delete_log', `Menghapus log oleh ${logUser} (Aksi: ${logToDelete.action}) - ${roleDisplay}`);
+        }
+        
+        // Refresh tabel logs (data akan otomatis update via listener)
+        // Tapi kita panggil render ulang untuk memastikan
+        setTimeout(() => {
+            renderLogsTable();
+        }, 500);
+        
+    } catch (error) {
+        console.error("Delete log error:", error);
+        showToast(`❌ Gagal menghapus log: ${error.message}`, "error");
+        
+        // Reset tombol
+        buttons.forEach(btn => {
+            btn.disabled = false;
+            btn.innerHTML = '🗑️';
+            btn.style.opacity = '1';
+        });
+    }
+}
+
+/**
+ * Hapus semua log (untuk admin/developer) - fitur tambahan
+ * @param {boolean} confirmed - Konfirmasi dari user
+ */
+async function deleteAllLogs() {
+    if (!currentUser) {
+        showToast("Anda harus login!", "error");
+        return;
+    }
+    
+    if (!canDeleteLogs(currentUser.role)) {
+        showToast("⛔ Hanya Developer dan Kepala Sekolah yang dapat menghapus log!", "error");
+        return;
+    }
+    
+    const totalLogs = currentLogsData.length;
+    if (totalLogs === 0) {
+        showToast("📭 Tidak ada log yang dapat dihapus!", "info");
+        return;
+    }
+    
+    if (!confirm(`⚠️ HAPUS SEMUA LOG\n\nApakah Anda yakin ingin menghapus SEMUA ${totalLogs} log aktivitas?\n\n⚠️ TINDAKAN INI TIDAK DAPAT DIBATALKAN!\n\nSemua log akan dihapus permanen dari database.`)) {
+        return;
+    }
+    
+    const roleDisplay = getRoleDisplayName(currentUser.role);
+    const confirmation = prompt(`Ketik "HAPUS SEMUA" untuk mengkonfirmasi penghapusan ${totalLogs} log:`);
+    
+    if (confirmation !== "HAPUS SEMUA") {
+        showToast("❌ Penghapusan dibatalkan", "error");
+        return;
+    }
+    
+    showToast("⏳ Menghapus semua log...", "info");
+    
+    try {
+        // Hapus semua log dari Firebase
+        await db.ref('logs').remove();
+        
+        showToast(`✅ ${totalLogs} log berhasil dihapus!`, "success");
+        
+        // Catat aktivitas
+        if (typeof logActivity === 'function') {
+            await logActivity('delete_all_logs', `Menghapus semua log (${totalLogs} log) - ${roleDisplay}`);
+        }
+        
+        // Refresh
+        setTimeout(() => {
+            renderLogsTable();
+        }, 500);
+        
+    } catch (error) {
+        console.error("Delete all logs error:", error);
+        showToast(`❌ Gagal menghapus log: ${error.message}`, "error");
+    }
+}
+
 function updateLogsCount(count) {
     const logsHeader = document.querySelector('#tab-logs .controls-bar h4');
     if (logsHeader) {
         logsHeader.innerHTML = `📋 Log Aktivitas <span style="font-size: 12px; color: #888;">(${count} record)</span>`;
+    }
+    
+    // Tambahkan tombol hapus semua jika user memiliki akses
+    const controlsBar = document.querySelector('#tab-logs .controls-bar');
+    if (controlsBar && canDeleteLogs(currentUser?.role)) {
+        let deleteAllBtn = document.getElementById('deleteAllLogsBtn');
+        if (!deleteAllBtn) {
+            deleteAllBtn = document.createElement('button');
+            deleteAllBtn.id = 'deleteAllLogsBtn';
+            deleteAllBtn.className = 'btn-action btn-danger';
+            deleteAllBtn.innerHTML = '🗑️ Hapus Semua Log';
+            deleteAllBtn.onclick = () => deleteAllLogs();
+            deleteAllBtn.style.marginLeft = 'auto';
+            deleteAllBtn.style.background = '#f44336';
+            deleteAllBtn.style.border = 'none';
+            deleteAllBtn.style.padding = '8px 16px';
+            deleteAllBtn.style.borderRadius = '8px';
+            deleteAllBtn.style.cursor = 'pointer';
+            deleteAllBtn.style.color = 'white';
+            controlsBar.appendChild(deleteAllBtn);
+        }
+    } else {
+        const deleteAllBtn = document.getElementById('deleteAllLogsBtn');
+        if (deleteAllBtn) deleteAllBtn.remove();
     }
 }
 
@@ -301,13 +451,11 @@ function renderPagination(totalPages) {
     }
     let html = '<div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">';
     
-    // First page button
     if (currentLogsPage > 1) {
         html += `<button class="btn-action btn-secondary" onclick="changeLogsPage(1)" title="Halaman pertama">⏮️</button>`;
         html += `<button class="btn-action btn-secondary" onclick="changeLogsPage(${currentLogsPage - 1})">◀ Prev</button>`;
     }
     
-    // Page numbers
     let startPage = Math.max(1, currentLogsPage - 2);
     let endPage = Math.min(totalPages, currentLogsPage + 2);
     
@@ -347,170 +495,58 @@ function changeLogsPage(page) {
 
 function getActionIcon(action) {
     const icons = {
-        // Autentikasi
-        'login': '🔓',
-        'logout': '🚪',
-        'register': '📝',
-        'forgot_password': '🔐',
-        
-        // Pengumuman
-        'create_announcement': '📢',
-        'update_announcement': '✏️',
-        'delete_announcement': '🗑️',
-        
-        // Absensi
-        'delete_attendance': '🗑️',
-        'simulate_attendance_in': '✅',
-        'simulate_attendance_out': '🏠',
-        'save_manual_attendance': '📝',
-        'export_attendance_excel': '📊',
-        
-        // Manajemen Siswa
-        'add_student': '➕',
-        'edit_student': '✏️',
-        'delete_student': '🗑️',
-        'import_students': '📥',
-        'export_students': '📤',
-        
-        // Manajemen User
-        'update_user_role': '🔄',
-        'delete_user': '🗑️',
-        'reset_system': '⚠️',
-        'reset_user_password': '🔑',
-        
-        // Status
-        'create_status': '📸',
-        'delete_status': '🗑️',
-        
-        // Pertemanan
-        'send_friend_request': '➕',
-        'accept_friend_request': '✅',
-        'reject_friend_request': '❌',
-        'remove_friend': '🗑️',
-        
-        // Chat
-        'delete_chat_message': '💬🗑️',
-        'clear_chat': '🧹',
-        
-        // Pengaturan
-        'upload_profile_photo': '📸',
-        'save_school_name': '🏫',
-        'upload_school_logo': '🖼️',
-        'remove_school_logo': '🗑️',
-        'update_global_delay': '⏰',
-        'save_classes': '📚',
-        'save_majors': '🎓',
-        'update_school_type': '🏫',
-        
-        // Ekspor
-        'export_rekap_excel': '📊',
-        'export_rekap_pdf': '📄',
-        
-        // Staff
-        'add_staff': '➕',
-        'edit_staff': '✏️',
-        'delete_staff': '🗑️',
-        'create_staff_account': '👤',
-        'simulate_staff_attendance_in': '✅',
-        'simulate_staff_attendance_out': '🏠',
-        'delete_staff_attendance': '🗑️',
+        'login': '🔓', 'logout': '🚪', 'register': '📝', 'forgot_password': '🔐',
+        'create_announcement': '📢', 'update_announcement': '✏️', 'delete_announcement': '🗑️',
+        'delete_attendance': '🗑️', 'simulate_attendance_in': '✅', 'simulate_attendance_out': '🏠',
+        'save_manual_attendance': '📝', 'export_attendance_excel': '📊',
+        'add_student': '➕', 'edit_student': '✏️', 'delete_student': '🗑️',
+        'import_students': '📥', 'export_students': '📤',
+        'update_user_role': '🔄', 'delete_user': '🗑️', 'reset_system': '⚠️', 'reset_user_password': '🔑',
+        'create_status': '📸', 'delete_status': '🗑️',
+        'send_friend_request': '➕', 'accept_friend_request': '✅', 'reject_friend_request': '❌', 'remove_friend': '🗑️',
+        'delete_chat_message': '💬🗑️', 'clear_chat': '🧹',
+        'upload_profile_photo': '📸', 'save_school_name': '🏫', 'upload_school_logo': '🖼️',
+        'remove_school_logo': '🗑️', 'update_global_delay': '⏰', 'save_classes': '📚',
+        'save_majors': '🎓', 'update_school_type': '🏫',
+        'export_rekap_excel': '📊', 'export_rekap_pdf': '📄',
+        'add_staff': '➕', 'edit_staff': '✏️', 'delete_staff': '🗑️', 'create_staff_account': '👤',
+        'simulate_staff_attendance_in': '✅', 'simulate_staff_attendance_out': '🏠', 'delete_staff_attendance': '🗑️',
         'export_staff_attendance_excel': '📊',
-        
-        // Izin Online
-        'create_izin': '📝',
-        'update_izin': '✏️',
-        'delete_izin': '🗑️',
-        'approve_izin': '✅',
-        'reject_izin': '❌',
-        
-        // Kode Registrasi
-        'generate_code': '🔑',
-        'delete_code': '🗑️'
+        'create_izin': '📝', 'update_izin': '✏️', 'delete_izin': '🗑️', 'approve_izin': '✅', 'reject_izin': '❌',
+        'generate_code': '🔑', 'delete_code': '🗑️',
+        'delete_log': '🗑️', 'delete_all_logs': '🔥'
     };
     return icons[action] || '📌';
 }
 
 function formatActionName(action) {
     const names = {
-        // Autentikasi
-        'login': 'Login',
-        'logout': 'Logout',
-        'register': 'Registrasi Akun',
-        'forgot_password': 'Lupa Password',
-        
-        // Pengumuman
-        'create_announcement': 'Buat Pengumuman',
-        'update_announcement': 'Edit Pengumuman',
-        'delete_announcement': 'Hapus Pengumuman',
-        
-        // Absensi
-        'delete_attendance': 'Hapus Absensi',
-        'simulate_attendance_in': 'Simulasi Absen Masuk',
-        'simulate_attendance_out': 'Simulasi Absen Pulang',
-        'save_manual_attendance': 'Atur Ketidakhadiran',
+        'login': 'Login', 'logout': 'Logout', 'register': 'Registrasi Akun', 'forgot_password': 'Lupa Password',
+        'create_announcement': 'Buat Pengumuman', 'update_announcement': 'Edit Pengumuman', 'delete_announcement': 'Hapus Pengumuman',
+        'delete_attendance': 'Hapus Absensi', 'simulate_attendance_in': 'Simulasi Absen Masuk',
+        'simulate_attendance_out': 'Simulasi Absen Pulang', 'save_manual_attendance': 'Atur Ketidakhadiran',
         'export_attendance_excel': 'Ekspor Absensi Excel',
-        
-        // Manajemen Siswa
-        'add_student': 'Tambah Siswa',
-        'edit_student': 'Edit Siswa',
-        'delete_student': 'Hapus Siswa',
-        'import_students': 'Import Siswa',
-        'export_students': 'Export Siswa',
-        
-        // Manajemen User
-        'update_user_role': 'Ubah Role User',
-        'delete_user': 'Hapus User',
-        'reset_system': 'Reset Sistem',
+        'add_student': 'Tambah Siswa', 'edit_student': 'Edit Siswa', 'delete_student': 'Hapus Siswa',
+        'import_students': 'Import Siswa', 'export_students': 'Export Siswa',
+        'update_user_role': 'Ubah Role User', 'delete_user': 'Hapus User', 'reset_system': 'Reset Sistem',
         'reset_user_password': 'Reset Password User',
-        
-        // Status
-        'create_status': 'Buat Status',
-        'delete_status': 'Hapus Status',
-        
-        // Pertemanan
-        'send_friend_request': 'Kirim Permintaan Teman',
-        'accept_friend_request': 'Terima Permintaan Teman',
-        'reject_friend_request': 'Tolak Permintaan Teman',
-        'remove_friend': 'Hapus Teman',
-        
-        // Chat
-        'delete_chat_message': 'Hapus Pesan Chat',
-        'clear_chat': 'Bersihkan Chat',
-        
-        // Pengaturan
-        'upload_profile_photo': 'Upload Foto Profil',
-        'save_school_name': 'Ubah Nama Sekolah',
-        'upload_school_logo': 'Upload Logo Sekolah',
-        'remove_school_logo': 'Hapus Logo Sekolah',
-        'update_global_delay': 'Ubah Delay Global',
-        'save_classes': 'Simpan Daftar Kelas',
-        'save_majors': 'Simpan Daftar Jurusan',
-        'update_school_type': 'Ubah Tipe Sekolah',
-        
-        // Ekspor
-        'export_rekap_excel': 'Ekspor Rekap Excel',
-        'export_rekap_pdf': 'Ekspor Rekap PDF',
-        
-        // Staff
-        'add_staff': 'Tambah Staff',
-        'edit_staff': 'Edit Staff',
-        'delete_staff': 'Hapus Staff',
-        'create_staff_account': 'Buat Akun Staff',
-        'simulate_staff_attendance_in': 'Absen Masuk Staff',
-        'simulate_staff_attendance_out': 'Absen Pulang Staff',
-        'delete_staff_attendance': 'Hapus Absensi Staff',
+        'create_status': 'Buat Status', 'delete_status': 'Hapus Status',
+        'send_friend_request': 'Kirim Permintaan Teman', 'accept_friend_request': 'Terima Permintaan Teman',
+        'reject_friend_request': 'Tolak Permintaan Teman', 'remove_friend': 'Hapus Teman',
+        'delete_chat_message': 'Hapus Pesan Chat', 'clear_chat': 'Bersihkan Chat',
+        'upload_profile_photo': 'Upload Foto Profil', 'save_school_name': 'Ubah Nama Sekolah',
+        'upload_school_logo': 'Upload Logo Sekolah', 'remove_school_logo': 'Hapus Logo Sekolah',
+        'update_global_delay': 'Ubah Delay Global', 'save_classes': 'Simpan Daftar Kelas',
+        'save_majors': 'Simpan Daftar Jurusan', 'update_school_type': 'Ubah Tipe Sekolah',
+        'export_rekap_excel': 'Ekspor Rekap Excel', 'export_rekap_pdf': 'Ekspor Rekap PDF',
+        'add_staff': 'Tambah Staff', 'edit_staff': 'Edit Staff', 'delete_staff': 'Hapus Staff',
+        'create_staff_account': 'Buat Akun Staff', 'simulate_staff_attendance_in': 'Absen Masuk Staff',
+        'simulate_staff_attendance_out': 'Absen Pulang Staff', 'delete_staff_attendance': 'Hapus Absensi Staff',
         'export_staff_attendance_excel': 'Ekspor Absensi Staff Excel',
-        
-        // Izin Online
-        'create_izin': 'Ajukan Izin',
-        'update_izin': 'Edit Izin',
-        'delete_izin': 'Hapus Izin',
-        'approve_izin': 'Setujui Izin',
-        'reject_izin': 'Tolak Izin',
-        
-        // Kode Registrasi
-        'generate_code': 'Generate Kode Registrasi',
-        'delete_code': 'Hapus Kode Registrasi'
+        'create_izin': 'Ajukan Izin', 'update_izin': 'Edit Izin', 'delete_izin': 'Hapus Izin',
+        'approve_izin': 'Setujui Izin', 'reject_izin': 'Tolak Izin',
+        'generate_code': 'Generate Kode Registrasi', 'delete_code': 'Hapus Kode Registrasi',
+        'delete_log': 'Hapus Log', 'delete_all_logs': 'Hapus Semua Log'
     };
     return names[action] || action.replace(/_/g, ' ').toUpperCase();
 }
@@ -544,5 +580,8 @@ window.getRoleDisplayName = getRoleDisplayName;
 window.getRoleIcon = getRoleIcon;
 window.canViewAllLogs = canViewAllLogs;
 window.canViewSensitiveLogs = canViewSensitiveLogs;
+window.canDeleteLogs = canDeleteLogs;
+window.deleteSingleLog = deleteSingleLog;
+window.deleteAllLogs = deleteAllLogs;
 
-console.log("✅ logs.js V2.0 loaded - Log aktivitas dengan role: Developer, Kepala Sekolah, Wakil Kepala Sekolah, Staff TU (terbatas), Guru, Siswa");
+console.log("✅ logs.js V2.1 loaded - Dengan tombol hapus log per baris untuk Developer & Kepala Sekolah");
