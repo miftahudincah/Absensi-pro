@@ -1,14 +1,11 @@
-// management.js - VERSION 3.2 (FULLY LOCKED: GURU & STAFF SAME AS STUDENT)
+// management.js - VERSION 3.5 (ALL ROLES EXCEPT SISWA CAN GENERATE STUDENT CODE)
 // Manajemen User & Kode Registrasi
-// Fitur: Generate kode untuk Siswa (dropdown siswa), Guru (dropdown staff), Staff (dropdown staff) DENGAN ID TERKUNCI
-// Role yang didukung: developer, admin (Kepala Sekolah), wakil_kepala, staff_tu, guru, siswa
-// PERUBAHAN V3.2: 
-//   - MENCEGAH generate ulang untuk ID yang sama (seperti sistem siswa)
-//   - CEK apakah sudah memiliki akun (berdasarkan email)
-//   - CEK apakah masih memiliki kode aktif
-//   - RESET dropdown setelah generate
-//   - HIGHLIGHT di tabel user/kode jika sudah ada
-//   - VALIDASI KETAT untuk semua jenis generate
+// Fitur: Generate kode untuk Siswa, Guru, Staff dengan ID TERKUNCI
+// PERUBAHAN V3.5: 
+//   - SEMUA ROLE kecuali SISWA dapat generate kode untuk SISWA
+//   - Guru, Wakil Kepala, Staff TU, Admin, Developer bisa generate kode siswa (DIPASTIKAN)
+//   - Untuk generate kode Staff/Guru baru, hanya Admin, Developer, Wakil Kepala
+//   - FIX: Staff TU sekarang juga bisa generate kode siswa (sudah berfungsi)
 // ============================================================================
 
 // ======================= ROLE HELPER FUNCTIONS =======================
@@ -88,10 +85,32 @@ function canManageUser(currentUser, targetUser) {
 }
 
 /**
- * Cek apakah user dapat menggenerate kode
+ * Cek apakah user dapat menggenerate kode untuk SISWA
+ * SEMUA ROLE kecuali SISWA bisa generate kode siswa
+ * (Termasuk: Admin, Developer, Wakil Kepala, Staff TU, Guru)
+ */
+function canGenerateStudentCode(userRole) {
+    // Semua role kecuali siswa bisa generate kode siswa
+    // Staff TU (staff_tu) juga BISA generate kode untuk siswa
+    return userRole !== 'siswa';
+}
+
+/**
+ * Cek apakah user dapat menggenerate kode untuk STAFF/GURU baru
+ * Hanya role tertentu yang bisa membuat akun staff baru
+ */
+function canGenerateStaffCode(userRole) {
+    const allowedRoles = ['admin', 'developer', 'wakil_kepala'];
+    return allowedRoles.includes(userRole);
+}
+
+/**
+ * Cek apakah user dapat menggenerate kode (untuk keperluan validasi umum)
+ * Maintain untuk kompatibilitas dengan kode lama
  */
 function canGenerateCode(userRole) {
-    const allowedRoles = ['admin', 'developer', 'wakil_kepala', 'guru'];
+    // Sekarang semua role kecuali siswa bisa generate kode (minimal untuk siswa)
+    const allowedRoles = ['admin', 'developer', 'wakil_kepala', 'staff_tu', 'guru'];
     return allowedRoles.includes(userRole);
 }
 
@@ -416,8 +435,9 @@ function generateRegistrationCode() {
         return;
     }
 
-    if (!canGenerateCode(currentUser.role)) {
-        showToast("⛔ Hanya Kepala Sekolah, Wakil Kepala Sekolah, Guru, dan Developer yang dapat generate kode!", "error");
+    // Cek akses generate kode (semua role kecuali siswa)
+    if (!canGenerateStudentCode(currentUser.role)) {
+        showToast("⛔ Hanya Admin, Guru, Wakil Kepala, Staff TU, dan Developer yang dapat generate kode!", "error");
         return;
     }
 
@@ -427,9 +447,8 @@ function generateRegistrationCode() {
         return;
     }
 
-    // ========== VALIDASI WAJIB PILIH SEBELUM GENERATE ==========
-    
-    // VALIDASI UNTUK SISWA
+    // ========== VALIDASI UNTUK SISWA ==========
+    // SEMUA ROLE (kecuali siswa) BISA generate kode untuk siswa
     if (targetType === 'siswa') {
         const selectSiswa = document.getElementById('selectStudentForCode');
         const selectedId = selectSiswa?.value;
@@ -456,8 +475,14 @@ function generateRegistrationCode() {
         generateStudentCode(selectedId);
         return;
     }
-    // ========== VALIDASI UNTUK GURU (WAJIB PILIH DROPDOWN & CEK KETAT) ==========
+    // ========== VALIDASI UNTUK GURU (Hanya role tertentu) ==========
     else if (targetType === 'guru') {
+        // Hanya Admin, Developer, Wakil Kepala yang bisa generate kode untuk guru baru
+        if (!canGenerateStaffCode(currentUser.role)) {
+            showToast("⛔ Hanya Kepala Sekolah, Wakil Kepala, dan Developer yang dapat generate kode untuk Guru baru!", "error");
+            return;
+        }
+        
         const selectStaff = document.getElementById('selectStaffForCode');
         
         if (!selectStaff) {
@@ -506,8 +531,14 @@ function generateRegistrationCode() {
         generateGuruCode(selectedStaffId, staffEmail, staffName, staffJabatan);
         return;
     }
-    // ========== VALIDASI UNTUK STAFF (WAJIB PILIH DROPDOWN & CEK KETAT) ==========
+    // ========== VALIDASI UNTUK STAFF (Hanya role tertentu) ==========
     else if (targetType === 'staff') {
+        // Hanya Admin, Developer, Wakil Kepala yang bisa generate kode untuk staff baru
+        if (!canGenerateStaffCode(currentUser.role)) {
+            showToast("⛔ Hanya Kepala Sekolah, Wakil Kepala, dan Developer yang dapat generate kode untuk Staff baru!", "error");
+            return;
+        }
+        
         const selectStaff = document.getElementById('selectStaffForCode');
         
         if (!selectStaff) {
@@ -952,7 +983,7 @@ function renderCodesTable() {
     if (!tbody) return;
     tbody.innerHTML = '';
     if (typeof dbData === 'undefined' || !dbData.codes || dbData.codes.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding: 30px; color:#888;">🔑 Belum ada kode registrasi. Generate kode di atas.</option></table></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding: 30px; color:#888;">🔑 Belum ada kode registrasi. Generate kode di atas.</td></tr>`;
         updateCodesStatistics();
         return;
     }
@@ -1007,13 +1038,13 @@ function renderCodesTable() {
                     <span style="color:${colorStyle}">${typeIcon}</span>
                     <strong>${c.code}</strong>
                     <br><small style="font-weight:normal; color:#888">${typeLabel}${linkedInfo}${requireIdBadge}${createdByName}</small>
-                 </td>
-                <td>${c.used ? '<span style="color:#4caf50;">✅ Terpakai</span>' : `<span style="color:#ff9800;">🟢 Aktif</span>${timeRemaining ? `<br><small style="color:#888;">⏰ ${timeRemaining}</small>` : ''}`}</div>
-                <td style="font-size: 12px;">${c.createdAt ? new Date(c.createdAt).toLocaleString('id-ID') : '-'}</div>
-                <td style="font-size: 12px;">${c.userId ? c.userId.substring(0, 20) + '...' : '-'}</div>
+                </td>
+                <td>${c.used ? '<span style="color:#4caf50;">✅ Terpakai</span>' : `<span style="color:#ff9800;">🟢 Aktif</span>${timeRemaining ? `<br><small style="color:#888;">⏰ ${timeRemaining}</small>` : ''}</span>`}</td>
+                <td style="font-size: 12px;">${c.createdAt ? new Date(c.createdAt).toLocaleString('id-ID') : '-'}</td>
+                <td style="font-size: 12px;">${c.userId ? c.userId.substring(0, 20) + '...' : '-'}</td>
                 <td>${!c.used ? `<button class="btn-icon" onclick="copyToClipboard('${c.code}')" title="Salin Kode">📋</button>
-                                <button class="btn-icon delete" onclick="deleteCode('${c.code}')" title="Hapus Kode">🗑️</button>` : '-'}</div>
-            </tr>
+                                <button class="btn-icon delete" onclick="deleteCode('${c.code}')" title="Hapus Kode">🗑️</button>` : '-'}</td>
+            </table>
         `;
     });
     updateCodesStatistics();
@@ -1113,7 +1144,7 @@ function renderUsersTable() {
     }
     tbody.innerHTML = '';
     if (typeof dbData === 'undefined' || !dbData.users_auth || dbData.users_auth.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 30px; color:#888;">👥 Belum ada pengguna terdaftar.</option></td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 30px; color:#888;">👥 Belum ada pengguna terdaftar.</td></tr>`;
         return;
     }
 
@@ -1121,7 +1152,7 @@ function renderUsersTable() {
     data.sort((a, b) => getRolePriority(a.role) - getRolePriority(b.role));
 
     if (data.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 30px; color:#888;">🔍 Tidak ada pengguna yang cocok dengan pencarian.</option></td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 30px; color:#888;">🔍 Tidak ada pengguna yang cocok dengan pencarian.</td></tr>`;
         return;
     }
 
@@ -1201,10 +1232,10 @@ function renderUsersTable() {
             <tr class="${isMe ? 'current-user-row' : ''}">
                 <td style="text-align:center;"><img src="${avatar}" style="width:40px; height:40px; border-radius:50%; object-fit:cover;"></td>
                 <td><strong>${escapeHtmlString(u.nama)}</strong>${isMe ? '<br><small style="color:#4a90e2;">Akun Anda</small>' : ''}</td>
-                <td style="color:#aaa; font-size:0.85rem;">${u.email || '-'}</div>
-                <td>${roleHtml}</div>
-                <td style="color:#888; font-size:0.8rem;">${detailIcon} ${escapeHtmlString(detailText)}<br><small>📅 ${registeredDate}</small></div>
-                <td style="text-align:center;">${actionsHtml}</div>
+                <td style="color:#aaa; font-size:0.85rem;">${u.email || '-'}</td>
+                <td>${roleHtml}</td>
+                <td style="color:#888; font-size:0.8rem;">${detailIcon} ${escapeHtmlString(detailText)}<br><small>📅 ${registeredDate}</small></td>
+                <td style="text-align:center;">${actionsHtml}</td>
             </tr>
         `;
     });
@@ -1366,10 +1397,14 @@ window.getRoleDisplayName = getRoleDisplayName;
 window.getRoleIcon = getRoleIcon;
 window.canManageUser = canManageUser;
 window.canGenerateCode = canGenerateCode;
+window.canGenerateStudentCode = canGenerateStudentCode;
+window.canGenerateStaffCode = canGenerateStaffCode;
 window.canResetPassword = canResetPassword;
 window.canDeleteUser = canDeleteUser;
 window.isValidRole = isValidRole;
 window.highlightUserInTable = highlightUserInTable;
 window.highlightExistingCode = highlightExistingCode;
 
-console.log("✅ management.js V3.2 loaded - FULLY LOCKED: GURU & STAFF validasi ketat seperti SISWA (cek akun, cek kode aktif, reset dropdown, highlight)!");
+console.log("✅ management.js V3.5 loaded - ALL ROLES EXCEPT SISWA can generate student code!");
+console.log("   - Guru, Staff TU, Wakil Kepala, Admin, Developer BISA generate kode untuk SISWA (DIPASTIKAN)");
+console.log("   - Untuk generate kode STAFF/GURU baru: hanya Admin, Developer, Wakil Kepala");
