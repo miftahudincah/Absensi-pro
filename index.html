@@ -10,21 +10,21 @@
     <!-- Google Fonts: Inter -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
 
-    <!-- CSS -->
+    <!-- CSS Modules -->
     <link rel="stylesheet" href="css/base.css">
     <link rel="stylesheet" href="css/layout.css">
     <link rel="stylesheet" href="css/components.css">
     <link rel="stylesheet" href="css/modules.css">
     <link rel="stylesheet" href="css/responsive.css">
     <link rel="stylesheet" href="css/custom.css">
-    
+
     <!-- Chart.js CDN -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 
-    <!-- Supabase SDK (HARUS sebelum Firebase) -->
+    <!-- Supabase SDK -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-    <!-- Firebase SDK (APP + AUTH + DATABASE + FUNCTIONS) -->
+    <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
@@ -121,7 +121,7 @@
             color: white;
         }
         
-        /* FLOATING BUTTONS */
+        /* FLOATING BUTTONS - hidden by default, shown for specific roles */
         .floating-chat-btn, 
         .floating-friends-btn, 
         .floating-status-btn, 
@@ -233,45 +233,6 @@
         
         .ai-summary-card .stat-number {
             font-size: 1.2rem !important;
-        }
-        
-        /* AI Summary Modal Content */
-        .ai-summary-content {
-            line-height: 1.6;
-        }
-        
-        .ai-summary-content h2 {
-            color: #667eea;
-            margin-top: 20px;
-            margin-bottom: 10px;
-        }
-        
-        .ai-summary-content h3 {
-            color: #00bcd4;
-            margin-top: 15px;
-            margin-bottom: 8px;
-        }
-        
-        .ai-summary-content ul {
-            margin: 8px 0 8px 20px;
-        }
-        
-        .ai-summary-content li {
-            margin: 4px 0;
-        }
-        
-        .loading-spinner {
-            display: inline-block;
-            width: 40px;
-            height: 40px;
-            border: 4px solid rgba(255,255,255,0.3);
-            border-radius: 50%;
-            border-top-color: #667eea;
-            animation: spin 1s ease-in-out infinite;
-        }
-        
-        @keyframes spin {
-            to { transform: rotate(360deg); }
         }
         
         /* Nav tabs disembunyikan */
@@ -480,6 +441,16 @@
             font-size: 11px;
             margin-top: 5px;
         }
+        
+        /* Menu disembunyikan untuk role selain developer dan admin */
+        .menu-restricted {
+            display: none !important;
+        }
+        
+        /* Tombol aksi terbatas */
+        .action-restricted {
+            display: none !important;
+        }
     </style>
 </head>
 <body>
@@ -587,16 +558,22 @@
                     <div class="dropdown-content" id="dropdownMainContent">
                         <button onclick="switchTab('dashboard'); closeAllDropdowns()">📊 Dashboard</button>
                         <button onclick="switchTab('attendance'); closeAllDropdowns()">📋 Absensi Siswa</button>
-                        <!-- Menu untuk ABSENSI STAFF - HANYA untuk Admin/Guru/Developer -->
-                        <button class="role-admin role-guru role-developer" onclick="switchTab('staff-attendance'); closeAllDropdowns()">👥 Absensi Staff</button>
-                        <!-- Menu untuk DATA SISWA - HANYA untuk Admin/Guru/Developer -->
-                        <button class="role-admin role-guru role-developer" onclick="switchTab('students'); closeAllDropdowns()">👨‍🎓 Data Siswa</button>
-                        <!-- Menu untuk DATA STAFF - HANYA untuk Admin/Guru/Developer -->
-                        <button class="role-admin role-guru role-developer" onclick="switchTab('staff'); closeAllDropdowns()">👥 Data Staff</button>
+                        
+                        <!-- MENU DIHAPUS untuk role selain developer dan admin -->
+                        <!-- Menu ABSENSI STAFF - HANYA Developer dan Kepala Sekolah -->
+                        <button class="role-developer role-admin" onclick="switchTab('staff-attendance'); closeAllDropdowns()" style="display: none;">👥 Absensi Staff</button>
+                        
+                        <button onclick="switchTab('students'); closeAllDropdowns()">👨‍🎓 Data Siswa</button>
+                        
+                        <!-- Menu DATA STAFF - HANYA Developer dan Kepala Sekolah -->
+                        <button class="role-developer role-admin" onclick="switchTab('staff'); closeAllDropdowns()" style="display: none;">👥 Data Staff</button>
+                        
                         <button onclick="switchTab('rekap'); closeAllDropdowns()">📊 Rekap Absensi</button>
-                        <!-- Menu untuk IZIN ONLINE - HANYA untuk Admin/Guru/Developer -->
+                        
+                        <!-- Menu IZIN ONLINE - HANYA untuk Admin/Guru/Developer (tetap) -->
                         <button class="role-admin role-guru role-developer" onclick="goToIzinTab()">📝 Izin Online</button>
-                        <!-- Menu untuk PANDUAN - HANYA untuk Admin/Guru/Developer -->
+                        
+                        <!-- Menu PANDUAN - HANYA untuk Admin/Guru/Developer (tetap) -->
                         <button class="role-admin role-guru role-developer" onclick="switchTab('guide'); closeAllDropdowns()">📘 Panduan</button>
                     </div>
                 </div>
@@ -611,7 +588,7 @@
                     </div>
                 </div>
                 
-                <!-- Menu Pengumuman (Khusus Admin/Guru/Developer) - DISEMBUNYIKAN UNTUK SISWA -->
+                <!-- Menu Pengumuman (Khusus Admin/Guru/Developer) -->
                 <div class="dropdown" id="dropdownAnnouncement">
                     <button class="dropdown-btn role-admin role-guru role-developer" onclick="toggleDropdown('dropdownAnnouncement')">📢 Pengumuman ▼</button>
                     <div class="dropdown-content" id="dropdownAnnouncementContent">
@@ -620,13 +597,15 @@
                     </div>
                 </div>
                 
-                <!-- Manajemen (Admin/Guru/Developer) - DISEMBUNYIKAN UNTUK SISWA -->
+                <!-- Manajemen (HANYA Developer dan Kepala Sekolah) -->
                 <div class="dropdown" id="dropdownManage">
-                    <button class="dropdown-btn role-admin role-guru" onclick="toggleDropdown('dropdownManage')">⚙️ Manajemen ▼</button>
+                    <button class="dropdown-btn role-developer role-admin" onclick="toggleDropdown('dropdownManage')" style="display: none;">⚙️ Manajemen ▼</button>
                     <div class="dropdown-content" id="dropdownManageContent">
-                        <button class="role-admin role-guru" onclick="switchTab('users'); closeAllDropdowns()">👥 Manajemen User</button>
-                        <button class="role-admin role-guru role-developer" onclick="switchTab('logs'); closeAllDropdowns()">📋 Log Aktivitas</button>
-                        <button class="role-admin role-guru role-developer" onclick="switchTab('config'); closeAllDropdowns()">⚙️ Pengaturan</button>
+                        <button class="role-developer role-admin" onclick="switchTab('users'); closeAllDropdowns()">👥 Manajemen User</button>
+                        <button class="role-developer role-admin" onclick="switchTab('logs'); closeAllDropdowns()">📋 Log Aktivitas</button>
+                        
+                        <!-- Menu PENGATURAN - HANYA Developer dan Kepala Sekolah -->
+                        <button class="role-developer role-admin" onclick="switchTab('config'); closeAllDropdowns()" style="display: none;">⚙️ Pengaturan</button>
                     </div>
                 </div>
                 
@@ -717,7 +696,6 @@
                     <button class="btn-action btn-primary" onclick="simulateAttendance()">📷 Simulasi Scan Masuk</button>
                     <button class="btn-action btn-secondary" onclick="simulateAttendanceOut()" style="background:#ff9800;">🏠 Simulasi Scan Pulang</button>
                     <button class="btn-action btn-info" onclick="openSimulateOutModal()" style="background:#2196f3;">📋 Pilih Siswa Pulang</button>
-                    <!-- TOMBOL DOWNLOAD EXCEL HANYA UNTUK ADMIN/GURU/DEVELOPER -->
                     <button class="btn-action btn-success role-admin role-guru role-developer" onclick="exportToExcel()">📥 Download Excel</button>
                 </div>
             </div>
@@ -725,8 +703,8 @@
             <div class="table-container"><table><thead><tr><th>Foto</th><th>Waktu</th><th>ID FP</th><th>Nama</th><th>Kelas</th><th>Jurusan</th><th>Status</th><th>Aksi</th></tr></thead><tbody id="tbody-attendance"><tr><td colspan="8">Memuat data...<\/td><\/tr></tbody></table></div>
         </div>
 
-        <!-- TAB STAFF ATTENDANCE (Absensi Staff) -->
-        <div id="tab-staff-attendance" class="tab-content role-admin role-guru role-developer">
+        <!-- TAB STAFF ATTENDANCE (Absensi Staff) - HANYA Developer dan Kepala Sekolah -->
+        <div id="tab-staff-attendance" class="tab-content role-developer role-admin" style="display: none;">
             <div class="controls-bar">
                 <div class="filter-group">
                     <label>📅 Tanggal:</label>
@@ -741,17 +719,9 @@
                 </div>
             </div>
             <div class="table-container">
-                <table>
+                <tr>
                     <thead>
-                        <tr>
-                            <th>Foto</th>
-                            <th>Waktu</th>
-                            <th>ID</th>
-                            <th>Nama</th>
-                            <th>Jabatan</th>
-                            <th>Status</th>
-                            <th>Aksi</th>
-                        </tr>
+                        <tr><th>Foto</th><th>Waktu</th><th>ID</th><th>Nama</th><th>Jabatan</th><th>Status</th><th>Aksi</th></tr>
                     </thead>
                     <tbody id="tbody-staff-attendance">
                         <tr><td colspan="7" style="text-align:center; padding:30px;">⏳ Memuat data...<\/td><\/tr>
@@ -767,8 +737,8 @@
             <div class="table-container"><table><thead><tr><th>Foto</th><th>ID FP</th><th>Nama</th><th>Kelas</th><th>Jurusan</th><th>Delay</th><th>Aksi</th></tr></thead><tbody id="tbody-students"><tr><td colspan="7">Memuat data...<\/td><\/tr></tbody></table></div>
         </div>
 
-        <!-- TAB STAFF (Data Staff) -->
-        <div id="tab-staff" class="tab-content role-admin role-guru role-developer">
+        <!-- TAB STAFF (Data Staff) - HANYA Developer dan Kepala Sekolah -->
+        <div id="tab-staff" class="tab-content role-developer role-admin" style="display: none;">
             <div class="controls-bar">
                 <div style="display:flex; gap:10px; flex-wrap:wrap; width:100%;">
                     <input type="hidden" id="staffEditMode" value="add">
@@ -822,16 +792,16 @@
             </div>
         </div>
 
-        <!-- TAB USERS - HANYA 2 PILIHAN GENERATE KODE (SISWA & STAFF) -->
-        <div id="tab-users" class="tab-content role-admin role-guru">
+        <!-- ==================== TAB USERS - MANAJEMEN USER (HANYA Developer dan Kepala Sekolah) ==================== -->
+        <div id="tab-users" class="tab-content role-developer role-admin" style="display: none;">
             <div class="controls-bar">
                 <h4>🔑 Generate Kode Pendaftaran</h4>
             </div>
-            <div class="key-box role-admin role-guru">
+            <div class="key-box">
                 <div style="flex:1;">
                     <div style="margin-bottom:10px;">
                         <label><input type="radio" name="genTarget" value="siswa" checked onchange="toggleGenerateInput()"> 👨‍🎓 Untuk Siswa</label>
-                        <label><input type="radio" name="genTarget" value="staff" onchange="toggleGenerateInput()"> 👥 Untuk Staff (Guru/Karyawan)</label>
+                        <label class="role-admin role-developer" style="display: inline-block;"><input type="radio" name="genTarget" value="staff" onchange="toggleGenerateInput()"> 👥 Untuk Staff (Guru/Karyawan)</label>
                     </div>
                     <div id="group-select-siswa">
                         <select id="selectStudentForCode"><option value="">-- Pilih Siswa --</option></select>
@@ -847,8 +817,8 @@
             </div>
             <div id="generatedKeyDisplay" style="display:none;"></div>
             
-            <h4 class="role-admin role-guru">📋 Daftar Kode Aktif</h4>
-            <div class="table-container role-admin role-guru">
+            <h4>📋 Daftar Kode Aktif</h4>
+            <div class="table-container">
                 <table>
                     <thead>
                         <tr><th>Kode</th><th>Status</th><th>Dibuat</th><th>Pengguna</th><th>Aksi</th></tr>
@@ -857,24 +827,33 @@
                 </table>
             </div>
             
-            <div class="controls-bar role-admin role-guru">
+            <div class="controls-bar">
                 <h4>👥 Daftar Pengguna</h4>
                 <div class="search-box">
                     <input type="text" id="searchUser" placeholder="🔍 Cari user..." oninput="renderUsersTable()">
                 </div>
             </div>
-            <div class="table-container role-admin role-guru">
-                </table>
+            <div class="table-container">
+                <table style="width:100%; border-collapse:collapse;">
                     <thead>
-                        <tr><th>Foto</th><th>Nama</th><th>Email</th><th>Role</th><th>Detail</th><th>Aksi</th></tr>
+                        <tr style="background:var(--bg-hover);">
+                            <th style="padding:12px;">Foto</th>
+                            <th style="padding:12px;">Nama</th>
+                            <th style="padding:12px;">Email</th>
+                            <th style="padding:12px;">Role</th>
+                            <th style="padding:12px;">Detail</th>
+                            <th style="padding:12px;">Aksi</th>
+                        </tr>
                     </thead>
-                    <tbody id="tbody-users"></tbody>
+                    <tbody id="tbody-users">
+                        <tr><td colspan="6" style="text-align:center; padding:40px;">⏳ Memuat data pengguna...<\/td><\/tr>
+                    </tbody>
                 </table>
             </div>
         </div>
 
         <!-- TAB REKAP -->
-        <div id="tab-rekap" class="tab-content"><div class="controls-bar"><div class="filter-group"><label>📅 Periode:</label><select id="rekapPeriod" onchange="loadRekap()"><option value="minggu">Minggu Ini</option><option value="bulan">Bulan Ini</option><option value="semester">Semester Ini</option><option value="custom">Custom Range</option></select></div><div id="customRangeGroup" style="display:none; gap:10px;"><input type="date" id="rekapStartDate"><span>s/d</span><input type="date" id="rekapEndDate"></div><div style="margin-left:auto; display:flex; gap:10px;"><button class="btn-action btn-success" onclick="exportRekapToExcel()">📥 Excel</button><button class="btn-action btn-primary" onclick="exportRekapToPDF()">📄 PDF</button></div></div><div class="chart-container" style="margin-bottom:25px;"><div style="display:flex; flex-wrap:wrap; gap:20px;"><div style="flex:1; min-width:250px;"><canvas id="rekapPieChart" style="max-height:300px;"></canvas><p class="text-small text-center">Distribusi Status</p></div><div style="flex:2; min-width:300px;"><canvas id="rekapBarChart" style="max-height:300px;"></canvas><p class="text-small text-center">Absensi per Hari</p></div></div></div><div class="table-container"><table><thead><tr><th>No</th><th>ID FP</th><th>Nama</th><th>Kelas</th><th>Jurusan</th><th>Total Hari</th><th>Hadir</th><th>Sakit</th><th>Izin</th><th>Alpha</th><th>Persentase</th><th>Status</th></tr></thead><tbody id="rekapTbody"><tr><td colspan="12">Memuat data...<\/td><\/tr></tbody></table></div><div class="rekap-per-siswa-container" id="rekapPerSiswaContainer" style="margin-top:30px; display:none;"><div class="section-title" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:20px;"><span>📋 Detail Rekap Per Siswa</span><div style="display:flex; gap:10px;"><button class="btn-action btn-success" onclick="exportCurrentRekapPerSiswaToExcel()">📥 Export Excel</button><button class="btn-action btn-primary" onclick="exportCurrentRekapPerSiswaToPDF()">📄 Export PDF</button></div></div><div class="rekap-per-siswa-select-wrapper"><select id="rekapPerSiswaSelect"><option value="">-- Pilih Siswa --</option></select></div><div class="rekap-per-siswa-period-wrapper"><div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;"><label style="font-weight:500;">📅 Periode:</label><select id="rekapPerSiswaPeriod"><option value="minggu">📆 Minggu Ini</option><option value="bulan">📅 Bulan Ini</option><option value="semester">📚 Semester Ini</option><option value="tahun">🗓️ Tahun Ini</option><option value="pertama">⭐ Pertama Kali Absensi</option><option value="custom">📅 Custom Range</option></select><div id="rekapPerSiswaCustomRange" style="display:none; gap:10px; align-items:center; flex-wrap:wrap;"><input type="date" id="rekapPerSiswaStartDate"><span>s/d</span><input type="date" id="rekapPerSiswaEndDate"></div><button class="btn-action btn-primary" onclick="loadRekapPerSiswa()">🔍 Tampilkan Rekap</button></div></div><div id="rekapPerSiswaPeriodLabel" class="text-small" style="margin-bottom:15px; color:var(--text-muted); text-align:center;"></div><div id="rekapPerSiswaContent"><div style="text-align:center; padding:40px; color:var(--text-muted);">👈 Pilih siswa, pilih periode, lalu klik "Tampilkan Rekap" untuk melihat detail absensi per siswa</div></div></div></div>
+        <div id="tab-rekap" class="tab-content"><div class="controls-bar"><div class="filter-group"><label>📅 Periode:</label><select id="rekapPeriod" onchange="loadRekap()"><option value="minggu">Minggu Ini</option><option value="bulan">Bulan Ini</option><option value="semester">Semester Ini</option><option value="custom">Custom Range</option></select></div><div id="customRangeGroup" style="display:none; gap:10px;"><input type="date" id="rekapStartDate"><span>s/d</span><input type="date" id="rekapEndDate"></div><div style="margin-left:auto; display:flex; gap:10px;"><button class="btn-action btn-success" onclick="exportRekapToExcel()">📥 Excel</button><button class="btn-action btn-primary" onclick="exportRekapToPDF()">📄 PDF</button></div></div><div class="chart-container" style="margin-bottom:25px;"><div style="display:flex; flex-wrap:wrap; gap:20px;"><div style="flex:1; min-width:250px;"><canvas id="rekapPieChart" style="max-height:300px;"></canvas><p class="text-small text-center">Distribusi Status</p></div><div style="flex:2; min-width:300px;"><canvas id="rekapBarChart" style="max-height:300px;"></canvas><p class="text-small text-center">Absensi per Hari</p></div></div></div><div class="table-container"><tr><thead><tr><th>No</th><th>ID FP</th><th>Nama</th><th>Kelas</th><th>Jurusan</th><th>Total Hari</th><th>Hadir</th><th>Sakit</th><th>Izin</th><th>Alpha</th><th>Persentase</th><th>Status</th></tr></thead><tbody id="rekapTbody"><tr><td colspan="12">Memuat data...<\/td><\/tr></tbody></tr></div><div class="rekap-per-siswa-container" id="rekapPerSiswaContainer" style="margin-top:30px; display:none;"><div class="section-title" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:20px;"><span>📋 Detail Rekap Per Siswa</span><div style="display:flex; gap:10px;"><button class="btn-action btn-success" onclick="exportCurrentRekapPerSiswaToExcel()">📥 Export Excel</button><button class="btn-action btn-primary" onclick="exportCurrentRekapPerSiswaToPDF()">📄 Export PDF</button></div></div><div class="rekap-per-siswa-select-wrapper"><select id="rekapPerSiswaSelect"><option value="">-- Pilih Siswa --</option></select></div><div class="rekap-per-siswa-period-wrapper"><div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;"><label style="font-weight:500;">📅 Periode:</label><select id="rekapPerSiswaPeriod"><option value="minggu">📆 Minggu Ini</option><option value="bulan">📅 Bulan Ini</option><option value="semester">📚 Semester Ini</option><option value="tahun">🗓️ Tahun Ini</option><option value="pertama">⭐ Pertama Kali Absensi</option><option value="custom">📅 Custom Range</option></select><div id="rekapPerSiswaCustomRange" style="display:none; gap:10px; align-items:center; flex-wrap:wrap;"><input type="date" id="rekapPerSiswaStartDate"><span>s/d</span><input type="date" id="rekapPerSiswaEndDate"></div><button class="btn-action btn-primary" onclick="loadRekapPerSiswa()">🔍 Tampilkan Rekap</button></div></div><div id="rekapPerSiswaPeriodLabel" class="text-small" style="margin-bottom:15px; color:var(--text-muted); text-align:center;"></div><div id="rekapPerSiswaContent"><div style="text-align:center; padding:40px; color:var(--text-muted);">👈 Pilih siswa, pilih periode, lalu klik "Tampilkan Rekap" untuk melihat detail absensi per siswa</div></div></div></div>
 
         <!-- TAB FRIENDS -->
         <div id="tab-friends" class="tab-content">
@@ -911,8 +890,8 @@
             </div>
         </div>
 
-        <!-- TAB LOGS -->
-        <div id="tab-logs" class="tab-content role-admin role-guru role-developer">
+        <!-- TAB LOGS (HANYA Developer dan Kepala Sekolah) -->
+        <div id="tab-logs" class="tab-content role-developer role-admin" style="display: none;">
             <div class="controls-bar">
                 <div class="filter-group"><label>🔍 Filter Aksi:</label><select id="logActionFilter" onchange="renderLogsTable()"><option value="all">Semua Aksi</option></select></div>
                 <div class="filter-group"><label>📅 Mulai:</label><input type="date" id="logStartDate" onchange="renderLogsTable()"></div>
@@ -928,8 +907,8 @@
             </div>
         </div>
 
-        <!-- TAB CONFIG -->
-        <div id="tab-config" class="tab-content role-admin role-guru role-developer">
+        <!-- TAB CONFIG (Pengaturan) - HANYA Developer dan Kepala Sekolah -->
+        <div id="tab-config" class="tab-content role-developer role-admin" style="display: none;">
             <div class="guide-container">
                 <h3>⚙️ Pengaturan Sistem</h3>
                 <div class="form-group" id="logoSettingGroup"><label>🏫 Logo Sekolah</label><div style="display:flex; align-items:center; gap:20px; flex-wrap:wrap;"><div class="logo-preview-wrapper" onclick="document.getElementById('logoFileInput').click()" style="cursor:pointer;"><img id="schoolLogoPreview" class="school-logo-preview" src="" alt="Logo"><div class="logo-upload-hint">Klik untuk ganti</div></div><div style="flex:1;"><input type="file" id="logoFileInput" hidden accept="image/*" onchange="uploadSchoolLogo(this)"><button class="btn-action btn-danger role-admin" onclick="removeSchoolLogo()" id="btnRemoveLogo" style="display:none;">🗑️ Hapus</button></div></div></div>
@@ -1181,7 +1160,7 @@ document.addEventListener('DOMContentLoaded', function () {
             if (overlay) overlay.classList.remove('active');
         }
         
-        // ======================== THEME TOGGLE ========================
+        // ======================= THEME TOGGLE ========================
         function initTheme() {
             var savedTheme = localStorage.getItem('theme') || 'dark';
             applyTheme(savedTheme);
@@ -1274,7 +1253,7 @@ document.addEventListener('DOMContentLoaded', function () {
         
         function escapeHtml(str) { if (!str) return ''; return str.replace(/[&<>]/g, function(m) { return m === '&' ? '&amp;' : m === '<' ? '&lt;' : '&gt;'; }); }
         
-        // ======================== WHATSAPP FUNCTIONS ========================
+        // ======================= WHATSAPP FUNCTIONS =======================
         async function saveParentContactFromModal() {
             const studentId = document.getElementById('parentStudentName').getAttribute('data-id');
             const studentName = document.getElementById('parentStudentName').value;
@@ -1305,7 +1284,7 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         };
         
-        // ======================== STAFF FUNCTIONS ========================
+        // ======================= STAFF FUNCTIONS =======================
         window.openSimulateStaffInModal = function() {
             if (typeof window.openSimulateStaffInModal === 'function') {
                 window.openSimulateStaffInModal();
@@ -1324,7 +1303,7 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         };
         
-        // ======================== IZIN FUNCTIONS ========================
+        // ======================= IZIN FUNCTIONS =======================
         function goToIzinTab() {
             console.log('📝 Membuka tab Izin Online...');
             if (typeof switchTab === 'function') {
@@ -1347,7 +1326,7 @@ document.addEventListener('DOMContentLoaded', function () {
             }, 300);
         }
         
-        // ======================== TOGGLE GENERATE INPUT (HANYA 2 PILIHAN: SISWA & STAFF) ========================
+        // ======================= TOGGLE GENERATE INPUT =======================
         function toggleGenerateInput() {
             const typeRadio = document.querySelector('input[name="genTarget"]:checked');
             if (!typeRadio) return;
@@ -1377,7 +1356,7 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         }
         
-        // ======================== TOGGLE REGISTER INPUT (HANYA 2 PILIHAN: SISWA & STAFF) ========================
+        // ======================= TOGGLE REGISTER INPUT =======================
         function toggleRegisterInput() {
             const typeRadio = document.querySelector('input[name="regRoleType"]:checked');
             if (!typeRadio) return;
@@ -1387,7 +1366,6 @@ document.addEventListener('DOMContentLoaded', function () {
             const staffGroup = document.getElementById('group-reg-staff');
             const codeInput = document.getElementById('regCode');
             
-            // Sembunyikan semua group
             if (idGroup) idGroup.style.display = 'none';
             if (staffGroup) staffGroup.style.display = 'none';
             
@@ -1403,7 +1381,6 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (staffGroup) staffGroup.style.display = 'block';
                 if (codeInput) codeInput.placeholder = '🔑 Kode Unik (Staff/Guru)';
                 
-                // Set required untuk ID Staff
                 const staffIdInput = document.getElementById('regStaffId');
                 if (staffIdInput) staffIdInput.required = true;
             }
@@ -1448,7 +1425,7 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         }
         
-        // ======================== DOM READY ========================
+        // ======================= DOM READY ========================
         document.addEventListener('DOMContentLoaded', function() {
             console.log("DOM Ready - Initializing...");
             
