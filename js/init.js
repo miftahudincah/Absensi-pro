@@ -1,7 +1,7 @@
-// init.js - VERSION 5.2 (SUPABASE INTEGRATION + WHATSAPP + IZIN ONLINE + STAFF)
+// init.js - VERSION 5.3 (SUPABASE INTEGRATION + WHATSAPP + IZIN ONLINE + STAFF + ATTENDANCE REMINDER)
 // INISIALISASI DATA DENGAN FLAG SYSTEM + EVENT DATA READY
 // DENGAN DUKUNGAN SUPABASE AUTO-DELETE UNTUK STATUS EXPIRED
-// PERUBAHAN V5.2: Menambahkan inisialisasi Staff System dan Staff Attendance
+// PERUBAHAN V5.3: Menambahkan inisialisasi Attendance Reminder System
 // ============================================================================
 
 let appInitialized = false;
@@ -234,6 +234,21 @@ function renderAllData() {
         setTimeout(() => {
             if (typeof initStaffAttendance === 'function') {
                 initStaffAttendance();
+            }
+        }, 1000);
+    }
+    
+    // 12. Inisialisasi Attendance Reminder (Pengingat Absensi WhatsApp) - BARU
+    if (typeof initAttendanceReminder === 'function') {
+        console.log("🔔 Initializing Attendance Reminder System...");
+        try {
+            initAttendanceReminder();
+        } catch(e) { console.warn("initAttendanceReminder error:", e); }
+    } else {
+        console.log("⚠️ attendance-reminder.js not loaded yet, will retry...");
+        setTimeout(() => {
+            if (typeof initAttendanceReminder === 'function') {
+                initAttendanceReminder();
             }
         }, 1000);
     }
@@ -752,4 +767,4 @@ window.syncSchoolConfigToAll = syncSchoolConfigToAll;
 window.initSupabaseAutoDelete = initSupabaseAutoDelete;
 window.stopSupabaseAutoDelete = stopSupabaseAutoDelete;
 
-console.log("✅ init.js V5.2 loaded - Supabase integration + WhatsApp Gateway + Izin Online + Staff System + Staff Attendance");
+console.log("✅ init.js V5.3 loaded - Supabase integration + WhatsApp Gateway + Izin Online + Staff System + Staff Attendance + Attendance Reminder!");
