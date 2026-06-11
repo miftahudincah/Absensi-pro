@@ -1,8 +1,8 @@
-// setting.js - VERSION 3.7 (DENGAN LOG AKTIVITAS)
+// setting.js - VERSION 3.8 (DENGAN DETEKSI OFFLINE ESP32 & LAST SEEN)
 // PENGATURAN SEKOLAH (SCHOOL CONFIG) & DELAY GLOBAL
 // Dengan dukungan manajemen KELAS dan JURUSAN yang bisa diedit
-// SENSOR STATUS: Dipisahkan ke modul sendiri (tetap di sini untuk kemudahan)
-// PERUBAHAN V3.7: Menambahkan logActivity untuk semua operasi pengaturan
+// SENSOR STATUS: Dengan deteksi offline berdasarkan timestamp
+// PERUBAHAN V3.8: Menambahkan deteksi ESP32 offline berdasarkan last_ping
 // ============================================================================
 
 let currentSchoolConfig = {
@@ -22,6 +22,12 @@ let attendanceSettings = {
 let settingDataReadyListenerAdded = false;
 let settingUiReadyListenerAdded = false;
 let isSchoolConfigLoaded = false;
+let esp32OfflineCheckInterval = null;
+let lastEsp32DataTimestamp = null;
+let isEsp32Online = false;
+
+// Konfigurasi timeout ESP32 (2 menit = 120000 ms)
+const ESP32_TIMEOUT_MS = 120000; // 2 menit
 
 // Pastikan window.currentSchoolConfig selalu sinkron (dengan return promise)
 function syncSchoolConfigToWindow() {
@@ -100,7 +106,6 @@ function forceReloadSchoolConfig() {
             
             showToast("✅ Konfigurasi sekolah dimuat ulang!", "success");
             
-            // LOG: Force reload config
             if (typeof logActivity === 'function') {
                 logActivity('force_reload_school_config', `Memuat ulang konfigurasi sekolah: tipe=${configType}, kelas=${configClasses.length}, jurusan=${configMajors.length}`);
             }
@@ -169,6 +174,7 @@ function setupSettingUiReadyListener() {
         if (user && (user.role === 'admin' || user.role === 'developer')) {
             console.log("🔍 uiReady: initializing sensor status for admin/developer");
             initSensorStatusListener();
+            startEsp32OfflineChecker();
         } else {
             const panel = document.getElementById('sensorStatusPanel');
             if (panel) panel.style.display = 'none';
@@ -269,7 +275,6 @@ function saveGlobalDelay() {
             const displaySpan = document.getElementById('globalDelayDisplay');
             if (displaySpan) displaySpan.textContent = formatDelayText(delayMinutes);
             
-            // LOG: Ubah delay global
             if (typeof logActivity === 'function') {
                 logActivity('update_global_delay', `Mengubah delay pulang global dari ${formatDelayText(oldDelay)} menjadi ${formatDelayText(delayMinutes)}`);
             }
@@ -401,7 +406,6 @@ function saveClasses() {
             showToast(`✅ Daftar kelas berhasil disimpan (${currentSchoolConfig.classes.length} kelas).`);
             syncSchoolConfigToWindow();
             
-            // LOG: Simpan daftar kelas
             if (typeof logActivity === 'function') {
                 const added = currentSchoolConfig.classes.filter(c => !oldClasses.includes(c));
                 const removed = oldClasses.filter(c => !currentSchoolConfig.classes.includes(c));
@@ -522,7 +526,6 @@ function saveSchoolType() {
             renderClassesList();
             renderMajorsList();
             
-            // LOG: Ubah tipe sekolah
             if (typeof logActivity === 'function') {
                 logActivity('update_school_type', `Mengubah tipe sekolah dari ${oldType} menjadi ${newType}`);
             }
@@ -603,7 +606,6 @@ function saveMajors() {
             showToast(`✅ Daftar jurusan berhasil disimpan (${currentSchoolConfig.majors.length} jurusan).`);
             syncSchoolConfigToWindow();
             
-            // LOG: Simpan daftar jurusan
             if (typeof logActivity === 'function') {
                 const added = currentSchoolConfig.majors.filter(m => !oldMajors.includes(m));
                 const removed = oldMajors.filter(m => !currentSchoolConfig.majors.includes(m));
@@ -665,7 +667,6 @@ function resetAllSettings() {
         const typeSelect = document.getElementById('schoolTypeSelect');
         if (typeSelect) typeSelect.value = 'smp';
         
-        // LOG: Reset semua pengaturan
         if (typeof logActivity === 'function') {
             logActivity('reset_all_settings', 'Meriset semua pengaturan ke default (delay global 60 menit, tipe SMP, kelas VII-IX, jurusan kosong)');
         }
@@ -696,7 +697,6 @@ function exportSchoolConfig() {
     URL.revokeObjectURL(link.href);
     showToast("📥 Konfigurasi sekolah berhasil diekspor", "success");
     
-    // LOG: Ekspor konfigurasi
     if (typeof logActivity === 'function') {
         logActivity('export_school_config', `Ekspor konfigurasi sekolah (tipe: ${currentSchoolConfig.type})`);
     }
@@ -717,7 +717,6 @@ function importSchoolConfig(file) {
                 db.ref('school_config').update(updates);
                 showToast("✅ Konfigurasi sekolah berhasil diimpor!", "success");
                 
-                // LOG: Impor konfigurasi
                 if (typeof logActivity === 'function') {
                     logActivity('import_school_config', `Impor konfigurasi sekolah (tipe: ${config.schoolType}, kelas: ${config.classes?.length || 0}, jurusan: ${config.majors?.length || 0})`);
                 }
@@ -733,7 +732,6 @@ function importSchoolConfig(file) {
 
 // ======================= PENGATURAN JAM EFEKTIF & HARI LIBUR =======================
 
-// Load settings from Firebase
 function loadAttendanceSettings() {
     db.ref('school_config/attendance_settings').on('value', (snapshot) => {
         const data = snapshot.val();
@@ -812,7 +810,6 @@ function addHolidayDate() {
     saveAttendanceSettingsToFirebase();
     dateInput.value = '';
     
-    // LOG: Tambah tanggal libur
     if (typeof logActivity === 'function') {
         logActivity('add_holiday_date', `Menambah tanggal libur: ${formatIndonesianDate(date)}`);
     }
@@ -826,7 +823,6 @@ function removeHolidayDate(date) {
     attendanceSettings.dateHolidays = attendanceSettings.dateHolidays.filter(d => d !== date);
     saveAttendanceSettingsToFirebase();
     
-    // LOG: Hapus tanggal libur
     if (typeof logActivity === 'function') {
         logActivity('remove_holiday_date', `Menghapus tanggal libur: ${formatIndonesianDate(date)}`);
     }
@@ -867,7 +863,6 @@ function saveAttendanceSettings() {
     attendanceSettings.weeklyHolidays = weeklyHolidays;
     saveAttendanceSettingsToFirebase();
     
-    // LOG: Simpan pengaturan jam efektif
     if (typeof logActivity === 'function') {
         const changes = [];
         if (oldLateThreshold !== lateThreshold) changes.push(`batas terlambat: ${oldLateThreshold} → ${lateThreshold}`);
@@ -911,9 +906,101 @@ function getHolidayCountInRange(startDate, endDate) {
     return count;
 }
 
-// ======================= SENSOR STATUS =======================
+// ======================= SENSOR STATUS (DENGAN DETEKSI OFFLINE) =======================
 
 let sensorStatusListener = null;
+
+// Fungsi untuk mengecek apakah ESP32 masih online (berdasarkan timestamp)
+function checkEsp32OnlineStatus(lastPingTimestamp) {
+    if (!lastPingTimestamp) return false;
+    
+    const now = Date.now();
+    const lastPing = typeof lastPingTimestamp === 'number' ? lastPingTimestamp : new Date(lastPingTimestamp).getTime();
+    const timeDiff = now - lastPing;
+    
+    const isOnline = timeDiff < ESP32_TIMEOUT_MS;
+    
+    // Update global status
+    if (isEsp32Online !== isOnline) {
+        isEsp32Online = isOnline;
+        if (!isOnline) {
+            console.log(`⚠️ ESP32 OFFLINE detected! Last ping: ${new Date(lastPing).toLocaleString()}, ${Math.floor(timeDiff/1000)}s ago`);
+            if (typeof showToast === 'function') {
+                showToast(`⚠️ ESP32 terdeteksi OFFLINE! Data terakhir: ${Math.floor(timeDiff/1000)} detik yang lalu`, 'warning');
+            }
+        } else {
+            console.log(`✅ ESP32 ONLINE detected! Last ping: ${new Date(lastPing).toLocaleString()}`);
+        }
+    }
+    
+    return isOnline;
+}
+
+// Mulai pengecekan offline ESP32 (setiap 30 detik)
+function startEsp32OfflineChecker() {
+    if (esp32OfflineCheckInterval) {
+        clearInterval(esp32OfflineCheckInterval);
+    }
+    
+    // Cek setiap 30 detik
+    esp32OfflineCheckInterval = setInterval(() => {
+        db.ref('status/esp32/sensors/timestamp').once('value').then((snapshot) => {
+            const timestamp = snapshot.val();
+            checkEsp32OnlineStatus(timestamp);
+            
+            // Update tampilan sensor jika offline
+            if (!isEsp32Online) {
+                showEsp32OfflineWarning();
+            }
+        }).catch(err => {
+            console.warn("Error checking ESP32 status:", err);
+        });
+        
+        // Juga cek dari node last_ping
+        db.ref('status/esp32/last_ping').once('value').then((snapshot) => {
+            const lastPing = snapshot.val();
+            if (lastPing) {
+                checkEsp32OnlineStatus(lastPing);
+            }
+        }).catch(err => console.warn(err));
+    }, 30000); // Setiap 30 detik
+}
+
+function showEsp32OfflineWarning() {
+    const container = document.getElementById('sensorGrid');
+    if (!container) return;
+    
+    // Cek apakah sudah ada warning
+    const existingWarning = container.querySelector('.esp32-offline-warning');
+    if (existingWarning) return;
+    
+    const warningDiv = document.createElement('div');
+    warningDiv.className = 'esp32-offline-warning';
+    warningDiv.style.cssText = `
+        grid-column: 1 / -1;
+        background: rgba(244, 67, 54, 0.15);
+        border: 1px solid #f44336;
+        border-radius: 12px;
+        padding: 15px;
+        text-align: center;
+        margin-bottom: 10px;
+    `;
+    warningDiv.innerHTML = `
+        <span style="color: #f44336; font-size: 20px;">⚠️</span>
+        <div style="color: #f44336; font-weight: bold;">ESP32 OFFLINE</div>
+        <small style="color: #ff8888;">Data terakhir lebih dari 2 menit yang lalu. ESP32 mungkin mati atau koneksi terputus.</small>
+    `;
+    
+    container.insertBefore(warningDiv, container.firstChild);
+}
+
+function removeEsp32OfflineWarning() {
+    const container = document.getElementById('sensorGrid');
+    if (container) {
+        const warning = container.querySelector('.esp32-offline-warning');
+        if (warning) warning.remove();
+    }
+}
 
 function initSensorStatusListener() {
     if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'developer')) {
@@ -926,15 +1013,65 @@ function initSensorStatusListener() {
     if (sensorStatusListener) {
         db.ref('status/esp32/sensors').off('value', sensorStatusListener);
     }
+    
+    // Listener untuk data sensor
     sensorStatusListener = db.ref('status/esp32/sensors').on('value', (snapshot) => {
         const data = snapshot.val();
-        if (data) {
-            renderSensorGrid(data);
-            updateSensorHeaderInfo(data);
+        if (data && data.sensors && data.sensors.length > 0) {
+            // Update last timestamp
+            lastEsp32DataTimestamp = data.timestamp || Date.now();
+            const isOnline = checkEsp32OnlineStatus(lastEsp32DataTimestamp);
+            
+            if (isOnline) {
+                removeEsp32OfflineWarning();
+                renderSensorGrid(data);
+                updateSensorHeaderInfo(data);
+            } else {
+                renderSensorGridOffline(data);
+            }
         } else {
             renderNoSensorData();
         }
     });
+}
+
+function renderSensorGridOffline(data) {
+    const container = document.getElementById('sensorGrid');
+    if (!container) return;
+    if (!data || !data.sensors || !Array.isArray(data.sensors)) {
+        renderNoSensorData();
+        return;
+    }
+    
+    let html = '';
+    data.sensors.forEach(sensor => {
+        const isOnline = false; // Semua sensor dianggap offline
+        const statusIcon = '❌';
+        const statusText = 'OFFLINE';
+        const statusClass = 'offline';
+        const templates = sensor.templateCount || 0;
+        html += `
+            <div class="sensor-card ${statusClass}" style="opacity: 0.6;">
+                <div class="sensor-number">#${sensor.id}</div>
+                <div class="sensor-status-icon">${statusIcon}</div>
+                <div class="sensor-status-text ${statusClass}">${statusText}</div>
+                <div class="sensor-templates">📁 ${templates} sidik</div>
+                <div class="sensor-error" style="font-size:10px;color:#f44336;margin-top:4px;">⏰ Data kadaluarsa</div>
+            </div>
+        `;
+    });
+    
+    // Tambahkan warning di atas
+    const warningHtml = `
+        <div class="esp32-offline-warning" style="grid-column: 1 / -1; background: rgba(244, 67, 54, 0.15); border: 1px solid #f44336; border-radius: 12px; padding: 15px; text-align: center; margin-bottom: 10px;">
+            <span style="color: #f44336; font-size: 20px;">⚠️</span>
+            <div style="color: #f44336; font-weight: bold;">ESP32 OFFLINE / DATA KADALUARSA</div>
+            <small style="color: #ff8888;">Data terakhir: ${data.timestamp ? new Date(data.timestamp).toLocaleString() : 'tidak diketahui'}</small><br>
+            <small style="color: #ff8888;">ESP32 tidak mengirim data lebih dari 2 menit. Periksa koneksi ESP32.</small>
+        </div>
+    `;
+    
+    container.innerHTML = warningHtml + html;
 }
 
 function renderSensorGrid(data) {
@@ -944,6 +1081,10 @@ function renderSensorGrid(data) {
         container.innerHTML = '<div class="sensor-loading">📡 Menunggu data dari ESP32...</div>';
         return;
     }
+    
+    // Hapus warning jika ada
+    removeEsp32OfflineWarning();
+    
     let html = '';
     data.sensors.forEach(sensor => {
         const isOnline = sensor.status === 'online';
@@ -951,12 +1092,18 @@ function renderSensorGrid(data) {
         const statusText = isOnline ? 'ONLINE' : 'OFFLINE';
         const statusClass = isOnline ? 'online' : 'offline';
         const templates = sensor.templateCount || 0;
+        
+        // Hitung umur data sensor
+        const dataAge = data.timestamp ? (Date.now() - data.timestamp) / 1000 : 0;
+        const isDataFresh = dataAge < ESP32_TIMEOUT_MS / 1000;
+        
         html += `
-            <div class="sensor-card ${statusClass}">
+            <div class="sensor-card ${statusClass} ${!isDataFresh ? 'data-stale' : ''}" style="${!isDataFresh ? 'opacity: 0.7;' : ''}">
                 <div class="sensor-number">#${sensor.id}</div>
                 <div class="sensor-status-icon">${statusIcon}</div>
                 <div class="sensor-status-text ${statusClass}">${statusText}</div>
                 <div class="sensor-templates">📁 ${templates} sidik</div>
+                ${!isDataFresh ? `<div class="sensor-error" style="font-size:10px;color:#ff9800;margin-top:4px;">⚠️ Data kadaluarsa</div>` : ''}
                 ${sensor.error ? `<div class="sensor-error" style="font-size:10px;color:#f44336;margin-top:4px;">${escapeHtmlStr(sensor.error)}</div>` : ''}
             </div>
         `;
@@ -968,23 +1115,53 @@ function updateSensorHeaderInfo(data) {
     const onlineCount = data.onlineCount || 0;
     const totalTemplates = data.totalTemplates || 0;
     const timestamp = data.timestamp;
+    const dataAge = timestamp ? (Date.now() - timestamp) / 1000 : 999999;
+    const isDataFresh = dataAge < ESP32_TIMEOUT_MS / 1000;
+    
     const badge = document.getElementById('sensorOnlineBadge');
     if (badge) {
-        badge.textContent = `${onlineCount}/16 Online`;
-        if (onlineCount === 16) badge.className = 'badge-success';
-        else if (onlineCount >= 12) badge.className = 'badge-warning';
-        else badge.className = 'badge-danger';
+        if (!isDataFresh) {
+            badge.textContent = `⚠️ DATA KADALUARSA`;
+            badge.className = 'badge-danger';
+        } else if (onlineCount === 16) {
+            badge.textContent = `${onlineCount}/16 Online (Data Fresh)`;
+            badge.className = 'badge-success';
+        } else if (onlineCount >= 12) {
+            badge.textContent = `${onlineCount}/16 Online`;
+            badge.className = 'badge-warning';
+        } else {
+            badge.textContent = `${onlineCount}/16 Online`;
+            badge.className = 'badge-danger';
+        }
     }
+    
     const lastUpdateSpan = document.getElementById('sensorLastUpdate');
     if (lastUpdateSpan && timestamp) {
         const date = new Date(timestamp);
-        lastUpdateSpan.textContent = `🕐 ${date.toLocaleTimeString('id-ID')}`;
-        lastUpdateSpan.className = 'badge-info';
+        const secondsAgo = Math.floor((Date.now() - timestamp) / 1000);
+        let ageText = '';
+        if (secondsAgo < 60) {
+            ageText = `${secondsAgo} detik yang lalu`;
+        } else if (secondsAgo < 3600) {
+            ageText = `${Math.floor(secondsAgo / 60)} menit yang lalu`;
+        } else {
+            ageText = `${Math.floor(secondsAgo / 3600)} jam yang lalu`;
+        }
+        lastUpdateSpan.textContent = `🕐 ${date.toLocaleTimeString('id-ID')} (${ageText})`;
+        
+        if (!isDataFresh) {
+            lastUpdateSpan.style.color = '#ff9800';
+            lastUpdateSpan.className = 'badge-warning';
+        } else {
+            lastUpdateSpan.style.color = '';
+            lastUpdateSpan.className = 'badge-info';
+        }
     } else if (lastUpdateSpan) {
         lastUpdateSpan.textContent = 'Menunggu data...';
     }
+    
     const header = document.querySelector('#sensorStatusPanel .sensor-header h4');
-    if (header) header.setAttribute('title', `Total ${totalTemplates} sidik jari tersimpan di semua sensor`);
+    if (header) header.setAttribute('title', `Total ${totalTemplates} sidik jari tersimpan di semua sensor | ${!isDataFresh ? '⚠️ Data kadaluarsa - ESP32 mungkin offline' : ''}`);
 }
 
 function renderNoSensorData() {
@@ -995,6 +1172,11 @@ function renderNoSensorData() {
     if (badge) {
         badge.textContent = 'Menunggu data';
         badge.className = 'badge-warning';
+    }
+    const lastUpdateSpan = document.getElementById('sensorLastUpdate');
+    if (lastUpdateSpan) {
+        lastUpdateSpan.textContent = 'Menunggu data...';
+        lastUpdateSpan.className = 'badge-info';
     }
 }
 
@@ -1015,7 +1197,15 @@ function refreshSensorStatus() {
     if (sensorStatusListener) {
         db.ref('status/esp32/sensors').once('value').then(snapshot => {
             const data = snapshot.val();
-            if (data) { renderSensorGrid(data); updateSensorHeaderInfo(data); }
+            if (data) { 
+                const isOnline = checkEsp32OnlineStatus(data.timestamp);
+                if (isOnline) {
+                    renderSensorGrid(data);
+                    updateSensorHeaderInfo(data);
+                } else {
+                    renderSensorGridOffline(data);
+                }
+            }
         }).catch(err => console.warn("Refresh error:", err));
     }
 }
@@ -1024,6 +1214,10 @@ function cleanupSensorStatus() {
     if (sensorStatusListener) {
         db.ref('status/esp32/sensors').off('value', sensorStatusListener);
         sensorStatusListener = null;
+    }
+    if (esp32OfflineCheckInterval) {
+        clearInterval(esp32OfflineCheckInterval);
+        esp32OfflineCheckInterval = null;
     }
 }
 
@@ -1099,6 +1293,8 @@ window.refreshSensorStatus = refreshSensorStatus;
 window.cleanupSensorStatus = cleanupSensorStatus;
 window.syncSchoolConfigToWindow = syncSchoolConfigToWindow;
 window.forceReloadSchoolConfig = forceReloadSchoolConfig;
+window.checkEsp32OnlineStatus = checkEsp32OnlineStatus;
+window.startEsp32OfflineChecker = startEsp32OfflineChecker;
 
 window.loadAttendanceSettings = loadAttendanceSettings;
 window.addHolidayDate = addHolidayDate;
@@ -1109,4 +1305,4 @@ window.filterAttendanceByHoliday = filterAttendanceByHoliday;
 window.getHolidayCountInRange = getHolidayCountInRange;
 window.renderHolidayDatesList = renderHolidayDatesList;
 
-console.log("✅ setting.js V3.7 loaded - Dengan log aktivitas untuk pengaturan");
+console.log("✅ setting.js V3.8 loaded - Dengan deteksi offline ESP32 berdasarkan timestamp (2 menit timeout)");
