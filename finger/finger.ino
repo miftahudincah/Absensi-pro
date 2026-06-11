@@ -1,4 +1,4 @@
-// finger.ino - VERSION 6.0 (Dengan Registrasi Staff via PCF Pin 1 + Sync dari Web)
+// finger.ino - VERSION 6.1 (Dengan Secret.h terpisah)
 // Fitur: 
 //   - Registrasi SISWA (fingerprint) via PCF pin 0
 //   - Registrasi STAFF (fingerprint) via PCF pin 1
@@ -24,14 +24,11 @@
 #include <RTClib.h>
 #include <ArduinoJson.h>
 #include <Preferences.h>
+#include "secrets.h"
 
 // ================= KONFIGURASI DEFAULT =================
 #define DEFAULT_WIFI_SSID ""
 #define DEFAULT_WIFI_PASSWORD ""
-
-// Konfigurasi Firebase
-#define API_KEY "AIzaSyBZg9NpbBAg8dKHkCbYf4J_2bpHH2ZJWWI"
-#define DATABASE_URL "https://absensi-4389a-default-rtdb.firebaseio.com/"
 
 // ================= PIN CONFIGURATION =================
 #define MUX_S0 26
@@ -49,7 +46,7 @@
 
 #define PCF_ADDR 0x20
 #define ENROLL_STUDENT_BTN_PIN 0    // Tombol daftar SISWA
-#define ENROLL_STAFF_BTN_PIN   1    // Tombol daftar STAFF (baru)
+#define ENROLL_STAFF_BTN_PIN   1    // Tombol daftar STAFF
 
 // ================= STRUKTUR DATA =================
 struct UserData {
@@ -264,7 +261,7 @@ void connectToWiFi() {
     syncOfflineData();
     checkFirebaseSettings();
     syncAllUsersFromFirebase();
-    syncAllStaffFromFirebase();  // Sync staff data
+    syncAllStaffFromFirebase();
     
     Firebase.RTDB.deleteNode(&fbdo, "/commands/esp32/delete_fingerprint");
     Firebase.RTDB.deleteNode(&fbdo, "/commands/esp32/delete_fingerprint_response");
@@ -688,7 +685,6 @@ bool deleteFingerprintFromAllSensors(int id) {
   sendBLEMessage(resultMsg);
   Serial.println("📱 " + resultMsg);
   
-  // Hapus dari database sesuai tipe
   removeUserFromSD(id);
   
   return (failCount == 0);
@@ -1013,11 +1009,9 @@ void syncAllStaffFromFirebase() {
       if (jabatan.length() == 0) jabatan = "guru";
       if (departemen.length() == 0) departemen = "-";
       
-      // Cari apakah staff sudah ada di cache berdasarkan staffId
       bool found = false;
       for (int s = 0; s < staffCacheCount; s++) {
         if (staffCache[s].staffId == staffId) {
-          // Update data staff yang sudah ada
           staffCache[s].nama = nama;
           staffCache[s].jabatan = jabatan;
           staffCache[s].departemen = departemen;
@@ -1031,7 +1025,6 @@ void syncAllStaffFromFirebase() {
       }
       
       if (!found) {
-        // Staff baru, assign ID fingerprint baru
         int newFpId = currentStaffID++;
         saveSettings();
         allStaffData += String(newFpId) + "," + staffId + "," + nama + "," + jabatan + "," + departemen + "," + email + "," + noHp + "\n";
@@ -1093,7 +1086,6 @@ void syncOfflineData() {
     String time = line.substring(c2 + 1, c3);
     String status = line.substring(c4 + 1);
     
-    // Cek apakah ini staff atau siswa (staff ID >= 1000)
     bool isStaff = (id >= 1000);
     
     if (isStaff) {
@@ -1212,11 +1204,9 @@ void handleAttendance(int id) {
   String date = getCurrentDateRTC();
   String time = getCurrentTimeRTC();
   
-  // Cek apakah ini staff (ID >= 1000) atau siswa
   bool isStaff = (id >= 1000);
   
   if (isStaff) {
-    // Handle STAFF attendance
     StaffData staff = getStaffData(id);
     
     String lastStatus = "NONE";
@@ -1257,7 +1247,6 @@ void handleAttendance(int id) {
     }
     
   } else {
-    // Handle SISWA attendance (existing code)
     UserData user = getUserData(id);
     int requiredDelay = (user.delayOut > 0) ? user.delayOut : globalDelayMinutes;
     
@@ -1356,7 +1345,6 @@ int enrollFingerprint(int id) {
 
 // ================= ENROLL STAFF =================
 void enrollStaff() {
-  // Cari ID fingerprint kosong untuk staff
   while (isStaffRegistered(currentStaffID)) {
     currentStaffID++;
     saveSettings();
@@ -1377,11 +1365,9 @@ void enrollStaff() {
   int result = enrollFingerprint(fpId);
   
   if (result == FINGERPRINT_OK) {
-    // Simpan ke SD
     saveStaffToSD(fpId, defaultStaffId, defaultNama, defaultJabatan, defaultDepartemen, defaultEmail, defaultNoHp);
     lastStaffNumber++;
     
-    // Sync ke Firebase jika online
     if (isOnline && Firebase.ready()) {
       FirebaseJson json;
       json.set("id", defaultStaffId);
@@ -1393,7 +1379,6 @@ void enrollStaff() {
       json.set("fingerprintId", fpId);
       Firebase.RTDB.set(&fbdo, "staff/" + defaultStaffId, &json);
       
-      // Generate kode registrasi untuk staff
       generateStaffRegistrationCode(defaultStaffId, defaultEmail, defaultNama);
     }
     
@@ -1473,7 +1458,6 @@ class MyCallbacks : public BLECharacteristicCallbacks {
       Serial.println("📱 BLE RX: " + rxValue);
       rxValue.trim();
       
-      // State machine untuk WiFi config interaktif
       if (wifiConfigState == WIFI_WAITING_SSID_SELECTION) {
         int selectedIndex = rxValue.toInt() - 1;
         if (selectedIndex >= 0 && selectedIndex < wifiScanCount) {
@@ -1504,7 +1488,6 @@ class MyCallbacks : public BLECharacteristicCallbacks {
         return;
       }
       
-      // SCAN_WIFI
       if (rxValue.equalsIgnoreCase("SCAN_WIFI")) {
         sendBLEMessage("📡 Scanning WiFi networks...");
         int n = WiFi.scanNetworks();
@@ -1531,7 +1514,6 @@ class MyCallbacks : public BLECharacteristicCallbacks {
         return;
       }
       
-      // GET_WIFI
       else if (rxValue.equalsIgnoreCase("GET_WIFI")) {
         if (wifiSSID.length() > 0) {
           sendBLEMessage("WiFi SSID: " + wifiSSID);
@@ -1545,7 +1527,6 @@ class MyCallbacks : public BLECharacteristicCallbacks {
         return;
       }
       
-      // CLEAR_WIFI
       else if (rxValue.equalsIgnoreCase("CLEAR_WIFI")) {
         clearWiFiCredentials();
         WiFi.disconnect(true);
@@ -1556,7 +1537,6 @@ class MyCallbacks : public BLECharacteristicCallbacks {
         return;
       }
       
-      // GET_STATUS
       else if (rxValue.equalsIgnoreCase("GET_STATUS")) {
         sendBLEMessage("STATUS|Delay:" + String(globalDelayMinutes) + 
                        "|Online:" + String(isOnline) + 
@@ -1569,7 +1549,6 @@ class MyCallbacks : public BLECharacteristicCallbacks {
         return;
       }
       
-      // SET_DELAY
       else if (rxValue.startsWith("SET_DELAY:")) {
         int newDelay = rxValue.substring(10).toInt();
         if (newDelay > 0) {
@@ -1582,7 +1561,6 @@ class MyCallbacks : public BLECharacteristicCallbacks {
         return;
       }
       
-      // SYNC_USERS
       else if (rxValue.equalsIgnoreCase("SYNC_USERS")) {
         if (isOnline) {
           syncAllUsersFromFirebase();
@@ -1593,7 +1571,6 @@ class MyCallbacks : public BLECharacteristicCallbacks {
         return;
       }
       
-      // SYNC_STAFF
       else if (rxValue.equalsIgnoreCase("SYNC_STAFF")) {
         if (isOnline) {
           syncAllStaffFromFirebase();
@@ -1604,7 +1581,6 @@ class MyCallbacks : public BLECharacteristicCallbacks {
         return;
       }
       
-      // DELETE_FP
       else if (rxValue.startsWith("DELETE_FP:")) {
         int fid = rxValue.substring(10).toInt();
         if (fid > 0) {
@@ -1615,7 +1591,6 @@ class MyCallbacks : public BLECharacteristicCallbacks {
         return;
       }
       
-      // REBOOT
       else if (rxValue.equalsIgnoreCase("REBOOT")) {
         sendBLEMessage("🔄 Rebooting ESP32...");
         delay(100);
@@ -1623,7 +1598,6 @@ class MyCallbacks : public BLECharacteristicCallbacks {
         return;
       }
       
-      // HELP
       else if (rxValue.equalsIgnoreCase("HELP")) {
         sendBLEMessage("=== ESP32 Commands ===");
         sendBLEMessage("SCAN_WIFI - Scan & config WiFi");
@@ -1822,7 +1796,6 @@ void loop() {
     lastDailyCheck = millis();
   }
 
-  // Deteksi tombol SISWA (pin 0)
   if (pcf.digitalRead(ENROLL_STUDENT_BTN_PIN) == LOW) {
     delay(500);
     
@@ -1832,7 +1805,6 @@ void loop() {
       isEnrolling = true;
       isStaffEnroll = false;
       
-      // Cari ID kosong untuk siswa
       while (isUserRegistered(currentStudentID)) {
         currentStudentID++;
         saveSettings();
@@ -1875,7 +1847,6 @@ void loop() {
     delay(500);
   }
   
-  // Deteksi tombol STAFF (pin 1) - BARU
   if (pcf.digitalRead(ENROLL_STAFF_BTN_PIN) == LOW) {
     delay(500);
     
