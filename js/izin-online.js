@@ -1,5 +1,6 @@
-// izin-online.js - VERSION 1.2 (ADD DELETE FEATURE)
+// izin-online.js - VERSION 1.3 (DARK THEME ADAPTED)
 // Fitur Izin Online: ajukan izin, upload surat, approve/reject, delete
+// PERUBAHAN V1.3: Penyesuaian warna untuk tema gelap (dark mode)
 // ============================================================================
 
 let izinInitialized = false;
@@ -143,8 +144,29 @@ function renderIzinList(izinList) {
     let html = '<div class="izin-grid">';
     
     for (const izin of izinList) {
-        const statusClass = izin.status === 'approved' ? 'status-approved' : 
-                           (izin.status === 'rejected' ? 'status-rejected' : 'status-pending');
+        // Warna status - gelap untuk dark mode
+        let statusClass = '';
+        let statusBgColor = '';
+        let statusTextColor = '';
+        let borderLeftColor = '';
+        
+        if (izin.status === 'approved') {
+            statusClass = 'status-approved';
+            statusBgColor = 'rgba(15, 92, 46, 0.15)';
+            statusTextColor = '#0f5c2e';
+            borderLeftColor = '#0f5c2e';
+        } else if (izin.status === 'rejected') {
+            statusClass = 'status-rejected';
+            statusBgColor = 'rgba(160, 26, 44, 0.15)';
+            statusTextColor = '#a01a2c';
+            borderLeftColor = '#a01a2c';
+        } else {
+            statusClass = 'status-pending';
+            statusBgColor = 'rgba(184, 92, 0, 0.15)';
+            statusTextColor = '#b85c00';
+            borderLeftColor = '#b85c00';
+        }
+        
         const statusText = izin.status === 'approved' ? '✅ Disetujui' :
                           (izin.status === 'rejected' ? '❌ Ditolak' : '⏳ Menunggu Persetujuan');
         
@@ -197,31 +219,34 @@ function renderIzinList(izinList) {
             alasanPenolakan = `<div class="izin-reject-reason"><strong>Alasan Ditolak:</strong> ${escapeHtml(reasonText)}</div>`;
         }
         
+        // Tampilan kartu dengan warna gelap (dark mode friendly)
         html += `
-            <div class="izin-card ${statusClass}">
-                <div class="izin-card-header">
-                    <div class="izin-type">
+            <div class="izin-card ${statusClass}" style="background: var(--bg-card); border-left: 5px solid ${borderLeftColor}; transition: transform 0.2s, box-shadow 0.2s; box-shadow: 0 2px 8px rgba(0,0,0,0.2);">
+                <div class="izin-card-header" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: var(--bg-hover); border-bottom: 1px solid var(--border);">
+                    <div class="izin-type" style="font-weight: bold;">
                         ${izin.type === 'sakit' ? '🤒 Izin Sakit' : '📝 Izin Keperluan'}
                     </div>
-                    <div class="izin-status ${statusClass}">${statusText}</div>
-                </div>
-                <div class="izin-card-body">
-                    <div class="izin-student">
-                        <strong>👤 ${escapeHtml(izin.studentName)}</strong>
-                        <small>Kelas: ${izin.kelas || '-'} | Jurusan: ${izin.jurusan || '-'}</small>
+                    <div class="izin-status ${statusClass}" style="background: ${borderLeftColor}; color: white; padding: 4px 12px; border-radius: 20px; font-weight: bold; font-size: 0.75rem;">
+                        ${statusText}
                     </div>
-                    <div class="izin-date">
+                </div>
+                <div class="izin-card-body" style="padding: 16px;">
+                    <div class="izin-student" style="margin-bottom: 12px;">
+                        <strong style="font-size: 1.1rem;">👤 ${escapeHtml(izin.studentName)}</strong>
+                        <div style="font-size: 0.8rem; color: var(--text-muted);">Kelas: ${izin.kelas || '-'} | Jurusan: ${izin.jurusan || '-'}</div>
+                    </div>
+                    <div class="izin-date" style="margin-bottom: 12px; background: var(--bg-hover); padding: 8px 12px; border-radius: 8px;">
                         📅 ${tanggalMulai} - ${tanggalSelesai}
                     </div>
-                    <div class="izin-reason">
+                    <div class="izin-reason" style="margin-bottom: 12px; line-height: 1.5;">
                         <strong>Alasan:</strong><br>
                         ${escapeHtml(izin.reason)}
                     </div>
                     ${attachmentHtml}
                     ${alasanPenolakan}
                 </div>
-                <div class="izin-card-footer">
-                    <small>Diajukan: ${formatDate(izin.createdAt)}</small>
+                <div class="izin-card-footer" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: var(--bg-hover); border-top: 1px solid var(--border); font-size: 0.7rem; color: var(--text-muted);">
+                    <div>Diajukan: ${formatDate(izin.createdAt)}</div>
                     ${actionButtons}
                 </div>
             </div>
@@ -567,6 +592,9 @@ function filterIzinList(status) {
     const filterBtns = document.querySelectorAll('.izin-filter .filter-btn');
     filterBtns.forEach(btn => {
         btn.classList.remove('active');
+        btn.style.background = 'var(--bg-input)';
+        btn.style.color = 'var(--text-primary)';
+        btn.style.border = '1px solid var(--border)';
     });
     
     // Cari tombol yang sesuai dan tambahkan active
@@ -574,7 +602,12 @@ function filterIzinList(status) {
         const onclick = btn.getAttribute('onclick');
         return onclick && onclick.includes(`'${status}'`);
     });
-    if (activeBtn) activeBtn.classList.add('active');
+    if (activeBtn) {
+        activeBtn.classList.add('active');
+        activeBtn.style.background = 'var(--primary)';
+        activeBtn.style.color = 'white';
+        activeBtn.style.borderColor = 'var(--primary)';
+    }
     
     loadIzinList();
 }
@@ -641,13 +674,14 @@ function addIzinTab() {
     }
 }
 
-// Tambahkan CSS untuk filter button active state dan tombol hapus
+// Tambahkan CSS untuk dark mode - Warna lebih gelap
 const style = document.createElement('style');
 style.textContent = `
+    /* IZIN ONLINE - DARK MODE STYLES */
     .izin-filter .filter-btn.active {
-        background: #00bcd4;
+        background: var(--primary);
         color: white;
-        border-color: #00bcd4;
+        border-color: var(--primary);
     }
     .izin-filter .filter-btn {
         background: var(--bg-input);
@@ -656,21 +690,24 @@ style.textContent = `
         border-radius: 30px;
         cursor: pointer;
         transition: all 0.2s;
+        color: var(--text-primary);
     }
     .izin-filter .filter-btn:hover {
         background: var(--primary);
         color: white;
+        transform: translateY(-2px);
     }
     .izin-card {
         background: var(--bg-card);
         border-radius: 16px;
         overflow: hidden;
-        box-shadow: var(--shadow);
+        box-shadow: var(--shadow-sm);
         transition: transform 0.2s;
         border: 1px solid var(--border);
     }
     .izin-card:hover {
         transform: translateY(-2px);
+        box-shadow: var(--shadow-md);
     }
     .izin-grid {
         display: grid;
@@ -705,15 +742,15 @@ style.textContent = `
         font-weight: 600;
     }
     .status-pending {
-        background: #ff9800;
+        background: #b85c00;
         color: white;
     }
     .status-approved {
-        background: #4caf50;
+        background: #0f5c2e;
         color: white;
     }
     .status-rejected {
-        background: #f44336;
+        background: #a01a2c;
         color: white;
     }
     .izin-actions-buttons {
@@ -722,7 +759,7 @@ style.textContent = `
         flex-wrap: wrap;
     }
     .btn-action.btn-success {
-        background: #4caf50;
+        background: #0f5c2e;
         color: white;
         border: none;
         padding: 6px 12px;
@@ -731,11 +768,11 @@ style.textContent = `
         transition: all 0.2s;
     }
     .btn-action.btn-success:hover {
-        background: #45a049;
+        background: #0a4a24;
         transform: scale(1.02);
     }
     .btn-action.btn-danger {
-        background: #f44336;
+        background: #a01a2c;
         color: white;
         border: none;
         padding: 6px 12px;
@@ -744,11 +781,11 @@ style.textContent = `
         transition: all 0.2s;
     }
     .btn-action.btn-danger:hover {
-        background: #d32f2f;
+        background: #8a1525;
         transform: scale(1.02);
     }
     .btn-action.btn-delete {
-        background: #757575;
+        background: #4a4a6a;
         color: white;
         border: none;
         padding: 6px 12px;
@@ -757,7 +794,7 @@ style.textContent = `
         transition: all 0.2s;
     }
     .btn-action.btn-delete:hover {
-        background: #616161;
+        background: #3a3a5a;
         transform: scale(1.02);
     }
     .izin-student {
@@ -769,6 +806,9 @@ style.textContent = `
     .izin-date {
         margin-bottom: 12px;
         font-size: 0.9rem;
+        background: var(--bg-hover);
+        padding: 8px 12px;
+        border-radius: 8px;
     }
     .izin-reason {
         margin-bottom: 12px;
@@ -778,7 +818,7 @@ style.textContent = `
         margin-top: 8px;
     }
     .izin-attachment .btn-link {
-        color: #00bcd4;
+        color: var(--primary);
         text-decoration: none;
         font-size: 0.85rem;
     }
@@ -788,10 +828,11 @@ style.textContent = `
     .izin-reject-reason {
         margin-top: 12px;
         padding: 8px 12px;
-        background: rgba(244, 67, 54, 0.1);
+        background: rgba(160, 26, 44, 0.15);
         border-radius: 8px;
         font-size: 0.85rem;
-        border-left: 3px solid #f44336;
+        border-left: 3px solid #a01a2c;
+        color: var(--text-secondary);
     }
     .izin-empty {
         text-align: center;
@@ -827,4 +868,4 @@ window.deleteIzin = deleteIzin;
 window.filterIzinList = filterIzinList;
 window.clearAttachment = clearAttachment;
 
-console.log('✅ izin-online.js v1.2 loaded (with delete feature)');
+console.log('✅ izin-online.js v1.3 loaded (Dark theme adapted)');
