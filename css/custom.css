@@ -1,7 +1,132 @@
 /* ==================== CUSTOM STYLES ==================== */
 /* Style yang sebelumnya ada di <style> tag index.html */
 
-/* DROPDOWN MENU STYLES - Click to Open */
+/* ==================== PERBAIKAN WARNA LATAR AGAR LEBIH GELAP ==================== */
+
+/* Pastikan semua background card gelap */
+.stat-card-new,
+.chart-col,
+.class-col,
+.controls-bar,
+.table-container,
+.modal-box,
+.status-bar-container,
+.sensor-status-container,
+.friend-item,
+.friend-request-item,
+.search-result-item,
+.chat-container {
+    background-color: var(--bg-card);
+}
+
+/* Pastikan hover tetap gelap */
+.stat-card-new:hover,
+.chart-col:hover,
+.class-col:hover,
+.controls-bar:hover,
+.table-container tr:hover,
+.friend-item:hover,
+.friend-request-item:hover,
+.search-result-item:hover {
+    background-color: var(--bg-hover);
+}
+
+/* Darken announcement container */
+.announcement-container {
+    background: var(--bg-card);
+    border: 1px solid var(--primary);
+    box-shadow: none;
+}
+
+/* Darken announcement item background */
+.announcement-item {
+    background: var(--bg-hover);
+}
+
+.announcement-item:hover {
+    background: var(--bg-input);
+}
+
+/* Darken key box */
+.key-box {
+    background: var(--bg-sidebar);
+}
+
+/* Darken sensor cards */
+.sensor-card {
+    background: var(--bg-sidebar);
+}
+
+/* Darken table header */
+th {
+    background: var(--bg-sidebar);
+}
+
+/* Darken guide container */
+.guide-container details {
+    background: var(--bg-hover);
+}
+
+.guide-container details summary {
+    background: var(--bg-card);
+}
+
+/* Darken modal title */
+.modal-title {
+    background: var(--bg-sidebar);
+}
+
+/* Darken chat components */
+.chat-sidebar {
+    background: var(--bg-sidebar);
+}
+
+.chat-header {
+    background: var(--bg-sidebar);
+}
+
+.chat-input-area {
+    background: var(--bg-sidebar);
+}
+
+/* Darken dropdown */
+.dropdown-content {
+    background: var(--bg-card);
+}
+
+/* Darken progress bar background */
+.progress-bar {
+    background: #252530;
+}
+
+/* Darken select options */
+.filter-group select option {
+    background: var(--bg-card);
+    color: var(--text-primary);
+}
+
+/* Darken input background */
+.filter-group select,
+.filter-group input,
+.search-box input,
+.form-group input,
+.form-group select,
+.form-group textarea {
+    background: #14141c;
+}
+
+/* Darken table row hover */
+tr:hover {
+    background: rgba(26, 73, 114, 0.08);
+}
+
+/* Darken badge time */
+.badge-time {
+    background: #b85c00;
+    color: #121212;
+}
+
+/* ==================== DROPDOWN MENU STYLES - Click to Open ==================== */
 .dropdown-navbar {
     background: var(--bg-card);
     border-bottom: 1px solid var(--border);
@@ -100,7 +225,270 @@
     display: block;
 }
 
-/* FLOATING BUTTONS */
+/* ==================== Ganti gradient AI button ==================== */
+#aiAssistantBtn {
+    background: linear-gradient(135deg, #1a4972, #0f2e4f);
+}
+
+.ai-avatar {
+    background: linear-gradient(135deg, #1a4972, #0f2e4f);
+}
+
+/* AI Summary Card */
+.ai-summary-card {
+    background: linear-gradient(135deg, #1a4972, #5a3a8a) !important;
+}
+
+/* Dashboard role info */
+.dashboard-role-info {
+    border-left: 4px solid #1a4972;
+}
+
+.dashboard-role-info span {
+    color: #1a4972;
+}
+
+/* Avatar hover */
+.student-avatar:hover,
+.attendance-student-avatar:hover,
+.rekap-student-avatar:hover {
+    box-shadow: 0 2px 12px rgba(26, 73, 114, 0.4);
+    border-color: #1a4972;
+}
+
+/* Sidebar button active */
+.sidebar-btn.active {
+    background: rgba(26, 73, 114, 0.15);
+    border-right: 3px solid #1a4972;
+}
+
+/* Progress fill */
+.progress-fill {
+    background: linear-gradient(90deg, #1a4972, #0f2e4f);
+}
+
+/* Controls bar focus */
+.filter-group select:focus,
+.filter-group input:focus {
+    border-color: #1a4972;
+    box-shadow: 0 0 0 3px rgba(26, 73, 114, 0.2);
+}
+
+/* Branding footer */
+.branding-footer {
+    border-top: 1px solid rgba(26, 73, 114, 0.3);
+}
+
+/* Announcement container */
+.announcement-container {
+    border: 1px solid #1a4972;
+}
+
+.announcement-header-bar {
+    border-bottom: 1px solid rgba(26, 73, 114, 0.3);
+}
+
+.btn-announcement {
+    background: #1a4972;
+}
+
+.announcement-item {
+    border-left: 4px solid #1a4972;
+}
+
+.announcement-title {
+    color: #1a4972;
+}
+
+/* Floating buttons */
+.floating-chat-btn {
+    background: linear-gradient(135deg, #0f5c2e, #0a4a24);
+}
+
+.floating-friends-btn {
+    background: linear-gradient(135deg, #1a4972, #0f2e4f);
+}
+
+.floating-status-btn {
+    background: linear-gradient(135deg, #5a3a8a, #4a2a7a);
+}
+
+/* Toast */
+.toast {
+    border-left-color: #1a4972;
+}
+
+/* Modal title */
+.modal-title span:first-child {
+    color: #1a4972;
+}
+
+/* Table header */
+th {
+    color: #1a4972;
+}
+
+/* Key box */
+.key-box {
+    border-left: 4px solid #1a4972;
+}
+
+/* Sensor card online */
+.sensor-card.online {
+    border-left-color: #0f5c2e;
+}
+
+/* Sensor card offline */
+.sensor-card.offline {
+    border-left-color: #a01a2c;
+}
+
+/* Attendance ID badge */
+.attendance-id-badge {
+    color: #1a4972;
+}
+
+/* Light mode adjustments tetap dipertahankan */
+body.light-mode .clock-display {
+    color: #1a4972;
+}
+
+body.light-mode .attendance-id-badge {
+    color: #1a4972;
+}
+
+/* ==================== ANIMASI NAMA SEKOLAH - PERUBAHAN WARNA BERULANG ==================== */
+
+/* Animasi perubahan warna - lebih gelap dan elegan */
+@keyframes schoolNameColorShift {
+    0% {
+        color: #c9a000;
+        text-shadow: 0 0 5px rgba(201, 160, 0, 0.3);
+    }
+    15% {
+        color: #b85c00;
+        text-shadow: 0 0 8px rgba(184, 92, 0, 0.4);
+    }
+    30% {
+        color: #a01a2c;
+        text-shadow: 0 0 10px rgba(160, 26, 44, 0.5);
+    }
+    45% {
+        color: #5a3a8a;
+        text-shadow: 0 0 10px rgba(90, 58, 138, 0.5);
+    }
+    60% {
+        color: #1a7a6a;
+        text-shadow: 0 0 8px rgba(26, 122, 106, 0.4);
+    }
+    75% {
+        color: #0a6b80;
+        text-shadow: 0 0 8px rgba(10, 107, 128, 0.4);
+    }
+    100% {
+        color: #1a4972;
+        text-shadow: 0 0 6px rgba(26, 73, 114, 0.3);
+    }
+}
+
+/* Animasi untuk light mode */
+@keyframes schoolNameColorShiftLight {
+    0% { color: #b8960a; }
+    15% { color: #a04a00; }
+    30% { color: #8a1020; }
+    45% { color: #4a2a6a; }
+    60% { color: #0f5c4e; }
+    75% { color: #085a6e; }
+    100% { color: #143b60; }
+}
+
+/* Efek bounce ringan saat hover */
+@keyframes schoolNameBounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-4px); }
+}
+
+/* Efek glow berkelanjutan */
+@keyframes schoolNameGlow {
+    0% {
+        text-shadow: 0 0 5px rgba(201, 160, 0, 0.2);
+    }
+    50% {
+        text-shadow: 0 0 15px rgba(26, 73, 114, 0.4), 0 0 5px rgba(201, 160, 0, 0.2);
+    }
+    100% {
+        text-shadow: 0 0 5px rgba(26, 73, 114, 0.3);
+    }
+}
+
+/* Class untuk elemen nama sekolah - ANIMASI WARNA BERULANG */
+.school-name-animated {
+    display: inline-block;
+    font-weight: 800;
+    transition: all 0.3s ease;
+    position: relative;
+    letter-spacing: 0.5px;
+    animation: schoolNameColorShift 5s ease-in-out infinite;
+}
+
+/* Hover effect dengan bounce dan glow */
+.school-name-animated:hover {
+    animation: schoolNameColorShift 5s ease-in-out infinite, schoolNameBounce 0.5s ease-in-out, schoolNameGlow 1s ease-in-out;
+    cursor: pointer;
+}
+
+/* Light mode version */
+body.light-mode .school-name-animated {
+    animation: schoolNameColorShiftLight 5s ease-in-out infinite;
+}
+
+body.light-mode .school-name-animated:hover {
+    animation: schoolNameColorShiftLight 5s ease-in-out infinite, schoolNameBounce 0.5s ease-in-out, schoolNameGlow 1s ease-in-out;
+}
+
+/* Responsif untuk mobile */
+@media (max-width: 768px) {
+    .school-name-animated {
+        animation: schoolNameColorShift 4s ease-in-out infinite;
+    }
+    body.light-mode .school-name-animated {
+        animation: schoolNameColorShiftLight 4s ease-in-out infinite;
+    }
+}
+
+/* Tooltip style untuk nama sekolah */
+#schoolNameDisplay[title] {
+    position: relative;
+}
+
+#schoolNameDisplay[title]:hover::after {
+    content: attr(title);
+    position: absolute;
+    bottom: -30px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 5px 10px;
+    border-radius: 8px;
+    font-size: 12px;
+    white-space: nowrap;
+    z-index: 100;
+    pointer-events: none;
+}
+
+/* Loading spinner - ganti warna */
+.loading-spinner {
+    display: inline-block;
+    width: 40px;
+    height: 40px;
+    border: 3px solid rgba(26, 73, 114, 0.2);
+    border-radius: 50%;
+    border-top-color: #1a4972;
+    animation: spin 1s ease-in-out infinite;
+}
+
+/* ==================== FLOATING BUTTONS ==================== */
 .floating-chat-btn, 
 .floating-friends-btn, 
 .floating-status-btn, 
@@ -109,32 +497,7 @@
     display: none !important;
 }
 
-/* AI ASSISTANT BUTTON */
-#aiAssistantBtn {
-    position: fixed;
-    bottom: 100px;
-    right: 20px;
-    width: 56px;
-    height: 56px;
-    border-radius: 50%;
-    background: linear-gradient(135deg, #00bcd4, #2196f3);
-    color: white;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-    z-index: 998;
-    border: none;
-    font-size: 28px;
-    transition: transform 0.2s;
-}
-
-#aiAssistantBtn:hover {
-    transform: scale(1.1);
-}
-
-/* AI CHAT MESSAGES */
+/* ==================== AI ASSISTANT ==================== */
 .ai-message {
     display: flex;
     gap: 10px;
@@ -143,18 +506,6 @@
 
 .ai-message.ai-user {
     flex-direction: row-reverse;
-}
-
-.ai-avatar {
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    background: linear-gradient(135deg, #00bcd4, #2196f3);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 20px;
-    flex-shrink: 0;
 }
 
 .ai-message.ai-user .ai-avatar {
@@ -193,9 +544,8 @@
     40% { opacity: 1; transform: scale(1.2); }
 }
 
-/* AI SUMMARY CARD STYLES */
+/* ==================== AI SUMMARY CARD ==================== */
 .ai-summary-card {
-    background: linear-gradient(135deg, #667eea, #764ba2) !important;
     cursor: pointer;
     transition: transform 0.2s;
 }
@@ -220,13 +570,13 @@
 }
 
 .ai-summary-content h2 {
-    color: #667eea;
+    color: #1a4972;
     margin-top: 20px;
     margin-bottom: 10px;
 }
 
 .ai-summary-content h3 {
-    color: #00bcd4;
+    color: #0a6b80;
     margin-top: 15px;
     margin-bottom: 8px;
 }
@@ -239,21 +589,7 @@
     margin: 4px 0;
 }
 
-.loading-spinner {
-    display: inline-block;
-    width: 40px;
-    height: 40px;
-    border: 4px solid rgba(255,255,255,0.3);
-    border-radius: 50%;
-    border-top-color: #667eea;
-    animation: spin 1s ease-in-out infinite;
-}
-
-@keyframes spin {
-    to { transform: rotate(360deg); }
-}
-
-/* Nav tabs disembunyikan */
+/* ==================== NAV TABS ==================== */
 .nav-tabs {
     display: none !important;
 }
@@ -262,19 +598,7 @@
     margin-top: 0 !important;
 }
 
-.dashboard-role-info {
-    margin-bottom: 15px;
-    padding: 10px 15px;
-    background: var(--bg-hover);
-    border-radius: 12px;
-    border-left: 4px solid #00bcd4;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    flex-wrap: wrap;
-}
-
-/* Avatar styles */
+/* ==================== AVATAR STYLES ==================== */
 .student-avatar,
 .attendance-student-avatar,
 .rekap-student-avatar {
@@ -291,11 +615,11 @@
 .attendance-student-avatar:hover,
 .rekap-student-avatar:hover {
     transform: scale(1.1);
-    box-shadow: 0 2px 12px rgba(0, 188, 212, 0.4);
-    border-color: #00bcd4;
+    box-shadow: 0 2px 12px rgba(26, 73, 114, 0.4);
+    border-color: #1a4972;
 }
 
-/* WhatsApp Button di tabel siswa */
+/* ==================== WHATSAPP BUTTON ==================== */
 .btn-wa {
     background: #25D366;
     color: white;
@@ -315,8 +639,9 @@
     transform: scale(1.05);
 }
 
+/* ==================== BADGE ACCOUNT ==================== */
 .badge-account {
-    background: #4caf50;
+    background: #0f5c2e;
     color: white;
     font-size: 9px;
     padding: 2px 6px;
@@ -337,43 +662,7 @@
     vertical-align: middle;
 }
 
-.navbar-right {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-}
-
-.navbar-user {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    background: var(--bg-input);
-    padding: 5px 15px;
-    border-radius: 30px;
-}
-
-.navbar-avatar {
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    object-fit: cover;
-}
-
-.navbar-logout {
-    background: #ef4444;
-    border: none;
-    padding: 8px 16px;
-    border-radius: 30px;
-    color: white;
-    cursor: pointer;
-    font-weight: 500;
-}
-
-.navbar-logout:hover {
-    background: #dc2626;
-}
-
-/* Theme Toggle Button */
+/* ==================== THEME TOGGLE BUTTON ==================== */
 #themeToggleBtn {
     background: var(--bg-input);
     border: 1px solid var(--border);
@@ -394,6 +683,7 @@
     transform: scale(1.05);
 }
 
+/* ==================== RESPONSIVE ==================== */
 @media (max-width: 768px) {
     .dropdown-navbar {
         flex-direction: column;
@@ -415,151 +705,6 @@
     }
 }
 
-/* ==================== ANIMASI NAMA SEKOLAH - PERUBAHAN WARNA BERULANG ==================== */
-
-/* Animasi perubahan warna - lebih dinamis dengan 6 warna */
-@keyframes schoolNameColorShift {
-    0% {
-        color: #ffd700;
-        text-shadow: 0 0 5px rgba(255, 215, 0, 0.5);
-    }
-    15% {
-        color: #ffaa00;
-        text-shadow: 0 0 10px rgba(255, 170, 0, 0.6);
-    }
-    30% {
-        color: #ff6600;
-        text-shadow: 0 0 15px rgba(255, 102, 0, 0.7);
-    }
-    45% {
-        color: #ff3366;
-        text-shadow: 0 0 15px rgba(255, 51, 102, 0.7);
-    }
-    60% {
-        color: #9c27b0;
-        text-shadow: 0 0 15px rgba(156, 39, 176, 0.7);
-    }
-    75% {
-        color: #00bcd4;
-        text-shadow: 0 0 12px rgba(0, 188, 212, 0.6);
-    }
-    100% {
-        color: #2196f3;
-        text-shadow: 0 0 8px rgba(33, 150, 243, 0.5);
-    }
-}
-
-/* Animasi untuk light mode */
-@keyframes schoolNameColorShiftLight {
-    0% { color: #d4a017; }
-    15% { color: #e6a800; }
-    30% { color: #cc6b00; }
-    45% { color: #c2185b; }
-    60% { color: #7b1fa2; }
-    75% { color: #0097a7; }
-    100% { color: #0288d1; }
-}
-
-/* Efek bounce ringan saat hover */
-@keyframes schoolNameBounce {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-4px); }
-}
-
-/* Efek glow berkelanjutan */
-@keyframes schoolNameGlow {
-    0% {
-        text-shadow: 0 0 5px rgba(255, 215, 0, 0.3);
-    }
-    50% {
-        text-shadow: 0 0 20px rgba(0, 188, 212, 0.5), 0 0 8px rgba(255, 215, 0, 0.3);
-    }
-    100% {
-        text-shadow: 0 0 5px rgba(33, 150, 243, 0.3);
-    }
-}
-
-/* Class untuk elemen nama sekolah - ANIMASI WARNA BERULANG */
-.school-name-animated {
-    display: inline-block;
-    font-weight: 800;
-    transition: all 0.3s ease;
-    position: relative;
-    letter-spacing: 0.5px;
-    animation: schoolNameColorShift 4s ease-in-out infinite;
-}
-
-/* Efek tambahan: kombinasi animated dengan pulse ringan */
-.school-name-pulse {
-    animation: schoolNameColorShift 4s ease-in-out infinite, schoolNameGlow 2s ease-in-out infinite;
-}
-
-/* Hover effect dengan bounce dan glow */
-.school-name-animated:hover {
-    animation: schoolNameColorShift 4s ease-in-out infinite, schoolNameBounce 0.5s ease-in-out, schoolNameGlow 1s ease-in-out;
-    cursor: pointer;
-}
-
-/* Light mode version */
-body.light-mode .school-name-animated {
-    animation: schoolNameColorShiftLight 4s ease-in-out infinite;
-}
-
-body.light-mode .school-name-animated:hover {
-    animation: schoolNameColorShiftLight 4s ease-in-out infinite, schoolNameBounce 0.5s ease-in-out, schoolNameGlow 1s ease-in-out;
-}
-
-/* Responsif untuk mobile */
-@media (max-width: 768px) {
-    .school-name-animated {
-        animation: schoolNameColorShift 3s ease-in-out infinite;
-    }
-    body.light-mode .school-name-animated {
-        animation: schoolNameColorShiftLight 3s ease-in-out infinite;
-    }
-}
-
-/* Tooltip style untuk nama sekolah */
-#schoolNameDisplay[title] {
-    position: relative;
-}
-
-#schoolNameDisplay[title]:hover::after {
-    content: attr(title);
-    position: absolute;
-    bottom: -30px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: rgba(0, 0, 0, 0.8);
-    color: white;
-    padding: 5px 10px;
-    border-radius: 8px;
-    font-size: 12px;
-    white-space: nowrap;
-    z-index: 100;
-    pointer-events: none;
-}
-
-/* Branding Footer */
-.branding-footer {
-    text-align: center;
-    padding: 15px 20px;
-    margin-top: 30px;
-    border-top: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-    font-size: 0.75rem;
-    color: var(--text-secondary);
-}
-
-.branding-footer .branding-logo {
-    width: 20px;
-    height: 20px;
-    border-radius: 4px;
-}
-
 /* ==================== SCROLLBAR CUSTOM ==================== */
 ::-webkit-scrollbar {
     width: 8px;
@@ -577,7 +722,7 @@ body.light-mode .school-name-animated:hover {
 }
 
 ::-webkit-scrollbar-thumb:hover {
-    background: #00bcd4;
+    background: var(--primary-dark);
 }
 
 /* ==================== TAB TRANSITION ANIMATIONS ==================== */
@@ -604,18 +749,6 @@ body.light-mode .school-name-animated:hover {
     }
 }
 
-@keyframes fadeSlideOut {
-    from {
-        opacity: 1;
-        transform: translateY(0);
-    }
-    to {
-        opacity: 0;
-        transform: translateY(-8px);
-        visibility: hidden;
-    }
-}
-
 /* Dropdown menu transition */
 .dropdown-content {
     transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s;
@@ -631,31 +764,6 @@ body.light-mode .school-name-animated:hover {
     visibility: visible;
 }
 
-/* Dropdown button hover effect */
-.dropdown-btn {
-    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-    position: relative;
-    overflow: hidden;
-}
-
-.dropdown-btn::after {
-    content: '';
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    width: 0;
-    height: 0;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.2);
-    transform: translate(-50%, -50%);
-    transition: width 0.4s, height 0.4s;
-}
-
-.dropdown-btn:active::after {
-    width: 100%;
-    height: 100%;
-}
-
 /* Tab button transition */
 .tab-btn {
     transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
@@ -664,7 +772,7 @@ body.light-mode .school-name-animated:hover {
 
 .tab-btn.active {
     background: var(--primary);
-    color: #121212;
+    color: #ffffff;
     transform: scale(1.02);
 }
 
@@ -745,7 +853,7 @@ body.light-mode .school-name-animated:hover {
     width: 0;
     height: 0;
     border-radius: 50%;
-    background: rgba(255, 255, 255, 0.3);
+    background: rgba(255, 255, 255, 0.2);
     transform: translate(-50%, -50%);
     transition: width 0.4s, height 0.4s;
 }
@@ -917,13 +1025,13 @@ canvas {
 
 @keyframes avatarPulse {
     0% {
-        box-shadow: 0 0 0 0 rgba(0, 188, 212, 0.4);
+        box-shadow: 0 0 0 0 rgba(26, 73, 114, 0.4);
     }
     70% {
-        box-shadow: 0 0 0 10px rgba(0, 188, 212, 0);
+        box-shadow: 0 0 0 10px rgba(26, 73, 114, 0);
     }
     100% {
-        box-shadow: 0 0 0 0 rgba(0, 188, 212, 0);
+        box-shadow: 0 0 0 0 rgba(26, 73, 114, 0);
     }
 }
 
@@ -950,7 +1058,7 @@ canvas {
 /* Selection highlight */
 ::selection {
     background: var(--primary);
-    color: #121212;
+    color: #ffffff;
 }
 
 /* Smooth scroll behavior */
@@ -1005,719 +1113,5 @@ html {
         animation-iteration-count: 1 !important;
         transition-duration: 0.01s !important;
         scroll-behavior: auto !important;
-    }
-}
-
-/* ==================== TAB ATTENDANCE (ANDROID) - IMPROVED ==================== */
-#tab-attendance .controls-bar {
-    display: flex;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 12px;
-    background: var(--bg-card);
-    border-radius: 20px;
-    padding: 16px;
-    margin-bottom: 20px;
-}
-
-#tab-attendance .controls-bar > div:first-child {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
-    justify-content: space-between;
-}
-
-#tab-attendance .filter-group {
-    flex: 1;
-    min-width: 100px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    background: var(--bg-hover);
-    padding: 6px 12px;
-    border-radius: 40px;
-}
-
-#tab-attendance .filter-group label {
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: var(--text-secondary);
-}
-
-#tab-attendance .filter-group select {
-    background: transparent;
-    border: none;
-    color: var(--text-primary);
-    font-size: 0.8rem;
-    padding: 6px 0;
-    font-weight: 500;
-}
-
-#tab-attendance .controls-bar > div:last-child {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    justify-content: center;
-    margin-top: 8px;
-}
-
-#tab-attendance .controls-bar .btn-action {
-    flex: 1 0 auto;
-    min-width: 130px;
-    justify-content: center;
-    padding: 12px 8px;
-    font-size: 0.8rem;
-    border-radius: 40px;
-    text-align: center;
-}
-
-#attendanceStats {
-    background: var(--bg-card);
-    border-radius: 20px;
-    padding: 12px 16px;
-    margin-bottom: 20px;
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: space-between;
-    align-items: center;
-    gap: 12px;
-}
-
-#attendanceStats > div {
-    flex: 1;
-    text-align: center;
-    background: var(--bg-hover);
-    padding: 8px;
-    border-radius: 16px;
-}
-
-#tab-attendance .chart-container > div {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
-}
-
-#attendanceDonutChart {
-    max-width: 180px;
-    margin: 0 auto;
-}
-
-/* Styling khusus untuk tabel absensi */
-#tab-attendance .table-container {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    border-radius: 20px;
-    margin-top: 10px;
-}
-
-#tab-attendance table {
-    min-width: 650px;
-    width: 100%;
-    font-size: 0.75rem;
-    border-collapse: collapse;
-}
-
-#tab-attendance th,
-#tab-attendance td {
-    padding: 12px 10px;
-    white-space: nowrap;
-    border-bottom: 1px solid var(--border);
-    vertical-align: middle;
-}
-
-#tab-attendance th {
-    background: var(--bg-sidebar);
-    color: var(--primary);
-    font-weight: 600;
-    font-size: 0.75rem;
-    position: sticky;
-    top: 0;
-}
-
-/* Responsive untuk tabel absensi di mobile */
-@media (max-width: 768px) {
-    #tab-attendance table {
-        min-width: 550px;
-    }
-    #tab-attendance th,
-    #tab-attendance td {
-        padding: 10px 6px;
-        font-size: 0.7rem;
-    }
-    .attendance-student-avatar {
-        width: 32px;
-        height: 32px;
-    }
-}
-
-.btn-icon.delete {
-    background: rgba(244, 67, 54, 0.1);
-    border-radius: 30px;
-    padding: 6px 10px;
-    font-size: 1rem;
-}
-
-@media (max-width: 600px) {
-    #tab-attendance .filter-group {
-        flex: 1 1 100%;
-        justify-content: space-between;
-    }
-    #tab-attendance .controls-bar .btn-action {
-        min-width: calc(50% - 8px);
-        font-size: 0.75rem;
-        padding: 10px 4px;
-    }
-    #attendanceStats > div {
-        font-size: 0.7rem;
-    }
-    #attendanceStats div strong {
-        display: block;
-        font-size: 1rem;
-    }
-}
-
-/* ==================== TAB USERS ==================== */
-#tab-users {
-    color: var(--text-primary);
-}
-
-#tab-users .key-box {
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: 20px;
-    padding: 18px;
-    margin-bottom: 20px;
-}
-
-#tab-users .key-box label,
-#tab-users .key-box .text-small,
-#tab-users .key-box small {
-    color: var(--text-secondary);
-}
-
-#tab-users .key-box label {
-    color: var(--text-primary);
-    font-weight: 500;
-}
-
-#tab-users #selectStudentForCode {
-    background: var(--bg-hover);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 10px;
-    color: var(--text-primary);
-    font-size: 0.85rem;
-    width: 100%;
-}
-
-#tab-users #selectStudentForCode option {
-    background: var(--bg-card);
-    color: var(--text-primary);
-}
-
-#tab-users .btn-secondary {
-    background: linear-gradient(135deg, var(--secondary), var(--secondary-dark));
-    color: #121212;
-    font-weight: bold;
-    border: none;
-    padding: 10px 20px;
-    border-radius: 40px;
-}
-
-#generatedKeyDisplay {
-    background: var(--bg-card);
-    border-radius: 20px;
-    margin: 15px 0;
-    padding: 5px;
-}
-
-#generatedKeyDisplay > div {
-    background: var(--bg-hover);
-    border-left: 4px solid var(--primary);
-    padding: 15px;
-    border-radius: 16px;
-}
-
-#generatedKeyDisplay div div {
-    color: var(--text-primary);
-}
-
-#generatedKeyDisplay .btn-success {
-    background: var(--success);
-    color: white;
-}
-
-#tbody-codes td,
-#tbody-codes th {
-    color: var(--text-primary);
-    border-color: var(--border);
-}
-
-#tbody-codes td span,
-#tbody-codes td strong {
-    color: var(--text-primary);
-}
-
-#tbody-codes .code-expiring-soon {
-    background: rgba(255, 152, 0, 0.1);
-}
-
-#tbody-codes td span[style*="color:#4caf50"] {
-    color: #4caf50 !important;
-}
-
-#tbody-codes td span[style*="color:#ff9800"] {
-    color: #ff9800 !important;
-}
-
-#tbody-codes .text-small,
-#tbody-codes small {
-    color: var(--text-muted);
-}
-
-#tbody-codes .btn-icon {
-    background: transparent;
-    color: var(--primary);
-    font-size: 1.2rem;
-    padding: 6px;
-}
-
-#tbody-codes .btn-icon.delete {
-    color: var(--danger);
-}
-
-#tbody-users select.form-control {
-    background: var(--bg-hover);
-    border: 1px solid var(--border);
-    color: var(--text-primary);
-    border-radius: 8px;
-    padding: 6px;
-}
-
-@media (max-width: 600px) {
-    #tab-users .key-box {
-        flex-direction: column;
-        text-align: left;
-    }
-    #tab-users .btn-secondary {
-        width: 100%;
-        margin-top: 10px;
-    }
-    #generatedKeyDisplay div div {
-        font-size: 0.9rem;
-        word-break: break-all;
-    }
-}
-
-/* ==================== ABSENCE LIST MODAL ==================== */
-.absence-student-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 12px;
-    border-bottom: 1px solid var(--border);
-    flex-wrap: wrap;
-    gap: 10px;
-}
-
-.absence-student-info {
-    flex: 1;
-    min-width: 180px;
-}
-
-.absence-student-name {
-    font-weight: 600;
-    font-size: 0.85rem;
-}
-
-.absence-student-detail {
-    font-size: 0.7rem;
-    color: var(--text-muted);
-}
-
-.status-select {
-    padding: 8px 12px;
-    border-radius: 30px;
-    border: 1px solid var(--border);
-    background: var(--bg-card);
-    color: var(--text-primary);
-    font-size: 0.8rem;
-    cursor: pointer;
-    min-width: 130px;
-}
-
-.status-select.hadir {
-    border-color: #4caf50;
-    color: #4caf50;
-}
-
-.status-select.sakit {
-    border-color: #ff9800;
-    color: #ff9800;
-}
-
-.status-select.izin {
-    border-color: #2196f3;
-    color: #2196f3;
-}
-
-.status-select.alpha {
-    border-color: #f44336;
-    color: #f44336;
-}
-
-/* ==================== IZIN ONLINE STYLES ==================== */
-.izin-container {
-    padding: 20px;
-}
-
-.izin-header {
-    margin-bottom: 24px;
-}
-
-.izin-actions {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 16px;
-    margin-bottom: 24px;
-}
-
-.izin-filter {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-}
-
-.filter-btn {
-    padding: 8px 16px;
-    border-radius: 30px;
-    background: var(--bg-hover);
-    border: 1px solid var(--border);
-    cursor: pointer;
-    transition: all 0.2s;
-    color: var(--text-primary);
-}
-
-.filter-btn.active {
-    background: var(--primary);
-    color: white;
-    border-color: var(--primary);
-}
-
-.filter-btn:hover {
-    background: var(--primary);
-    color: white;
-    transform: translateY(-2px);
-}
-
-.izin-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
-    gap: 20px;
-}
-
-.izin-card {
-    background: var(--bg-card);
-    border-radius: 16px;
-    overflow: hidden;
-    border: 1px solid var(--border);
-    transition: transform 0.2s, box-shadow 0.2s;
-}
-
-.izin-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 25px rgba(0,0,0,0.15);
-}
-
-.izin-card-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 16px;
-    background: var(--bg-hover);
-    border-bottom: 1px solid var(--border);
-}
-
-.izin-type {
-    font-weight: bold;
-    font-size: 1rem;
-}
-
-.izin-status {
-    padding: 4px 12px;
-    border-radius: 20px;
-    font-size: 0.75rem;
-    font-weight: 500;
-}
-
-.status-pending {
-    background: #ff9800;
-    color: white;
-}
-
-.status-approved {
-    background: #4caf50;
-    color: white;
-}
-
-.status-rejected {
-    background: #f44336;
-    color: white;
-}
-
-.izin-card-body {
-    padding: 16px;
-}
-
-.izin-student {
-    margin-bottom: 12px;
-}
-
-.izin-student strong {
-    display: block;
-    margin-bottom: 4px;
-}
-
-.izin-date {
-    color: var(--text-muted);
-    margin-bottom: 12px;
-    font-size: 0.85rem;
-}
-
-.izin-reason {
-    background: var(--bg-hover);
-    padding: 12px;
-    border-radius: 12px;
-    margin: 12px 0;
-}
-
-.izin-attachment {
-    margin-top: 12px;
-}
-
-.izin-attachment a {
-    color: var(--primary);
-    text-decoration: none;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 0.8rem;
-}
-
-.izin-attachment a:hover {
-    text-decoration: underline;
-}
-
-.izin-reject-reason {
-    margin-top: 12px;
-    padding: 8px 12px;
-    background: rgba(244, 67, 54, 0.1);
-    border-radius: 8px;
-    color: #f44336;
-    font-size: 0.8rem;
-}
-
-.izin-card-footer {
-    padding: 12px 16px;
-    background: var(--bg-hover);
-    border-top: 1px solid var(--border);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 10px;
-}
-
-.izin-actions-buttons {
-    display: flex;
-    gap: 8px;
-}
-
-.izin-empty {
-    text-align: center;
-    padding: 60px 20px;
-    background: var(--bg-hover);
-    border-radius: 16px;
-}
-
-/* Izin Badge di Tab */
-.izin-badge {
-    background: #f44336;
-    color: white;
-    border-radius: 50%;
-    padding: 2px 6px;
-    font-size: 10px;
-    margin-left: 5px;
-}
-
-/* ==================== WHATSAPP NOTIFICATION STYLES ==================== */
-/* Parent Contact Modal */
-#modal-parent-contact .modal-box {
-    max-width: 450px;
-}
-
-#modal-parent-contact .form-group input,
-#modal-parent-contact .form-group select {
-    width: 100%;
-    padding: 10px;
-    border-radius: 12px;
-    border: 1px solid var(--border);
-    background: var(--bg-input);
-    color: var(--text-primary);
-}
-
-/* WhatsApp Status Indicator */
-.wa-status-indicator {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 0.7rem;
-    padding: 2px 8px;
-    border-radius: 20px;
-    background: rgba(37, 211, 102, 0.1);
-    color: #25D366;
-}
-
-.wa-status-indicator.disabled {
-    background: rgba(244, 67, 54, 0.1);
-    color: #f44336;
-}
-
-.wa-status-indicator.sent {
-    background: rgba(37, 211, 102, 0.2);
-    color: #128C7E;
-}
-
-/* WhatsApp Test Button */
-.btn-test-wa {
-    background: #25D366;
-    color: white;
-    border: none;
-    border-radius: 30px;
-    padding: 6px 12px;
-    font-size: 0.7rem;
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-.btn-test-wa:hover {
-    background: #128C7E;
-    transform: scale(1.02);
-}
-
-/* Notifikasi Log di Settings */
-.notif-log-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 10px;
-    border-bottom: 1px solid var(--border);
-    font-size: 0.8rem;
-}
-
-.notif-log-time {
-    font-size: 0.7rem;
-    color: var(--text-muted);
-}
-
-/* ==================== LIGHT MODE ADJUSTMENTS ==================== */
-body.light-mode .attendance-student-avatar {
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-}
-
-body.light-mode .attendance-id-badge {
-    background: #e0e0e0;
-    color: #0097a7;
-}
-
-body.light-mode .status-select {
-    background: #ffffff;
-}
-
-body.light-mode .absence-student-row {
-    background: #fafafa;
-}
-
-body.light-mode .izin-card {
-    background: #ffffff;
-}
-
-body.light-mode .izin-reason {
-    background: #f5f5f5;
-}
-
-body.light-mode .filter-btn {
-    background: #f0f0f0;
-}
-
-body.light-mode .filter-btn.active {
-    background: var(--primary);
-    color: white;
-}
-
-/* ==================== ANIMATION DELAY UTILITIES ==================== */
-.animate-delay-1 { animation-delay: 0.05s !important; }
-.animate-delay-2 { animation-delay: 0.1s !important; }
-.animate-delay-3 { animation-delay: 0.15s !important; }
-.animate-delay-4 { animation-delay: 0.2s !important; }
-.animate-delay-5 { animation-delay: 0.25s !important; }
-
-/* Hover scale effect for interactive elements */
-.interactive-scale {
-    transition: transform 0.2s ease;
-}
-
-.interactive-scale:hover {
-    transform: scale(1.02);
-}
-
-.interactive-scale:active {
-    transform: scale(0.98);
-}
-
-/* ==================== RESPONSIVE IZIN ONLINE ==================== */
-@media (max-width: 768px) {
-    .izin-grid {
-        grid-template-columns: 1fr;
-    }
-    
-    .izin-actions {
-        flex-direction: column;
-        align-items: stretch;
-    }
-    
-    .izin-filter {
-        justify-content: center;
-    }
-    
-    .izin-card-header {
-        flex-direction: column;
-        gap: 8px;
-        text-align: center;
-    }
-    
-    .izin-card-footer {
-        flex-direction: column;
-        text-align: center;
-    }
-    
-    .izin-actions-buttons {
-        justify-content: center;
-    }
-}
-
-/* ==================== RESPONSIVE WHATSAPP ==================== */
-@media (max-width: 768px) {
-    #modal-parent-contact .modal-box {
-        width: 95%;
-        margin: 20px auto;
-    }
-    
-    .btn-wa {
-        padding: 4px 8px;
-        font-size: 0.7rem;
     }
 }

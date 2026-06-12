@@ -6,14 +6,14 @@
     border-radius: 12px;
     background: var(--bg-card);
     border: 2px solid var(--primary);
-    box-shadow: 0 2px 8px rgba(0, 188, 212, 0.2);
+    box-shadow: 0 2px 8px rgba(26, 73, 114, 0.2);
     transition: all 0.3s ease;
 }
 
 .school-logo:hover {
     transform: scale(1.05);
     border-color: var(--secondary);
-    box-shadow: 0 4px 12px rgba(0, 188, 212, 0.3);
+    box-shadow: 0 4px 12px rgba(26, 73, 114, 0.3);
 }
 
 .header-left {
@@ -44,7 +44,7 @@
 
 .logo-preview-wrapper:hover .school-logo-preview {
     border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(0, 188, 212, 0.2);
+    box-shadow: 0 0 0 3px rgba(26, 73, 114, 0.2);
 }
 
 .logo-upload-hint {
@@ -78,11 +78,11 @@
     align-items: center;
     min-height: 100vh;
     padding: 20px;
-    background: linear-gradient(135deg, #0a0a0f 0%, #12121a 100%);
+    background: linear-gradient(135deg, #05050a 0%, #0a0a12 100%);
 }
 
 body.light-mode #auth-section {
-    background: linear-gradient(135deg, #e0e0e0 0%, #f5f5f5 100%);
+    background: linear-gradient(135deg, #c8ccd2 0%, #d8dce2 100%);
 }
 
 .auth-card {
@@ -207,7 +207,7 @@ body.light-mode #auth-section {
 .sidebar-header {
     padding: 20px 16px;
     border-bottom: 1px solid var(--border);
-    background: linear-gradient(135deg, var(--primary-dark), var(--primary));
+    background: linear-gradient(135deg, #0f2e4f, #1a4972);
 }
 
 .sidebar-user-info {
@@ -272,7 +272,7 @@ body.light-mode #auth-section {
 }
 
 .sidebar-btn.active {
-    background: rgba(0, 188, 212, 0.15);
+    background: rgba(26, 73, 114, 0.15);
     color: var(--primary);
     border-right: 3px solid var(--primary);
 }
@@ -297,7 +297,7 @@ body.light-mode #auth-section {
     align-items: center;
     gap: 12px;
     padding: 10px 16px;
-    background: rgba(244, 67, 54, 0.1);
+    background: rgba(160, 26, 44, 0.1);
     border: none;
     border-radius: 12px;
     color: var(--danger);
@@ -306,7 +306,7 @@ body.light-mode #auth-section {
 }
 
 .sidebar-logout-btn:hover {
-    background: rgba(244, 67, 54, 0.2);
+    background: rgba(160, 26, 44, 0.2);
 }
 
 /* Overlay */
@@ -360,5 +360,5 @@ body.light-mode .sidebar-btn:hover {
 }
 
 body.light-mode .sidebar-btn.active {
-    background: rgba(0, 188, 212, 0.1);
+    background: rgba(26, 73, 114, 0.1);
 }

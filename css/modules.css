@@ -45,11 +45,11 @@
 }
 
 .stat-percent.positive {
-    color: #4caf50;
+    color: #0f5c2e;
 }
 
 .stat-percent.negative {
-    color: #f44336;
+    color: #a01a2c;
 }
 
 .stat-percent.neutral {
@@ -242,33 +242,33 @@ canvas#weeklyBarChart {
 }
 
 .attendance-status.hadir {
-    background: rgba(76, 175, 80, 0.15);
-    color: #4caf50;
+    background: rgba(15, 92, 46, 0.15);
+    color: #0f5c2e;
 }
 
 .attendance-status.pulang {
-    background: rgba(244, 67, 54, 0.15);
-    color: #f44336;
+    background: rgba(160, 26, 44, 0.15);
+    color: #a01a2c;
 }
 
 .attendance-status.terlambat {
-    background: rgba(255, 152, 0, 0.15);
-    color: #ff9800;
+    background: rgba(184, 92, 0, 0.15);
+    color: #b85c00;
 }
 
 .attendance-status.sakit {
-    background: rgba(255, 152, 0, 0.15);
-    color: #ff9800;
+    background: rgba(184, 92, 0, 0.15);
+    color: #b85c00;
 }
 
 .attendance-status.izin {
-    background: rgba(33, 150, 243, 0.15);
-    color: #2196f3;
+    background: rgba(10, 107, 128, 0.15);
+    color: #0a6b80;
 }
 
 .attendance-status.alpha {
-    background: rgba(244, 67, 54, 0.15);
-    color: #f44336;
+    background: rgba(160, 26, 44, 0.15);
+    color: #a01a2c;
 }
 
 /* Baris baru animasi */
@@ -278,7 +278,7 @@ canvas#weeklyBarChart {
 
 @keyframes highlightNew {
     0% {
-        background-color: rgba(0, 188, 212, 0.3);
+        background-color: rgba(26, 73, 114, 0.3);
     }
     100% {
         background-color: transparent;
@@ -317,7 +317,7 @@ canvas#weeklyBarChart {
 }
 
 .request-badge {
-    background: #f44336;
+    background: #a01a2c;
 }
 
 .search-result-item {
@@ -339,7 +339,7 @@ canvas#weeklyBarChart {
 
 .search-result-item.error {
     justify-content: center;
-    border-left-color: #f44336;
+    border-left-color: #a01a2c;
 }
 
 .friend-item,
@@ -425,11 +425,11 @@ canvas#weeklyBarChart {
 }
 
 .friend-actions .btn-icon.accept:hover {
-    color: #4caf50;
+    color: #0f5c2e;
 }
 
 .friend-actions .btn-icon.reject:hover {
-    color: #f44336;
+    color: #a01a2c;
 }
 
 /* ==================== CHAT SYSTEM ==================== */
@@ -485,7 +485,7 @@ canvas#weeklyBarChart {
 }
 
 .chat-item.active {
-    background: rgba(0, 188, 212, 0.1);
+    background: rgba(26, 73, 114, 0.1);
     border-left: 3px solid var(--primary);
 }
 
@@ -505,7 +505,7 @@ canvas#weeklyBarChart {
     position: absolute;
     bottom: -2px;
     right: -2px;
-    background: #f44336;
+    background: #a01a2c;
     color: white;
     border-radius: 50%;
     width: 20px;
@@ -1029,7 +1029,7 @@ canvas#weeklyBarChart {
 }
 
 .status-delete-btn:hover {
-    background: rgba(244, 67, 54, 0.9);
+    background: rgba(160, 26, 44, 0.9);
     transform: scale(1.05);
 }
 
@@ -1052,27 +1052,27 @@ canvas#weeklyBarChart {
 }
 
 .rekap-status-sangat-baik {
-    background: #4caf50;
+    background: #0f5c2e;
     color: white;
 }
 
 .rekap-status-baik {
-    background: #8bc34a;
+    background: #6f8f4a;
     color: #333;
 }
 
 .rekap-status-cukup {
-    background: #ffc107;
+    background: #b8960a;
     color: #333;
 }
 
 .rekap-status-kurang {
-    background: #ff9800;
+    background: #b85c00;
     color: white;
 }
 
 .rekap-status-buruk {
-    background: #f44336;
+    background: #a01a2c;
     color: white;
 }
 
@@ -1084,7 +1084,7 @@ canvas#weeklyBarChart {
 }
 
 .guide-container details {
-    background: #16161f;
+    background: var(--bg-hover);
     padding: 14px 16px;
     border-radius: 16px;
     margin-bottom: 12px;
@@ -1103,7 +1103,7 @@ canvas#weeklyBarChart {
 }
 
 .guide-box {
-    background: rgba(0, 188, 212, 0.08);
+    background: rgba(26, 73, 114, 0.08);
     padding: 16px;
     border-radius: 16px;
     border-left: 4px solid var(--primary);
@@ -1139,7 +1139,7 @@ canvas#weeklyBarChart {
 }
 
 .badge-success {
-    background: #4caf50;
+    background: #0f5c2e;
     color: white;
     padding: 4px 12px;
     border-radius: 30px;
@@ -1147,7 +1147,7 @@ canvas#weeklyBarChart {
 }
 
 .badge-warning {
-    background: #ff9800;
+    background: #b85c00;
     color: white;
     padding: 4px 12px;
     border-radius: 30px;
@@ -1155,7 +1155,7 @@ canvas#weeklyBarChart {
 }
 
 .badge-danger {
-    background: #f44336;
+    background: #a01a2c;
     color: white;
     padding: 4px 12px;
     border-radius: 30px;
@@ -1163,7 +1163,7 @@ canvas#weeklyBarChart {
 }
 
 .badge-info {
-    background: #2196f3;
+    background: #0a6b80;
     color: white;
     padding: 4px 12px;
     border-radius: 30px;
@@ -1187,13 +1187,13 @@ canvas#weeklyBarChart {
 }
 
 .sensor-card.online {
-    border-left: 4px solid #4caf50;
-    background: rgba(76, 175, 80, 0.05);
+    border-left: 4px solid #0f5c2e;
+    background: rgba(15, 92, 46, 0.05);
 }
 
 .sensor-card.offline {
-    border-left: 4px solid #f44336;
-    background: rgba(244, 67, 54, 0.05);
+    border-left: 4px solid #a01a2c;
+    background: rgba(160, 26, 44, 0.05);
     opacity: 0.7;
 }
 
@@ -1214,11 +1214,11 @@ canvas#weeklyBarChart {
 }
 
 .sensor-status-text.online {
-    color: #4caf50;
+    color: #0f5c2e;
 }
 
 .sensor-status-text.offline {
-    color: #f44336;
+    color: #a01a2c;
 }
 
 .sensor-templates {
@@ -1403,7 +1403,7 @@ canvas#weeklyBarChart {
 }
 
 .btn-icon.delete {
-    background: rgba(244, 67, 54, 0.1);
+    background: rgba(160, 26, 44, 0.1);
     border-radius: 30px;
     padding: 6px 10px;
     font-size: 1rem;
@@ -1511,15 +1511,15 @@ canvas#weeklyBarChart {
 }
 
 #tbody-codes .code-expiring-soon {
-    background: rgba(255, 152, 0, 0.1);
+    background: rgba(184, 92, 0, 0.1);
 }
 
 #tbody-codes td span[style*="color:#4caf50"] {
-    color: #4caf50 !important;
+    color: #0f5c2e !important;
 }
 
 #tbody-codes td span[style*="color:#ff9800"] {
-    color: #ff9800 !important;
+    color: #b85c00 !important;
 }
 
 #tbody-codes .text-small,
@@ -1599,23 +1599,23 @@ canvas#weeklyBarChart {
 }
 
 .status-select.hadir {
-    border-color: #4caf50;
-    color: #4caf50;
+    border-color: #0f5c2e;
+    color: #0f5c2e;
 }
 
 .status-select.sakit {
-    border-color: #ff9800;
-    color: #ff9800;
+    border-color: #b85c00;
+    color: #b85c00;
 }
 
 .status-select.izin {
-    border-color: #2196f3;
-    color: #2196f3;
+    border-color: #0a6b80;
+    color: #0a6b80;
 }
 
 .status-select.alpha {
-    border-color: #f44336;
-    color: #f44336;
+    border-color: #a01a2c;
+    color: #a01a2c;
 }
 
 /* ==================== LIGHT MODE ADJUSTMENTS ==================== */
@@ -1625,7 +1625,7 @@ body.light-mode .attendance-student-avatar {
 
 body.light-mode .attendance-id-badge {
     background: #e0e0e0;
-    color: #0097a7;
+    color: #1a4972;
 }
 
 body.light-mode .status-select {
