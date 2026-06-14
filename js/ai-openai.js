@@ -1,22 +1,16 @@
-// ai-openai.js - VERSION 1.0 (INTEGRASI OPENAI UNTUK AI SUMMMARY SUPER POWERFULL)
+// ai-openai.js - VERSION 1.1 (BACKEND PROXY MODE - AMAN)
 // Integrasi OpenAI API untuk analisis kehadiran yang lebih cerdas
-// Fitur:
-// - Analisis Natural Language Processing (NLP) dari data kehadiran
-// - Rekomendasi strategi peningkatan kehadiran berbasis AI
-// - Deteksi pola kompleks yang tidak terlihat oleh rule-based
-// - Prediksi akurat menggunakan GPT-4o-mini
-// - Auto-summarization laporan eksekutif
-// - Saran intervensi personal untuk setiap siswa bermasalah
+// API Key disimpan di backend, tidak terekspos ke frontend
+//
+// PERUBAHAN V1.1:
+// - Menghapus API key dari frontend (keamanan)
+// - Semua panggilan OpenAI melalui backend proxy
+// - Backend endpoint: https://backendtest-azure.vercel.app/api/ai/openai
+// - Fallback ke rule-based jika backend tidak tersedia
 // ============================================================================
 
-// Konfigurasi OpenAI
-const OPENAI_CONFIG = {
-    apiKey: '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',
-    model: 'gpt-4o-mini',
-    maxTokens: 2000,
-    temperature: 0.3,
-    apiUrl: 'https://api.openai.com/v1/chat/completions'
-};
+// ======================= KONFIGURASI BACKEND =======================
+const BACKEND_URL = "https://backendtest-azure.vercel.app";
 
 let openAIAvailable = true;
 let openAIAnalysisCache = null;
@@ -26,7 +20,7 @@ const OPENAI_CACHE_TTL = 15 * 60 * 1000; // 15 menit cache untuk analisis OpenAI
 // ======================= FUNGSI UTILITY =======================
 
 /**
- * Memanggil API OpenAI untuk analisis
+ * Memanggil API OpenAI melalui backend proxy (AMAN)
  * @param {string} systemPrompt - System prompt untuk AI
  * @param {string} userPrompt - User prompt untuk AI
  * @returns {Promise<string>} - Response dari OpenAI
@@ -38,29 +32,28 @@ async function callOpenAI(systemPrompt, userPrompt) {
     }
 
     try {
-        const response = await fetch(OPENAI_CONFIG.apiUrl, {
+        console.log("🤖 Calling OpenAI via backend proxy...");
+        
+        const response = await fetch(`${BACKEND_URL}/api/ai/openai`, {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${OPENAI_CONFIG.apiKey}`
+                'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                model: OPENAI_CONFIG.model,
-                messages: [
-                    { role: 'system', content: systemPrompt },
-                    { role: 'user', content: userPrompt }
-                ],
-                max_tokens: OPENAI_CONFIG.maxTokens,
-                temperature: OPENAI_CONFIG.temperature
+                message: userPrompt,
+                systemPrompt: systemPrompt,
+                history: [],
+                temperature: 0.3,
+                maxTokens: 2000
             })
         });
 
         if (!response.ok) {
-            const errorData = await response.json();
-            console.error("OpenAI API error:", errorData);
+            const errorData = await response.json().catch(() => ({}));
+            console.error("Backend OpenAI error:", errorData);
             
             // Jika error karena quota habis atau auth error, nonaktifkan sementara
-            if (response.status === 401 || response.status === 429) {
+            if (response.status === 401 || response.status === 429 || response.status === 500) {
                 openAIAvailable = false;
                 console.warn("OpenAI API temporarily disabled due to error");
                 setTimeout(() => { openAIAvailable = true; }, 5 * 60 * 1000); // Coba lagi setelah 5 menit
@@ -69,7 +62,13 @@ async function callOpenAI(systemPrompt, userPrompt) {
         }
 
         const data = await response.json();
-        return data.choices[0].message.content;
+        
+        if (data.success && data.response) {
+            console.log("✅ OpenAI response received via backend");
+            return data.response;
+        } else {
+            throw new Error(data.error || 'Invalid response from backend');
+        }
     } catch (error) {
         console.error("OpenAI call error:", error);
         openAIAvailable = false;
@@ -377,7 +376,7 @@ async function generateFullAIReport(analytics) {
         return openAIAnalysisCache;
     }
 
-    console.log("🤖 Generating full AI report with OpenAI...");
+    console.log("🤖 Generating full AI report with OpenAI via backend...");
 
     // Tampilkan loading indicator di UI jika diperlukan
     if (typeof showToast === 'function') {
@@ -394,10 +393,11 @@ async function generateFullAIReport(analytics) {
     const aiReport = {
         timestamp: Date.now(),
         openAIAvailable: openAIAvailable,
+        backendUrl: BACKEND_URL,
         executiveSummary: executiveSummary,
         aiRecommendations: aiRecommendations,
         advancedPrediction: advancedPrediction,
-        disclaimer: "Analisis ini dihasilkan oleh AI (GPT-4o-mini) berdasarkan data kehadiran. Gunakan sebagai referensi, tetap lakukan verifikasi manual untuk keputusan penting."
+        disclaimer: "Analisis ini dihasilkan oleh AI (GPT-4o-mini) melalui backend proxy berdasarkan data kehadiran. Gunakan sebagai referensi, tetap lakukan verifikasi manual untuk keputusan penting."
     };
 
     // Simpan ke cache
@@ -473,6 +473,14 @@ async function renderAISummaryWithOpenAI(analytics) {
                 </div>
                 ` : ''}
                 
+                <!-- Security Notice -->
+                <div style="margin-top: 12px; padding: 8px 12px; background: rgba(0, 188, 212, 0.1); border-radius: 8px; font-size: 10px; color: #00bcd4; text-align: center; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                    <span>🔒</span>
+                    <span>API Key aman disimpan di backend proxy</span>
+                    <span>|</span>
+                    <span>🤖 Backend: ${aiReport.backendUrl || BACKEND_URL}</span>
+                </div>
+                
                 <!-- Disclaimer -->
                 <div style="margin-top: 16px; padding: 12px; background: rgba(102, 126, 234, 0.1); border-radius: 12px; font-size: 11px; color: #888; text-align: center;">
                     ${aiReport.disclaimer}
@@ -533,6 +541,7 @@ async function openAISummaryModalWithOpenAI() {
                             <h3>🧠 AI Sedang Menganalisis Data...</h3>
                             <p style="color: #888; margin-top: 10px;">Menggunakan kecerdasan buatan GPT-4o untuk analisis mendalam</p>
                             <p style="color: #888;">Menganalisis pola, tren, dan memberikan rekomendasi strategis</p>
+                            <p style="color: #00bcd4; font-size: 12px; margin-top: 15px;">🔒 API Key aman (backend proxy mode)</p>
                             <div style="margin-top: 20px;">
                                 <div style="width: 80%; height: 4px; background: #2a2a35; border-radius: 4px; overflow: hidden; margin: 0 auto;">
                                     <div style="width: 60%; height: 100%; background: linear-gradient(90deg, #667eea, #764ba2); border-radius: 4px; animation: loading 1s ease-in-out infinite;"></div>
@@ -618,4 +627,6 @@ window.generatePersonalStudentAnalysis = generatePersonalStudentAnalysis;
 window.renderAISummaryWithOpenAI = renderAISummaryWithOpenAI;
 window.callOpenAI = callOpenAI;
 
-console.log("✅ ai-openai.js V1.0 loaded - OpenAI integration for super powerful AI analysis!");
+console.log("✅ ai-openai.js V1.1 loaded - BACKEND PROXY MODE (API Key aman di server)!");
+console.log("   🔒 Semua panggilan OpenAI melalui backend proxy:", BACKEND_URL);
+console.log("   🧠 OpenAI GPT-4o-mini integration for super powerful AI analysis!");

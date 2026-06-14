@@ -1,28 +1,27 @@
-// supabase-config.js - VERSION 2.1 (FULL INTEGRATION)
-// Konfigurasi Supabase untuk penyimpanan gambar
-// Mendukung: foto profil, logo sekolah, status, chat image
-// Auto-delete file saat data dihapus atau expired
-// Fallback ke ImgBB jika Supabase gagal
+// supabase-config.js - VERSION 5.0 (SUPABASE ONLY - NO FALLBACK)
+// Semua operasi upload/delete melalui backend proxy (API Key aman di server)
+// ONLY SUPABASE STORAGE - No ImgBB fallback
+// Menggunakan FormData (file asli, bukan base64) untuk efisiensi
 // ============================================================================
 
-// Konfigurasi dari index.html
-const SUPABASE_URL = 'https://hxxvyjzpcabwuvvbgftu.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_7XOS2VtvUVGjAZI8nruo8w_P9qxJNVm';
+// ======================= KONFIGURASI BACKEND =======================
+const BACKEND_URL = "https://backendtest-azure.vercel.app";
+
+// ======================= KONFIGURASI SUPABASE (PRODUCTION) =======================
+// Menggunakan project Supabase yang aktif: aaveyddnxsxmrxwhjbsi
+const SUPABASE_URL = 'https://aaveyddnxsxmrxwhjbsi.supabase.co';
 const STORAGE_BUCKET = 'foto-absensi';
 
-// Inisialisasi Supabase
-const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-// Flag untuk fallback
-let supabaseAvailable = true;
+// Flag untuk status
+let backendAvailable = true;
 let autoDeleteInterval = null;
 
 // ======================= FUNGSI UTILITY =======================
 
 /**
  * Ekstrak path dari URL Supabase
- * Contoh: https://.../storage/v1/object/public/foto-absensi/profiles/uid/xxx.jpg
- * Menjadi: profiles/uid/xxx.jpg
+ * @param {string} url - URL lengkap dari Supabase
+ * @returns {string|null} Path file atau null
  */
 function extractPathFromUrl(url) {
     if (!url || !url.includes(SUPABASE_URL)) return null;
@@ -47,133 +46,141 @@ function extractPathFromUrl(url) {
 }
 
 /**
- * Generate unique filename
+ * Validasi file gambar
+ * @param {File} file - File yang akan divalidasi
+ * @param {string} folder - Folder tujuan (untuk menentukan max size)
+ * @returns {Object} { valid: boolean, error: string }
  */
-function generateFileName(prefix, extension) {
-    const timestamp = Date.now();
-    const randomStr = Math.random().toString(36).substring(2, 10);
-    return `${prefix}/${timestamp}_${randomStr}.${extension}`;
-}
-
-/**
- * Dapatkan ekstensi file
- */
-function getFileExtension(filename) {
-    return filename.split('.').pop().toLowerCase();
-}
-
-// ======================= FUNGSI UPLOAD KE SUPABASE =======================
-
-/**
- * Upload file ke Supabase Storage
- * @param {File} file - File yang akan diupload
- * @param {string} folder - Folder tujuan (profiles, school, status, chat)
- * @param {string} userId - ID user (untuk folder personal, opsional)
- * @returns {Promise<{success: boolean, url: string, path: string}>}
- */
-async function uploadToSupabase(file, folder = 'uploads', userId = null) {
-    if (!file) throw new Error('Tidak ada file yang dipilih');
-    
-    // Validasi tipe file
-    if (!file.type.match('image.*')) {
-        throw new Error('Hanya file gambar yang diperbolehkan!');
+function validateImageFile(file, folder = 'uploads') {
+    if (!file) {
+        return { valid: false, error: 'Tidak ada file yang dipilih' };
     }
     
-    // Validasi ukuran file (max 5MB untuk status, 2MB untuk profile/logo)
+    // Validasi tipe file
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+        return { valid: false, error: 'Hanya file gambar yang diperbolehkan! (JPG, PNG, GIF, WEBP)' };
+    }
+    
+    // Validasi ukuran file
     let maxSize = 2 * 1024 * 1024; // default 2MB
     if (folder === 'status') maxSize = 5 * 1024 * 1024;
     if (folder === 'chat') maxSize = 5 * 1024 * 1024;
     
     if (file.size > maxSize) {
-        throw new Error(`Ukuran gambar maksimal ${maxSize / (1024 * 1024)}MB!`);
+        const sizeMB = maxSize / (1024 * 1024);
+        return { valid: false, error: `Ukuran gambar maksimal ${sizeMB}MB!` };
     }
     
-    // Tentukan path lengkap
-    let fullPath;
-    const ext = getFileExtension(file.name);
-    const timestamp = Date.now();
-    const randomStr = Math.random().toString(36).substring(2, 8);
-    
-    if (userId) {
-        fullPath = `${folder}/${userId}/${timestamp}_${randomStr}.${ext}`;
-    } else {
-        fullPath = `${folder}/${timestamp}_${randomStr}.${ext}`;
+    return { valid: true, error: null };
+}
+
+// ======================= FUNGSI UPLOAD VIA BACKEND PROXY =======================
+
+/**
+ * Upload file melalui backend proxy menggunakan FormData (file asli)
+ * ONLY SUPABASE - No fallback to ImgBB
+ * @param {File} file - File yang akan diupload
+ * @param {string} folder - Folder tujuan (profiles, school, status, chat)
+ * @param {string} userId - ID user (untuk folder personal, opsional)
+ * @returns {Promise<{success: boolean, url: string, path: string}>}
+ */
+async function uploadToSupabaseBackend(file, folder = 'uploads', userId = null) {
+    // Validasi file
+    const validation = validateImageFile(file, folder);
+    if (!validation.valid) {
+        throw new Error(validation.error);
     }
     
-    console.log(`📤 Uploading to Supabase: ${fullPath}`);
+    console.log(`📤 Uploading to Supabase via backend: folder=${folder}, userId=${userId}, file=${file.name}, size=${(file.size / 1024).toFixed(2)}KB`);
     
     try {
-        const { data, error } = await supabaseClient.storage
-            .from(STORAGE_BUCKET)
-            .upload(fullPath, file, {
-                cacheControl: '3600',
-                upsert: false,
-                contentType: file.type
-            });
+        const formData = new FormData();
+        formData.append('image', file);
+        formData.append('folder', folder);
+        if (userId && userId !== 'null' && userId !== 'undefined' && userId !== '') {
+            formData.append('userId', userId);
+        }
+        formData.append('bucket', STORAGE_BUCKET);
         
-        if (error) {
-            console.error('Supabase upload error:', error);
-            supabaseAvailable = false;
-            throw new Error('Gagal mengupload ke Supabase: ' + error.message);
+        const response = await fetch(`${BACKEND_URL}/api/upload`, {
+            method: 'POST',
+            body: formData
+        });
+        
+        if (!response.ok) {
+            let errorMessage = `Upload failed: HTTP ${response.status}`;
+            try {
+                const errorData = await response.json();
+                errorMessage = errorData.error || errorMessage;
+            } catch (e) {
+                // Ignore JSON parsing error
+            }
+            throw new Error(errorMessage);
         }
         
-        // Dapatkan public URL
-        const { data: urlData } = supabaseClient.storage
-            .from(STORAGE_BUCKET)
-            .getPublicUrl(fullPath);
+        const data = await response.json();
         
-        supabaseAvailable = true;
-        console.log(`✅ Upload successful: ${urlData.publicUrl}`);
-        
-        return {
-            success: true,
-            url: urlData.publicUrl,
-            path: fullPath
-        };
+        if (data.success) {
+            console.log(`✅ Upload successful to Supabase: ${data.data.url}`);
+            backendAvailable = true;
+            return {
+                success: true,
+                url: data.data.url,
+                path: data.data.path,
+                storage: data.data.storage || 'supabase'
+            };
+        } else {
+            throw new Error(data.error || 'Upload failed');
+        }
     } catch (error) {
-        console.error('Upload error:', error);
+        console.error('Upload error:', error.message);
+        backendAvailable = false;
         throw error;
     }
 }
 
-// ======================= FUNGSI DELETE DARI SUPABASE =======================
+// ======================= FUNGSI DELETE VIA BACKEND PROXY =======================
 
 /**
- * Hapus file dari Supabase Storage
+ * Hapus file melalui backend proxy (AMAN)
  * @param {string} fileUrlOrPath - URL atau path file
  * @returns {Promise<boolean>}
  */
-async function deleteFromSupabase(fileUrlOrPath) {
+async function deleteFromSupabaseBackend(fileUrlOrPath) {
     if (!fileUrlOrPath) return false;
     
-    // Ekstrak path
-    let path = fileUrlOrPath;
-    if (fileUrlOrPath.includes(SUPABASE_URL) || fileUrlOrPath.includes('supabase.co')) {
-        path = extractPathFromUrl(fileUrlOrPath);
-        if (!path) {
-            console.warn('Could not extract path from URL:', fileUrlOrPath);
-            return false;
-        }
+    // Jika bukan URL Supabase, skip
+    if (!fileUrlOrPath.includes(SUPABASE_URL) && !fileUrlOrPath.includes('supabase.co')) {
+        console.log('Not a Supabase URL, skipping delete');
+        return true;
     }
     
-    if (!path) return false;
-    
-    console.log(`🗑️ Deleting from Supabase: ${path}`);
+    console.log(`🗑️ Deleting via backend proxy: ${fileUrlOrPath.substring(0, 100)}...`);
     
     try {
-        const { error } = await supabaseClient.storage
-            .from(STORAGE_BUCKET)
-            .remove([path]);
+        const response = await fetch(`${BACKEND_URL}/api/storage/delete`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                fileUrl: fileUrlOrPath,
+                bucket: STORAGE_BUCKET
+            })
+        });
         
-        if (error) {
-            console.error('Supabase delete error:', error);
+        const data = await response.json();
+        
+        if (data.success) {
+            console.log(`✅ Deleted successfully via backend`);
+            return true;
+        } else {
+            console.warn(`Delete failed: ${data.message || 'Unknown error'}`);
             return false;
         }
-        
-        console.log(`✅ Deleted: ${path}`);
-        return true;
     } catch (error) {
-        console.error('Delete error:', error);
+        console.error('Delete via backend error:', error.message);
         return false;
     }
 }
@@ -182,25 +189,36 @@ async function deleteFromSupabase(fileUrlOrPath) {
 
 /**
  * Upload foto profil
+ * @param {File} file - File gambar
+ * @param {string} userId - ID user
+ * @returns {Promise<string>} URL foto profil
  */
 async function uploadProfilePhotoToSupabase(file, userId) {
-    const result = await uploadToSupabase(file, 'profiles', userId);
+    if (!userId) {
+        throw new Error('User ID is required for profile photo upload');
+    }
+    const result = await uploadToSupabaseBackend(file, 'profiles', userId);
     return result.url;
 }
 
 /**
  * Upload logo sekolah
+ * @param {File} file - File gambar logo
+ * @returns {Promise<string>} URL logo
  */
 async function uploadSchoolLogoToSupabase(file) {
-    const result = await uploadToSupabase(file, 'school');
+    const result = await uploadToSupabaseBackend(file, 'school');
     return result.url;
 }
 
 /**
  * Upload status image (dengan auto-delete setelah 24 jam)
+ * @param {File} file - File gambar
+ * @param {string} userId - ID user
+ * @returns {Promise<{url: string, path: string}>}
  */
 async function uploadStatusImageToSupabase(file, userId) {
-    const result = await uploadToSupabase(file, 'status', userId);
+    const result = await uploadToSupabaseBackend(file, 'status', userId);
     return {
         url: result.url,
         path: result.path
@@ -209,10 +227,30 @@ async function uploadStatusImageToSupabase(file, userId) {
 
 /**
  * Upload chat image
+ * @param {File} file - File gambar
+ * @returns {Promise<string>} URL gambar chat
  */
 async function uploadChatImageToSupabase(file) {
-    const result = await uploadToSupabase(file, 'chat');
+    const result = await uploadToSupabaseBackend(file, 'chat');
     return result.url;
+}
+
+/**
+ * Upload dengan fallback (sekarang hanya Supabase)
+ * @param {File} file - File yang akan diupload
+ * @param {string} folder - Folder tujuan
+ * @param {string} userId - ID user (opsional)
+ * @returns {Promise<{success: boolean, url: string, path: string|null}>}
+ */
+async function uploadWithFallback(file, folder, userId = null) {
+    // Sekarang hanya menggunakan Supabase, tidak ada fallback
+    const result = await uploadToSupabaseBackend(file, folder, userId);
+    return { 
+        success: true, 
+        url: result.url, 
+        path: result.path,
+        storage: result.storage
+    };
 }
 
 // ======================= DELETE FOTO LAMA SAAT UPDATE =======================
@@ -226,16 +264,21 @@ async function deleteOldProfilePhoto(userId, newPhotoUrl) {
     if (!userId) return;
     
     try {
+        if (typeof db === 'undefined' || !db) {
+            console.warn('Firebase db not available, skipping old photo deletion');
+            return;
+        }
+        
         const snapshot = await db.ref(`users_auth/${userId}`).once('value');
         const userData = snapshot.val();
         const oldPhotoUrl = userData?.photoUrl;
         
-        if (oldPhotoUrl && oldPhotoUrl !== newPhotoUrl && oldPhotoUrl.includes(SUPABASE_URL)) {
+        if (oldPhotoUrl && oldPhotoUrl !== newPhotoUrl && oldPhotoUrl !== 'null' && oldPhotoUrl !== 'undefined') {
             console.log(`🗑️ Menghapus foto profil lama untuk user ${userId}`);
-            await deleteFromSupabase(oldPhotoUrl);
+            await deleteFromSupabaseBackend(oldPhotoUrl);
         }
     } catch (error) {
-        console.error('Error deleting old profile photo:', error);
+        console.error('Error deleting old profile photo:', error.message);
     }
 }
 
@@ -245,25 +288,31 @@ async function deleteOldProfilePhoto(userId, newPhotoUrl) {
  */
 async function deleteOldSchoolLogo(newLogoUrl) {
     try {
+        if (typeof db === 'undefined' || !db) {
+            console.warn('Firebase db not available, skipping old logo deletion');
+            return;
+        }
+        
         const snapshot = await db.ref('system_config/schoolLogo').once('value');
         const oldLogoUrl = snapshot.val();
         
-        if (oldLogoUrl && oldLogoUrl !== newLogoUrl && oldLogoUrl.includes(SUPABASE_URL)) {
+        if (oldLogoUrl && oldLogoUrl !== newLogoUrl && oldLogoUrl !== 'null' && oldLogoUrl !== 'undefined') {
             console.log('🗑️ Menghapus logo sekolah lama');
-            await deleteFromSupabase(oldLogoUrl);
+            await deleteFromSupabaseBackend(oldLogoUrl);
         }
     } catch (error) {
-        console.error('Error deleting old school logo:', error);
+        console.error('Error deleting old school logo:', error.message);
     }
 }
 
 /**
  * Hapus gambar status tertentu (saat user menghapus status manual)
  * @param {string} statusMediaUrl - URL gambar status
+ * @returns {Promise<boolean>}
  */
 async function deleteStatusImage(statusMediaUrl) {
-    if (statusMediaUrl && statusMediaUrl.includes(SUPABASE_URL)) {
-        return await deleteFromSupabase(statusMediaUrl);
+    if (statusMediaUrl && statusMediaUrl !== 'null' && statusMediaUrl !== 'undefined') {
+        return await deleteFromSupabaseBackend(statusMediaUrl);
     }
     return false;
 }
@@ -276,6 +325,11 @@ async function deleteStatusImage(statusMediaUrl) {
  */
 async function deleteExpiredStatusImages() {
     console.log('🕐 Checking for expired statuses...');
+    
+    if (typeof db === 'undefined' || !db) {
+        console.warn('Firebase not available, skipping expired status cleanup');
+        return;
+    }
     
     try {
         const snapshot = await db.ref('statuses').once('value');
@@ -291,41 +345,36 @@ async function deleteExpiredStatusImages() {
         let deletedCount = 0;
         let expiredStatuses = [];
         
-        // Loop melalui semua user yang punya status
         for (const [userId, userStatuses] of Object.entries(allStatuses)) {
+            if (!userStatuses) continue;
+            
             for (const [statusId, statusData] of Object.entries(userStatuses)) {
-                const createdAt = statusData.createdAt;
-                
-                // Cek apakah status sudah expired (> 24 jam)
+                const createdAt = statusData?.createdAt;
                 if (createdAt && (now - createdAt) > twentyFourHours) {
                     expiredStatuses.push({ userId, statusId, statusData });
                 }
             }
         }
         
-        // Hapus status yang expired
         for (const { userId, statusId, statusData } of expiredStatuses) {
-            // Hapus gambar dari Supabase jika ada
-            if (statusData.mediaUrl && statusData.mediaUrl.includes(SUPABASE_URL)) {
-                const deleted = await deleteFromSupabase(statusData.mediaUrl);
+            if (statusData.mediaUrl && statusData.mediaUrl !== 'null' && statusData.mediaUrl !== 'undefined') {
+                const deleted = await deleteFromSupabaseBackend(statusData.mediaUrl);
                 if (deleted) deletedCount++;
             }
-            
-            // Hapus dari Firebase
             await db.ref(`statuses/${userId}/${statusId}`).remove();
             console.log(`🗑️ Expired status deleted: ${userId}/${statusId}`);
         }
         
         if (deletedCount > 0) {
-            console.log(`✅ Deleted ${deletedCount} expired status images from Supabase`);
+            console.log(`✅ Deleted ${deletedCount} expired status images`);
         }
         
         if (expiredStatuses.length > 0) {
-            console.log(`✅ Removed ${expiredStatuses.length} expired statuses from Firebase`);
+            console.log(`✅ Removed ${expiredStatuses.length} expired statuses`);
         }
         
     } catch (error) {
-        console.error('Error deleting expired statuses:', error);
+        console.error('Error deleting expired statuses:', error.message);
     }
 }
 
@@ -333,17 +382,16 @@ async function deleteExpiredStatusImages() {
  * Start auto-delete interval (setiap 1 jam)
  */
 function startAutoDeleteExpiredStatus() {
-    if (autoDeleteInterval) clearInterval(autoDeleteInterval);
+    if (autoDeleteInterval) {
+        clearInterval(autoDeleteInterval);
+    }
     
-    // Jalankan setiap 1 jam
     autoDeleteInterval = setInterval(() => {
         console.log('🕐 Running scheduled expired status cleanup...');
         deleteExpiredStatusImages();
-    }, 60 * 60 * 1000); // 1 jam
+    }, 60 * 60 * 1000);
     
-    // Jalankan sekali saat startup (delay 5 detik)
     setTimeout(() => deleteExpiredStatusImages(), 5000);
-    
     console.log('✅ Auto-delete for expired statuses started (every 1 hour)');
 }
 
@@ -358,126 +406,104 @@ function stopAutoDeleteExpiredStatus() {
     }
 }
 
-// ======================= FALLBACK KE IMGBB =======================
+// ======================= FUNGSI READ-ONLY =======================
 
 /**
- * Upload ke ImgBB (fallback jika Supabase gagal)
- */
-async function uploadToImgBB(file) {
-    const formData = new FormData();
-    formData.append('image', file);
-    
-    const response = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_KEY}`, {
-        method: 'POST',
-        body: formData
-    });
-    
-    const data = await response.json();
-    if (!data.success) {
-        throw new Error('ImgBB upload failed: ' + (data.error?.message || 'Unknown error'));
-    }
-    
-    return data.data.image.url;
-}
-
-/**
- * Upload dengan fallback (coba Supabase dulu, gagal pakai ImgBB)
- * @param {File} file - File yang akan diupload
- * @param {string} folder - Folder tujuan
- * @param {string} userId - ID user (opsional)
- * @returns {Promise<{success: boolean, url: string, path: string|null, isFallback: boolean}>}
- */
-async function uploadWithFallback(file, folder, userId = null) {
-    if (supabaseAvailable) {
-        try {
-            const result = await uploadToSupabase(file, folder, userId);
-            return { success: true, url: result.url, path: result.path, isFallback: false };
-        } catch (error) {
-            console.warn('Supabase failed, falling back to ImgBB:', error.message);
-            supabaseAvailable = false;
-            try {
-                const url = await uploadToImgBB(file);
-                return { success: true, url: url, path: null, isFallback: true };
-            } catch (fallbackError) {
-                console.error('ImgBB fallback also failed:', fallbackError);
-                throw fallbackError;
-            }
-        }
-    } else {
-        console.log('Supabase not available, using ImgBB fallback');
-        const url = await uploadToImgBB(file);
-        return { success: true, url: url, path: null, isFallback: true };
-    }
-}
-
-// ======================= FUNGSI UTILITY LAINNYA =======================
-
-/**
- * Mendapatkan public URL dari path
+ * Mendapatkan public URL dari path (untuk menampilkan gambar)
+ * @param {string} filePath - Path file di storage
+ * @returns {string} Public URL
  */
 function getPublicUrl(filePath) {
-    const { data } = supabaseClient.storage.from(STORAGE_BUCKET).getPublicUrl(filePath);
-    return data.publicUrl;
+    if (!filePath) return '';
+    if (filePath.startsWith('http')) return filePath;
+    return `${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}/${filePath}`;
 }
 
 /**
- * List semua file di folder tertentu
+ * List semua file di folder tertentu (read-only)
+ * @param {string} folderPath - Path folder
+ * @returns {Promise<Array>} List file
  */
 async function listFilesInFolder(folderPath = '') {
-    const { data, error } = await supabaseClient.storage
-        .from(STORAGE_BUCKET)
-        .list(folderPath, { limit: 100 });
-    
-    if (error) {
-        console.error('List files error:', error);
+    try {
+        const response = await fetch(`${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}/${folderPath}?list`);
+        if (!response.ok) return [];
+        const data = await response.json();
+        return data || [];
+    } catch (error) {
+        console.error('List files error:', error.message);
         return [];
     }
-    
-    return data;
 }
+
+// ======================= CEK KONEKSI BACKEND =======================
 
 /**
- * Hapus folder dan isinya
+ * Cek koneksi ke backend
+ * @returns {Promise<boolean>}
  */
-async function deleteFolder(folderPath) {
-    const files = await listFilesInFolder(folderPath);
-    if (files.length === 0) return true;
-    
-    const filePaths = files.map(file => `${folderPath}/${file.name}`);
-    const { error } = await supabaseClient.storage
-        .from(STORAGE_BUCKET)
-        .remove(filePaths);
-    
-    if (error) {
-        console.error('Delete folder error:', error);
+async function checkBackendConnection() {
+    try {
+        const response = await fetch(`${BACKEND_URL}/api/health`, {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await response.json();
+        const supabaseActive = data.services?.supabase === true;
+        console.log(`🔌 Backend: ${data.success ? 'Connected' : 'Failed'}, Supabase: ${supabaseActive ? 'Active' : 'Inactive'}`);
+        return data.success === true && supabaseActive;
+    } catch (error) {
+        console.warn('Backend connection check failed:', error.message);
         return false;
     }
-    
-    console.log(`✅ Folder deleted: ${folderPath} (${files.length} files)`);
-    return true;
 }
 
-console.log('✅ supabase-config.js V2.1 loaded with bucket:', STORAGE_BUCKET);
+// Jalankan pengecekan koneksi saat load
+setTimeout(() => {
+    checkBackendConnection().then(isConnected => {
+        if (isConnected) {
+            console.log('✅ Backend connected with Supabase active:', BACKEND_URL);
+        } else {
+            console.warn('⚠️ Backend or Supabase not available:', BACKEND_URL);
+        }
+    });
+}, 1000);
 
 // ======================= EKSPOR KE GLOBAL =======================
+
+// Konfigurasi
 window.SUPABASE_URL = SUPABASE_URL;
-window.SUPABASE_ANON_KEY = SUPABASE_ANON_KEY;
 window.STORAGE_BUCKET = STORAGE_BUCKET;
-window.supabaseClient = supabaseClient;
-window.uploadToSupabase = uploadToSupabase;
-window.deleteFromSupabase = deleteFromSupabase;
+window.BACKEND_STORAGE_URL = BACKEND_URL;
+
+// Write operations (via backend)
+window.uploadToSupabase = uploadToSupabaseBackend;
+window.deleteFromSupabase = deleteFromSupabaseBackend;
 window.uploadProfilePhotoToSupabase = uploadProfilePhotoToSupabase;
 window.uploadStatusImageToSupabase = uploadStatusImageToSupabase;
 window.uploadSchoolLogoToSupabase = uploadSchoolLogoToSupabase;
 window.uploadChatImageToSupabase = uploadChatImageToSupabase;
 window.uploadWithFallback = uploadWithFallback;
+
+// Delete helpers
 window.deleteExpiredStatusImages = deleteExpiredStatusImages;
 window.deleteOldProfilePhoto = deleteOldProfilePhoto;
 window.deleteOldSchoolLogo = deleteOldSchoolLogo;
 window.deleteStatusImage = deleteStatusImage;
+
+// Auto-delete
 window.startAutoDeleteExpiredStatus = startAutoDeleteExpiredStatus;
 window.stopAutoDeleteExpiredStatus = stopAutoDeleteExpiredStatus;
+
+// Utility functions
 window.extractPathFromUrl = extractPathFromUrl;
 window.getPublicUrl = getPublicUrl;
 window.listFilesInFolder = listFilesInFolder;
-window.deleteFolder = deleteFolder;
+window.validateImageFile = validateImageFile;
+window.checkBackendConnection = checkBackendConnection;
+
+console.log('✅ supabase-config.js V5.0 loaded - SUPABASE ONLY (No ImgBB fallback)!');
+console.log(`   🔒 Backend: ${BACKEND_URL}`);
+console.log(`   🗄️ Supabase: ${SUPABASE_URL}`);
+console.log(`   📁 Storage bucket: ${STORAGE_BUCKET}`);
+console.log(`   📸 Using FormData (file asli) for upload - lebih efisien!`);

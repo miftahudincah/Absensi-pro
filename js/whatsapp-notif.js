@@ -1,13 +1,22 @@
-// whatsapp-notif.js - VERSION 1.0
+// whatsapp-notif.js - VERSION 2.0 (BACKEND PROXY MODE - AMAN)
 // WhatsApp Gateway Integration untuk notifikasi absensi
-// Support: Fonnte API, WABA, Wati
+// Support: Fonnte API (via backend proxy)
+//
+// PERUBAHAN V2.0:
+// - Menghapus API Key dari frontend (keamanan)
+// - Semua panggilan WhatsApp melalui backend proxy
+// - Backend endpoint: https://backendtest-azure.vercel.app/api/whatsapp/send
+// - API Key hanya tersimpan di environment variable backend
 // ============================================================================
 
 let whatsappInitialized = false;
 let pendingNotificationQueue = [];
 let isProcessingQueue = false;
 
-// ======================= KONFIGURASI =======================
+// ======================= KONFIGURASI BACKEND =======================
+const BACKEND_URL = "https://backendtest-azure.vercel.app";
+
+// ======================= TEMPLATE PESAN =======================
 
 const NOTIF_TEMPLATES = {
     check_in: {
@@ -37,6 +46,14 @@ const NOTIF_TEMPLATES = {
             const typeText = type === 'sakit' ? 'Sakit' : 'Izin';
             return `Izin *${typeText}* untuk *${studentName}* pada tanggal *${date}* telah disetujui.\n\nTerima kasih atas informasinya.`;
         }
+    },
+    broadcast: {
+        title: '📢 PENGUMUMAN SEKOLAH',
+        body: (message) => message
+    },
+    test: {
+        title: '🔔 Test Notifikasi WhatsApp',
+        body: (message) => message || 'Ini adalah pesan test dari Sistem Absensi. Jika Anda menerima pesan ini, notifikasi WhatsApp berfungsi dengan baik! ✅'
     }
 };
 
@@ -78,61 +95,14 @@ async function getParentWhatsAppNumber(studentId) {
     }
 }
 
-// ======================= SEND WHATSAPP VIA FONNTE =======================
+// ======================= SEND WHATSAPP VIA BACKEND PROXY =======================
 
 /**
- * Kirim pesan via Fonnte API
+ * Kirim pesan WhatsApp melalui backend proxy (AMAN)
  * @param {string} phoneNumber - Nomor tujuan (format: 62xxxx)
- * @param {string} message - Pesan yang akan dikirim
+ * @param {string} title - Judul pesan
+ * @param {string} message - Isi pesan
  * @returns {Promise<boolean>}
- */
-async function sendViaFonnte(phoneNumber, message) {
-    const apiKey = window.WHATSAPP_CONFIG?.fonnteApiKey;
-    if (!apiKey || apiKey === 'YOUR_FONNTE_API_KEY') {
-        console.warn('⚠️ Fonnte API Key belum dikonfigurasi');
-        return false;
-    }
-    
-    try {
-        const response = await fetch('https://api.fonnte.com/send', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': apiKey
-            },
-            body: JSON.stringify({
-                target: phoneNumber,
-                message: message,
-                countryCode: '62'
-            })
-        });
-        
-        const result = await response.json();
-        
-        if (result.status === true) {
-            console.log(`✅ WhatsApp sent to ${phoneNumber}`);
-            return true;
-        } else {
-            console.error('Fonnte error:', result);
-            return false;
-        }
-    } catch (error) {
-        console.error('Fonnte send error:', error);
-        return false;
-    }
-}
-
-/**
- * Kirim pesan via WhatsApp Business API (fallback)
- */
-async function sendViaWABA(phoneNumber, message) {
-    // Implementasi jika pakai WABA official
-    console.warn('WABA not implemented yet');
-    return false;
-}
-
-/**
- * Kirim notifikasi WhatsApp (auto pilih gateway)
  */
 async function sendWhatsAppNotification(phoneNumber, title, message) {
     if (!window.WHATSAPP_CONFIG?.enabled) {
@@ -145,23 +115,136 @@ async function sendWhatsAppNotification(phoneNumber, title, message) {
         return false;
     }
     
-    const fullMessage = `*📢 SISTEM ABSENSI SEKOLAH*\n\n*${title}*\n\n${message}\n\n---\n📱 Sistem Absensi IoT - Real-time`;
+    // Format nomor telepon
+    let formattedPhone = phoneNumber.toString().replace(/[^0-9]/g, '');
+    if (formattedPhone.startsWith('0')) formattedPhone = '62' + formattedPhone.substring(1);
+    if (!formattedPhone.startsWith('62')) formattedPhone = '62' + formattedPhone;
     
-    const gateway = window.WHATSAPP_CONFIG?.gateway || 'fonnte';
+    const fullMessage = `*📢 SISTEM ABSENSI SEKOLAH*\n\n*${title}*\n\n${message}\n\n---\n📱 Sistem Absensi IoT - Real-time\n🔒 Notifikasi via Backend Proxy`;
     
-    let success = false;
-    if (gateway === 'fonnte') {
-        success = await sendViaFonnte(phoneNumber, fullMessage);
-    } else if (gateway === 'waba') {
-        success = await sendViaWABA(phoneNumber, fullMessage);
+    console.log(`📱 Sending WhatsApp via backend to ${formattedPhone}...`);
+    
+    try {
+        const response = await fetch(`${BACKEND_URL}/api/whatsapp/send`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                phoneNumber: formattedPhone,
+                message: fullMessage
+            })
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error || `HTTP ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            console.log(`✅ WhatsApp sent to ${formattedPhone}`);
+            
+            // Log notifikasi
+            if (typeof logActivity === 'function') {
+                logActivity('whatsapp_notification', `Kirim notif ke ${formattedPhone}: ${title} - SUCCESS via backend`);
+            }
+            
+            return true;
+        } else {
+            console.error('Backend WhatsApp error:', data.error);
+            return false;
+        }
+    } catch (error) {
+        console.error('WhatsApp send error:', error);
+        
+        // Log error
+        if (typeof logActivity === 'function') {
+            logActivity('whatsapp_notification_error', `Gagal kirim ke ${formattedPhone}: ${error.message}`);
+        }
+        
+        return false;
+    }
+}
+
+/**
+ * Kirim pesan WhatsApp broadcast via backend (untuk admin)
+ * @param {string} message - Pesan broadcast
+ * @param {Array<string>} phoneNumbers - Array nomor tujuan (opsional, jika kosong kirim ke semua)
+ * @returns {Promise<{success: boolean, results: Array}>}
+ */
+async function sendWhatsAppBroadcast(message, phoneNumbers = null) {
+    if (!window.WHATSAPP_CONFIG?.enabled) {
+        console.log('WhatsApp broadcast disabled');
+        return { success: false, error: 'WhatsApp disabled' };
     }
     
-    // Log notifikasi
-    if (typeof logActivity === 'function') {
-        logActivity('whatsapp_notification', `Kirim notif ke ${phoneNumber}: ${title} - ${success ? 'SUCCESS' : 'FAILED'}`);
+    if (!message) {
+        return { success: false, error: 'Message is required' };
     }
     
-    return success;
+    console.log(`📢 Sending WhatsApp broadcast via backend...`);
+    
+    try {
+        let targetPhones = phoneNumbers;
+        
+        // Jika tidak ada nomor yang ditentukan, ambil semua kontak orang tua
+        if (!targetPhones || targetPhones.length === 0) {
+            const snapshot = await db.ref('parent_contacts').once('value');
+            const contacts = snapshot.val();
+            targetPhones = [];
+            
+            if (contacts) {
+                for (const [studentId, contact] of Object.entries(contacts)) {
+                    if (contact.phoneNumber) {
+                        let phone = contact.phoneNumber.replace(/[^0-9]/g, '');
+                        if (phone.startsWith('0')) phone = '62' + phone.substring(1);
+                        if (!phone.startsWith('62')) phone = '62' + phone;
+                        targetPhones.push(phone);
+                    }
+                }
+            }
+        }
+        
+        if (targetPhones.length === 0) {
+            return { success: false, error: 'No phone numbers found' };
+        }
+        
+        const results = [];
+        
+        for (const phone of targetPhones) {
+            const result = await sendWhatsAppNotification(phone, NOTIF_TEMPLATES.broadcast.title, message);
+            results.push({ phone, success: result });
+            await new Promise(resolve => setTimeout(resolve, 1000)); // delay 1 detik antar pengiriman
+        }
+        
+        const successCount = results.filter(r => r.success).length;
+        
+        return {
+            success: successCount > 0,
+            results,
+            total: targetPhones.length,
+            successCount,
+            failedCount: targetPhones.length - successCount
+        };
+    } catch (error) {
+        console.error('Broadcast error:', error);
+        return { success: false, error: error.message };
+    }
+}
+
+/**
+ * Kirim pesan WhatsApp test (untuk testing koneksi)
+ * @param {string} phoneNumber - Nomor tujuan test
+ * @returns {Promise<boolean>}
+ */
+async function sendWhatsAppTest(phoneNumber) {
+    return await sendWhatsAppNotification(
+        phoneNumber,
+        NOTIF_TEMPLATES.test.title,
+        NOTIF_TEMPLATES.test.body()
+    );
 }
 
 // ======================= NOTIFIKASI ABSENSI =======================
@@ -266,8 +349,10 @@ async function processNotificationQueue() {
  * Simpan nomor WhatsApp orang tua
  */
 async function saveParentContact(studentId, studentName, phoneNumber, relation = 'orang_tua') {
-    if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'guru')) {
-        showToast('⛔ Hanya Admin/Guru yang dapat mengedit kontak orang tua!', 'error');
+    if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'developer')) {
+        if (typeof showToast === 'function') {
+            showToast('⛔ Hanya Admin/Developer yang dapat mengedit kontak orang tua!', 'error');
+        }
         return false;
     }
     
@@ -290,7 +375,9 @@ async function saveParentContact(studentId, studentName, phoneNumber, relation =
         // Update juga di data siswa
         await db.ref(`users/${studentId}/wa_ortu`).set(formattedNumber);
         
-        showToast(`✅ Nomor WhatsApp ${studentName} berhasil disimpan!`, 'success');
+        if (typeof showToast === 'function') {
+            showToast(`✅ Nomor WhatsApp ${studentName} berhasil disimpan!`, 'success');
+        }
         
         if (typeof logActivity === 'function') {
             logActivity('save_parent_contact', `Simpan kontak orang tua ${studentName} (ID: ${studentId}) - ${formattedNumber}`);
@@ -299,7 +386,9 @@ async function saveParentContact(studentId, studentName, phoneNumber, relation =
         return true;
     } catch (error) {
         console.error('Save parent contact error:', error);
-        showToast('❌ Gagal menyimpan nomor', 'error');
+        if (typeof showToast === 'function') {
+            showToast('❌ Gagal menyimpan nomor', 'error');
+        }
         return false;
     }
 }
@@ -314,6 +403,52 @@ async function getParentContact(studentId) {
     } catch (error) {
         console.error('Get parent contact error:', error);
         return null;
+    }
+}
+
+/**
+ * Hapus kontak orang tua
+ */
+async function deleteParentContact(studentId) {
+    if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'developer')) {
+        if (typeof showToast === 'function') {
+            showToast('⛔ Hanya Admin/Developer yang dapat menghapus kontak!', 'error');
+        }
+        return false;
+    }
+    
+    try {
+        await db.ref(`parent_contacts/${studentId}`).remove();
+        await db.ref(`users/${studentId}/wa_ortu`).remove();
+        
+        if (typeof showToast === 'function') {
+            showToast('✅ Kontak orang tua berhasil dihapus!', 'success');
+        }
+        
+        return true;
+    } catch (error) {
+        console.error('Delete parent contact error:', error);
+        return false;
+    }
+}
+
+/**
+ * Dapatkan semua kontak orang tua
+ */
+async function getAllParentContacts() {
+    try {
+        const snapshot = await db.ref('parent_contacts').once('value');
+        const contacts = snapshot.val();
+        
+        if (!contacts) return [];
+        
+        return Object.entries(contacts).map(([studentId, data]) => ({
+            studentId,
+            ...data
+        }));
+    } catch (error) {
+        console.error('Get all contacts error:', error);
+        return [];
     }
 }
 
@@ -346,6 +481,9 @@ function openParentContactModal(studentId, studentName) {
                             <option value="wali">Wali</option>
                         </select>
                     </div>
+                    <div class="form-group">
+                        <button class="btn-secondary" onclick="testWhatsAppNumber()" style="width: 100%; margin-top: 10px;">📱 Test Kirim Pesan</button>
+                    </div>
                     <div class="modal-actions">
                         <button class="btn-cancel" onclick="closeModal('modal-parent-contact')">Batal</button>
                         <button class="btn-save" onclick="saveParentContactFromModal('${studentId}', '${escapeHtml(studentName)}')">💾 Simpan</button>
@@ -373,7 +511,9 @@ async function saveParentContactFromModal(studentId, studentName) {
     const relation = document.getElementById('parentRelation').value;
     
     if (!phoneNumber) {
-        showToast('Masukkan nomor WhatsApp!', 'error');
+        if (typeof showToast === 'function') {
+            showToast('Masukkan nomor WhatsApp!', 'error');
+        }
         return;
     }
     
@@ -381,17 +521,34 @@ async function saveParentContactFromModal(studentId, studentName) {
     closeModal('modal-parent-contact');
 }
 
-// ======================= INISIALISASI =======================
-
-function initWhatsAppNotification() {
-    if (whatsappInitialized) return;
-    whatsappInitialized = true;
+async function testWhatsAppNumber() {
+    const phoneNumber = document.getElementById('parentPhoneNumber').value.trim();
     
-    console.log('📱 WhatsApp Notification system initialized');
+    if (!phoneNumber) {
+        if (typeof showToast === 'function') {
+            showToast('Masukkan nomor WhatsApp terlebih dahulu!', 'error');
+        }
+        return;
+    }
     
-    // Setup listener untuk auto-send notifikasi
-    setupAutoNotificationListener();
+    if (typeof showToast === 'function') {
+        showToast('📱 Mengirim pesan test...', 'info');
+    }
+    
+    const success = await sendWhatsAppTest(phoneNumber);
+    
+    if (success) {
+        if (typeof showToast === 'function') {
+            showToast('✅ Pesan test berhasil dikirim! Cek WhatsApp Anda.', 'success');
+        }
+    } else {
+        if (typeof showToast === 'function') {
+            showToast('❌ Gagal mengirim pesan test. Periksa konfigurasi backend.', 'error');
+        }
+    }
 }
+
+// ======================= SETUP AUTO NOTIFICATION LISTENER =======================
 
 function setupAutoNotificationListener() {
     // Listener untuk absensi masuk
@@ -425,14 +582,39 @@ function setupAutoNotificationListener() {
     });
 }
 
-// Ekspor ke global
+// ======================= INISIALISASI =======================
+
+function initWhatsAppNotification() {
+    if (whatsappInitialized) return;
+    whatsappInitialized = true;
+    
+    console.log('📱 WhatsApp Notification system initialized (Backend Proxy Mode)');
+    console.log(`   🔒 Backend URL: ${BACKEND_URL}`);
+    console.log('   🔒 API Key aman disimpan di server');
+    
+    // Setup listener untuk auto-send notifikasi jika enabled
+    if (window.WHATSAPP_CONFIG?.enabled && window.WHATSAPP_CONFIG?.sendOnCheckIn) {
+        setupAutoNotificationListener();
+        console.log('   ✅ Auto-notification listener enabled');
+    }
+}
+
+// ======================= EKSPOR KE GLOBAL =======================
+
+window.sendWhatsAppNotification = sendWhatsAppNotification;
+window.sendWhatsAppBroadcast = sendWhatsAppBroadcast;
+window.sendWhatsAppTest = sendWhatsAppTest;
 window.sendCheckInNotification = sendCheckInNotification;
 window.sendCheckOutNotification = sendCheckOutNotification;
 window.sendAlphaNotification = sendAlphaNotification;
 window.sendIzinApprovedNotification = sendIzinApprovedNotification;
 window.saveParentContact = saveParentContact;
 window.getParentContact = getParentContact;
+window.deleteParentContact = deleteParentContact;
+window.getAllParentContacts = getAllParentContacts;
 window.openParentContactModal = openParentContactModal;
+window.saveParentContactFromModal = saveParentContactFromModal;
+window.testWhatsAppNumber = testWhatsAppNumber;
 window.initWhatsAppNotification = initWhatsAppNotification;
 
-console.log('✅ whatsapp-notif.js loaded');
+console.log('✅ whatsapp-notif.js V2.0 loaded - BACKEND PROXY MODE (API Key aman di server)!');
