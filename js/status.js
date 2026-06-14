@@ -1,11 +1,12 @@
-// status.js - VERSION 5.0 (FULLY SYNCED WITH SUPABASE + REAL-TIME FRIENDS ONLY)
+// status.js - VERSION 5.1 (FULLY SYNCED WITH SUPABASE + SOCIAL NOTIFICATIONS)
 // Fitur Status: upload teks/gambar ke Supabase, auto-delete 24 jam, reply/balas status,
 // daftar orang yang melihat (viewers), notifikasi real-time.
-// PERUBAHAN V5.0:
+// PERUBAHAN V5.1:
 // - Integrasi penuh dengan Supabase untuk upload gambar status
 // - Status hanya bisa dilihat oleh TEMAN (bukan semua user)
 // - Auto-delete gambar dari Supabase saat status expired
 // - Notifikasi real-time untuk status baru dari teman
+// - Update badge sosial untuk status baru yang belum dilihat
 // ============================================================================
 
 // ======================= KONFIGURASI =======================
@@ -88,7 +89,7 @@ function initStatusSystem() {
         return;
     }
     
-    console.log("📸 Initializing status system v5.0...");
+    console.log("📸 Initializing status system v5.1...");
     setupStatusListener();
     startStatusExpiryChecker();
     
@@ -145,10 +146,14 @@ function setupStatusListener() {
         const now = Date.now();
         const twentyFourHours = 24 * 60 * 60 * 1000;
         let allStatuses = [];
+        let newStatusesFromFriends = []; // Untuk tracking notifikasi
         
         if (data) {
             for (const [userId, userStatuses] of Object.entries(data)) {
                 if (!userStatuses) continue;
+                
+                // Cek apakah user ini teman
+                const isFriendUser = await isFriend(userId);
                 
                 for (const [statusId, status] of Object.entries(userStatuses)) {
                     if (!status) continue;
@@ -174,11 +179,26 @@ function setupStatusListener() {
                     
                     // Hanya tambahkan status yang belum expired
                     if (createdAt && (now - createdAt) < twentyFourHours) {
+                        // Cek apakah status ini baru (belum dilihat) dan dari teman
+                        const isNewForCurrentUser = userId !== currentUser.uid && 
+                            (!status.viewedBy || !status.viewedBy[currentUser.uid]);
+                        
                         allStatuses.push({
                             id: statusId,
                             userId: userId,
+                            isNew: isNewForCurrentUser,
                             ...status
                         });
+                        
+                        if (isNewForCurrentUser && isFriendUser) {
+                            newStatusesFromFriends.push({
+                                userId: userId,
+                                userName: status.userName,
+                                userPhoto: status.userPhoto,
+                                statusId: statusId,
+                                createdAt: createdAt
+                            });
+                        }
                     }
                 }
             }
@@ -198,15 +218,70 @@ function setupStatusListener() {
         
         // Kelompokkan berdasarkan user untuk status bar
         const groupedByUser = {};
-        filteredStatuses.forEach(status => {
+        for (const status of filteredStatuses) {
             if (!groupedByUser[status.userId]) groupedByUser[status.userId] = [];
             groupedByUser[status.userId].push(status);
-        });
+        }
         
         await renderStatusBar(groupedByUser);
         currentStatusList = filteredStatuses;
-        checkAndNotifyNewStatus(filteredStatuses);
+        
+        // Update badge sosial untuk status baru
+        updateUnviewedStatusCount(filteredStatuses);
+        
+        // Notifikasi untuk status baru dari teman
+        if (newStatusesFromFriends.length > 0 && typeof window.showToast === 'function') {
+            for (const newStatus of newStatusesFromFriends.slice(0, 3)) {
+                window.showToast(`📸 ${newStatus.userName || 'Teman'} membagikan status baru`, "info");
+            }
+            
+            // Notifikasi browser
+            if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+                const firstNew = newStatusesFromFriends[0];
+                new Notification('Status Baru dari Teman', {
+                    body: firstNew.userName ? `${firstNew.userName} membagikan status baru` : 'Status baru dari teman',
+                    icon: firstNew.userPhoto || 'https://ui-avatars.com/api/?name=📸&background=00bcd4&color=fff'
+                });
+            }
+        }
+        
+        lastStatusCount = filteredStatuses.length;
     });
+}
+
+/**
+ * Hitung dan update badge untuk status yang belum dilihat
+ */
+function updateUnviewedStatusCount(statuses) {
+    if (!currentUser) return;
+    
+    let unviewedCount = 0;
+    for (const status of statuses) {
+        if (status.userId !== currentUser.uid && status.isNew === true) {
+            unviewedCount++;
+        }
+    }
+    
+    // Update badge di menu sosial
+    const statusBadge = document.getElementById('statusBadgeInMenu');
+    if (statusBadge) {
+        if (unviewedCount > 0) {
+            statusBadge.textContent = unviewedCount > 99 ? '99+' : unviewedCount;
+            statusBadge.style.display = 'inline-block';
+            statusBadge.style.backgroundColor = '#ff9800';
+        } else {
+            statusBadge.style.display = 'none';
+        }
+    }
+    
+    // Update total badge sosial jika fungsi tersedia
+    if (typeof window.updateSocialBadges === 'function') {
+        // Simpan ke global untuk diakses fungsi updateSocialBadges
+        window.unviewedStatusCount = unviewedCount;
+        window.updateSocialBadges();
+    }
+    
+    console.log(`📸 Unviewed status count: ${unviewedCount}`);
 }
 
 // ======================= RENDER STATUS BAR ========================
@@ -287,31 +362,6 @@ async function renderStatusBar(groupedByUser) {
     }
     container.innerHTML = html;
     setupStatusEventDelegation();
-}
-
-// ======================= NOTIFIKASI ========================
-function checkAndNotifyNewStatus(statuses) {
-    const currentCount = statuses.length;
-    if (currentCount > lastStatusCount && lastStatusCount > 0 && currentUser) {
-        const newStatuses = statuses.slice(0, currentCount - lastStatusCount);
-        for (const status of newStatuses) {
-            if (status.userId !== currentUser.uid) {
-                // Cek apakah ini teman
-                isFriend(status.userId).then(isFriendUser => {
-                    if (isFriendUser) {
-                        showToast(`📸 ${status.userName || 'Seseorang'} membagikan status baru`, "info");
-                        if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-                            new Notification('Status Baru', {
-                                body: status.userName ? `${status.userName} membagikan status` : 'Status baru dari teman',
-                                icon: status.userPhoto || 'https://ui-avatars.com/api/?name=📸&background=00bcd4&color=fff'
-                            });
-                        }
-                    }
-                });
-            }
-        }
-    }
-    lastStatusCount = currentCount;
 }
 
 function startStatusExpiryChecker() {
@@ -545,12 +595,19 @@ async function openStatusViewer(userId) {
             return;
         }
         
-        // Tandai sudah dilihat
+        // Tandai sudah dilihat dan update badge
+        let hasNewStatus = false;
         if (userId !== currentUser.uid) {
             for (const status of userStatuses) {
                 if (!status.viewedBy || !status.viewedBy[currentUser.uid]) {
                     await db.ref(`statuses/${userId}/${status.id}/viewedBy/${currentUser.uid}`).set(true);
+                    hasNewStatus = true;
                 }
+            }
+            
+            // Jika ada status baru yang ditandai, refresh badge
+            if (hasNewStatus) {
+                updateUnviewedStatusCount(currentStatusList);
             }
         }
         
@@ -1106,6 +1163,9 @@ if (typeof window !== 'undefined' && window.currentUser && window.currentUser.ui
     setTimeout(() => initStatusSystem(), 100);
 }
 
+// Ekspor fungsi untuk update badge dari luar
+window.updateUnviewedStatusCount = updateUnviewedStatusCount;
+
 // ======================= EKSPOR ========================
 window.initStatusSystem = initStatusSystem;
 window.openCreateStatusModal = openCreateStatusModal;
@@ -1125,4 +1185,4 @@ window.cleanupStatusSystem = cleanupStatusSystem;
 window.isFriend = isFriend;
 window.clearFriendsCache = clearFriendsCache;
 
-console.log("✅ status.js V5.0 loaded - Fully synced with Supabase + Friends-only visibility!");
+console.log("✅ status.js V5.1 loaded - Fully synced with Supabase + Friends-only visibility + Social Badge Integration!");
