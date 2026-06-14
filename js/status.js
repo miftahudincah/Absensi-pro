@@ -1,9 +1,14 @@
-// status.js - VERSION 4.9 (STATUS HANYA UNTUK TEMAN)
-// Fitur Status: upload teks/gambar, auto-delete 24 jam, reply/balas status,
-// daftar orang yang melihat (viewers), notifikasi.
-// PERUBAHAN V4.9: Status hanya bisa dilihat oleh TEMAN (selain status sendiri)
+// status.js - VERSION 5.0 (FULLY SYNCED WITH SUPABASE + REAL-TIME FRIENDS ONLY)
+// Fitur Status: upload teks/gambar ke Supabase, auto-delete 24 jam, reply/balas status,
+// daftar orang yang melihat (viewers), notifikasi real-time.
+// PERUBAHAN V5.0:
+// - Integrasi penuh dengan Supabase untuk upload gambar status
+// - Status hanya bisa dilihat oleh TEMAN (bukan semua user)
+// - Auto-delete gambar dari Supabase saat status expired
+// - Notifikasi real-time untuk status baru dari teman
 // ============================================================================
 
+// ======================= KONFIGURASI =======================
 let statusesListener = null;
 let currentStatusList = [];
 let currentStatusIndex = 0;
@@ -15,17 +20,44 @@ let lastStatusCount = 0;
 let currentViewerCount = 0;
 let viewerCountListener = null;
 
+// Cache untuk data user (untuk mempercepat pengecekan teman)
+let friendsCache = new Map();
+let friendsCacheTimestamp = 0;
+const FRIENDS_CACHE_TTL = 60000; // 1 menit cache
+
 // ======================= CEK APAKAH USER ADALAH TEMAN ========================
 async function isFriend(userId) {
     if (!currentUser) return false;
     if (userId === currentUser.uid) return true; // diri sendiri dianggap teman
+    
+    // Cek cache dulu
+    const now = Date.now();
+    if (friendsCache.has(userId) && (now - friendsCacheTimestamp) < FRIENDS_CACHE_TTL) {
+        return friendsCache.get(userId);
+    }
+    
     try {
         const snapshot = await db.ref(`friendships/list/${currentUser.uid}/${userId}`).once('value');
-        return snapshot.exists();
+        const isFriendResult = snapshot.exists();
+        
+        // Simpan ke cache
+        friendsCache.set(userId, isFriendResult);
+        friendsCacheTimestamp = now;
+        
+        return isFriendResult;
     } catch (err) {
         console.error("Error checking friend status:", err);
         return false;
     }
+}
+
+/**
+ * Clear cache friends
+ */
+function clearFriendsCache() {
+    friendsCache.clear();
+    friendsCacheTimestamp = 0;
+    console.log("📸 Friends cache cleared");
 }
 
 // ======================= EVENT LISTENER ========================
@@ -33,6 +65,7 @@ function setupStatusUiReadyListener() {
     if (statusUiReadyListenerAdded) return;
     statusUiReadyListenerAdded = true;
     console.log("📡 Setting up uiReady event listener for status module");
+    
     window.addEventListener('uiReady', (e) => {
         const user = e.detail.currentUser;
         if (user && user.uid) {
@@ -46,15 +79,20 @@ function setupStatusUiReadyListener() {
 function initStatusSystem() {
     if (!currentUser) {
         console.log("⏳ Menunggu currentUser untuk initStatusSystem");
+        setTimeout(initStatusSystem, 500);
         return;
     }
+    
     if (statusesListener) {
         console.log("Status system already initialized, skipping");
         return;
     }
-    console.log("📸 Initializing status system...");
+    
+    console.log("📸 Initializing status system v5.0...");
     setupStatusListener();
     startStatusExpiryChecker();
+    
+    // Request notification permission
     if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
         Notification.requestPermission();
     }
@@ -67,9 +105,9 @@ function setupStatusEventDelegation(retry = 0) {
         if (retry < 20) {
             console.log(`⏳ Menunggu #statusBar, retry ${retry+1}/20...`);
             setTimeout(() => setupStatusEventDelegation(retry + 1), 300);
-        } else {
-            console.error("❌ Gagal menemukan #statusBar setelah 20 retry!");
+            return;
         }
+        console.error("❌ Gagal menemukan #statusBar setelah 20 retry!");
         return;
     }
     container.removeEventListener('click', handleStatusClick);
@@ -94,63 +132,80 @@ function handleStatusClick(e) {
     openStatusViewer(userId);
 }
 
-// ======================= LISTENER STATUS ========================
+// ======================= LISTENER STATUS (HANYA TEMAN) ========================
 function setupStatusListener() {
     if (statusesListener) {
         db.ref('statuses').off('value', statusesListener);
     }
+    
     statusesListener = db.ref('statuses').on('value', async (snapshot) => {
         if (!currentUser) return;
+        
         const data = snapshot.val();
         const now = Date.now();
         const twentyFourHours = 24 * 60 * 60 * 1000;
         let allStatuses = [];
+        
         if (data) {
-            Object.keys(data).forEach(userId => {
-                const userStatuses = data[userId];
-                if (userStatuses) {
-                    Object.keys(userStatuses).forEach(statusId => {
-                        const status = userStatuses[statusId];
-                        if (status.createdAt && (now - status.createdAt) < twentyFourHours) {
-                            allStatuses.push({
-                                id: statusId,
-                                userId: userId,
-                                ...status
-                            });
-                        } else if (status.createdAt && (now - status.createdAt) >= twentyFourHours) {
-                            // Hapus gambar dari Supabase jika ada
-                            if (status.mediaUrl && status.mediaUrl.includes(SUPABASE_URL)) {
-                                if (typeof deleteFromSupabase === 'function') {
-                                    deleteFromSupabase(status.mediaUrl).catch(console.error);
+            for (const [userId, userStatuses] of Object.entries(data)) {
+                if (!userStatuses) continue;
+                
+                for (const [statusId, status] of Object.entries(userStatuses)) {
+                    if (!status) continue;
+                    
+                    const createdAt = status.createdAt;
+                    if (createdAt && (now - createdAt) >= twentyFourHours) {
+                        // Hapus status expired beserta gambarnya
+                        if (status.mediaUrl && status.mediaUrl.includes(SUPABASE_URL)) {
+                            if (typeof deleteFromSupabase === 'function') {
+                                try {
+                                    await deleteFromSupabase(status.mediaUrl);
+                                    console.log(`🗑️ Deleted expired status image: ${status.mediaUrl}`);
+                                } catch (err) {
+                                    console.warn("Failed to delete expired status image:", err);
                                 }
                             }
-                            db.ref(`status_replies/${statusId}`).remove().catch(console.error);
-                            db.ref(`statuses/${userId}/${statusId}`).remove();
                         }
-                    });
+                        // Hapus replies
+                        await db.ref(`status_replies/${statusId}`).remove().catch(() => {});
+                        await db.ref(`statuses/${userId}/${statusId}`).remove().catch(() => {});
+                        continue;
+                    }
+                    
+                    // Hanya tambahkan status yang belum expired
+                    if (createdAt && (now - createdAt) < twentyFourHours) {
+                        allStatuses.push({
+                            id: statusId,
+                            userId: userId,
+                            ...status
+                        });
+                    }
                 }
-            });
-        }
-        allStatuses.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-        
-        // Filter status berdasarkan teman
-        const friendStatuses = [];
-        for (const status of allStatuses) {
-            const isFriendUser = await isFriend(status.userId);
-            if (isFriendUser) {
-                friendStatuses.push(status);
             }
         }
         
+        // Urutkan dari terbaru
+        allStatuses.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+        
+        // FILTER: Hanya tampilkan status dari TEMAN (dan diri sendiri)
+        const filteredStatuses = [];
+        for (const status of allStatuses) {
+            const isFriendUser = await isFriend(status.userId);
+            if (isFriendUser) {
+                filteredStatuses.push(status);
+            }
+        }
+        
+        // Kelompokkan berdasarkan user untuk status bar
         const groupedByUser = {};
-        friendStatuses.forEach(status => {
+        filteredStatuses.forEach(status => {
             if (!groupedByUser[status.userId]) groupedByUser[status.userId] = [];
             groupedByUser[status.userId].push(status);
         });
         
         await renderStatusBar(groupedByUser);
-        currentStatusList = friendStatuses;
-        checkAndNotifyNewStatus(friendStatuses);
+        currentStatusList = filteredStatuses;
+        checkAndNotifyNewStatus(filteredStatuses);
     });
 }
 
@@ -166,8 +221,11 @@ async function renderStatusBar(groupedByUser) {
     let hasFriendStatus = false;
     for (const userId of Object.keys(groupedByUser)) {
         if (userId !== currentUser.uid) {
-            hasFriendStatus = true;
-            break;
+            const isFriendUser = await isFriend(userId);
+            if (isFriendUser) {
+                hasFriendStatus = true;
+                break;
+            }
         }
     }
     
@@ -206,13 +264,13 @@ async function renderStatusBar(groupedByUser) {
         `;
     }
     
-    // HANYA TAMPILKAN STATUS DARI TEMAN (bukan semua user)
+    // HANYA TAMPILKAN STATUS DARI TEMAN
     for (const [userId, statuses] of Object.entries(groupedByUser)) {
         if (userId === currentUser.uid) continue;
         
-        // CEK APAKAH USER INI TEMAN (sudah difilter di atas, tapi amankan)
+        // CEK APAKAH USER INI TEMAN
         const isFriendUser = await isFriend(userId);
-        if (!isFriendUser) continue; // SKIP jika bukan teman
+        if (!isFriendUser) continue;
         
         const latest = statuses[0];
         const isViewed = latest.viewedBy && latest.viewedBy[currentUser.uid];
@@ -236,35 +294,80 @@ function checkAndNotifyNewStatus(statuses) {
     const currentCount = statuses.length;
     if (currentCount > lastStatusCount && lastStatusCount > 0 && currentUser) {
         const newStatuses = statuses.slice(0, currentCount - lastStatusCount);
-        newStatuses.forEach(status => {
+        for (const status of newStatuses) {
             if (status.userId !== currentUser.uid) {
-                showToast(`📸 ${status.userName || 'Seseorang'} membagikan status baru`, "info");
-                if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-                    new Notification('Status Baru', {
-                        body: status.userName ? `${status.userName} membagikan status` : 'Status baru dari teman',
-                        icon: status.userPhoto || 'https://ui-avatars.com/api/?name=📸&background=00bcd4&color=fff'
-                    });
-                }
+                // Cek apakah ini teman
+                isFriend(status.userId).then(isFriendUser => {
+                    if (isFriendUser) {
+                        showToast(`📸 ${status.userName || 'Seseorang'} membagikan status baru`, "info");
+                        if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+                            new Notification('Status Baru', {
+                                body: status.userName ? `${status.userName} membagikan status` : 'Status baru dari teman',
+                                icon: status.userPhoto || 'https://ui-avatars.com/api/?name=📸&background=00bcd4&color=fff'
+                            });
+                        }
+                    }
+                });
             }
-        });
+        }
     }
     lastStatusCount = currentCount;
 }
 
 function startStatusExpiryChecker() {
     if (statusExpiryInterval) clearInterval(statusExpiryInterval);
+    // Cek setiap 1 jam untuk status expired
     statusExpiryInterval = setInterval(() => {
-        if (db) db.ref('statuses').once('value').catch(() => {});
+        if (db) {
+            db.ref('statuses').once('value').catch(() => {});
+        }
     }, 60 * 60 * 1000);
 }
 
-// ======================= CREATE STATUS (DENGAN LOG) ========================
+// ======================= CREATE STATUS (DENGAN SUPABASE UPLOAD) ========================
 function openCreateStatusModal() {
-    const modal = document.getElementById('modal-create-status');
-    if (!modal) return;
+    // Pastikan modal ada di DOM
+    let modal = document.getElementById('modal-create-status');
+    if (!modal) {
+        // Buat modal jika belum ada
+        const modalHtml = `
+            <div id="modal-create-status" class="modal-overlay">
+                <div class="modal-box" style="max-width: 450px;">
+                    <div class="modal-title">
+                        <span>📸 Buat Status Baru</span>
+                        <span onclick="closeModal('modal-create-status')">✖</span>
+                    </div>
+                    <div style="padding: 20px;">
+                        <div class="form-group">
+                            <label>✏️ Teks Status</label>
+                            <textarea id="statusText" rows="3" placeholder="Tuliskan status Anda..." style="width: 100%; padding: 12px; border-radius: 12px; border: 1px solid var(--border); background: var(--bg-input); color: var(--text-primary);"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>📷 Tambah Gambar (Opsional)</label>
+                            <input type="file" id="statusImageInput" accept="image/*" onchange="previewStatusImage(this)">
+                            <div id="statusImagePreviewContainer" style="display: none; margin-top: 10px;">
+                                <img id="statusImagePreview" style="max-width: 100%; max-height: 200px; border-radius: 12px;">
+                                <button type="button" class="btn-icon" onclick="removeStatusImage()" style="margin-top: 5px;">✖ Hapus Gambar</button>
+                            </div>
+                            <small class="text-small">Maksimal 5MB, format: JPG, PNG, GIF</small>
+                        </div>
+                    </div>
+                    <div class="modal-actions">
+                        <button class="btn-cancel" onclick="closeModal('modal-create-status')">Batal</button>
+                        <button class="btn-save" onclick="createStatus()">📤 Posting Status</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        modal = document.getElementById('modal-create-status');
+    }
+    
+    // Reset form
     document.getElementById('statusText').value = '';
     document.getElementById('statusImageInput').value = '';
     document.getElementById('statusImagePreviewContainer').style.display = 'none';
+    
     modal.classList.add('open');
 }
 
@@ -283,20 +386,31 @@ function previewStatusImage(input) {
     }
 }
 
+function removeStatusImage() {
+    document.getElementById('statusImageInput').value = '';
+    document.getElementById('statusImagePreviewContainer').style.display = 'none';
+}
+
 async function createStatus() {
     if (!currentUser) {
         showToast("Anda harus login!", "error");
         return;
     }
+    
     const text = document.getElementById('statusText').value.trim();
     const imageFile = document.getElementById('statusImageInput').files[0];
+    
     if (!text && !imageFile) {
         showToast("Masukkan teks atau pilih gambar!", "error");
         return;
     }
+    
     const btn = document.querySelector('#modal-create-status .btn-save');
     const originalText = btn?.innerHTML;
-    if (btn) { btn.disabled = true; btn.innerHTML = '⏳ Mengupload...'; }
+    if (btn) { 
+        btn.disabled = true; 
+        btn.innerHTML = '⏳ Mengupload...'; 
+    }
     
     let mediaUrl = null;
     let mediaPath = null;
@@ -309,13 +423,21 @@ async function createStatus() {
                 if (btn) { btn.disabled = false; btn.innerHTML = originalText; }
                 return;
             }
-            if (typeof uploadStatusImageToSupabase === 'undefined') {
-                throw new Error('Fungsi uploadStatusImageToSupabase tidak tersedia');
+            
+            // Upload ke Supabase via backend
+            if (typeof uploadToSupabaseBackend === 'function') {
+                const result = await uploadToSupabaseBackend(imageFile, 'status', currentUser.uid);
+                mediaUrl = result.url;
+                mediaPath = result.path;
+                type = 'image';
+            } else if (typeof uploadWithFallback === 'function') {
+                const result = await uploadWithFallback(imageFile, 'status', currentUser.uid);
+                mediaUrl = result.url;
+                mediaPath = result.path;
+                type = 'image';
+            } else {
+                throw new Error('Upload function not available');
             }
-            const uploadResult = await uploadStatusImageToSupabase(imageFile, currentUser.uid);
-            mediaUrl = uploadResult.url;
-            mediaPath = uploadResult.path;
-            type = 'image';
         }
         
         const statusId = `${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
@@ -346,6 +468,8 @@ async function createStatus() {
     } catch (err) {
         console.error("Create status error:", err);
         showToast("❌ Gagal posting status: " + err.message, "error");
+        
+        // Hapus gambar yang sudah terupload jika gagal
         if (mediaPath && typeof deleteFromSupabase === 'function') {
             await deleteFromSupabase(mediaPath);
         }
@@ -381,6 +505,7 @@ function updateViewerCountButton(buttonElement, count) {
 // ======================= STATUS VIEWER (DENGAN CEK TEMAN) ========================
 async function openStatusViewer(userId) {
     console.log("📸 openStatusViewer called for userId:", userId);
+    
     if (!currentUser) {
         showToast("Anda harus login!", "error");
         return;
@@ -399,6 +524,7 @@ async function openStatusViewer(userId) {
         showToast("Gagal membuka status: elemen tidak ditemukan", "error");
         return;
     }
+    
     try {
         const snapshot = await db.ref(`statuses/${userId}`).once('value');
         const statuses = snapshot.val();
@@ -406,16 +532,19 @@ async function openStatusViewer(userId) {
             showToast("Tidak ada status dari pengguna ini", "info");
             return;
         }
+        
         const now = Date.now();
         const twentyFourHours = 24 * 60 * 60 * 1000;
         const userStatuses = Object.keys(statuses)
             .filter(key => (now - (statuses[key].createdAt || 0)) < twentyFourHours)
             .map(key => ({ id: key, ...statuses[key] }))
             .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+        
         if (userStatuses.length === 0) {
             showToast("Status sudah kadaluarsa", "info");
             return;
         }
+        
         // Tandai sudah dilihat
         if (userId !== currentUser.uid) {
             for (const status of userStatuses) {
@@ -424,6 +553,7 @@ async function openStatusViewer(userId) {
                 }
             }
         }
+        
         currentStatusList = userStatuses;
         currentStatusIndex = 0;
         currentStatusOwnerId = userId;
@@ -437,8 +567,11 @@ async function openStatusViewer(userId) {
 function showStatusViewerModal(status) {
     const modal = document.getElementById('modal-status-viewer');
     if (!modal) return;
+    
     const content = document.getElementById('statusViewerContent');
     if (!content) return;
+    
+    // Bersihkan interval sebelumnya
     if (statusViewerInterval) clearInterval(statusViewerInterval);
     if (viewerCountListener) {
         if (currentStatusOwnerId && currentStatusList[currentStatusIndex]) {
@@ -476,18 +609,21 @@ function showStatusViewerModal(status) {
     
     const updateContent = async () => {
         const s = currentStatusList[currentStatusIndex];
-        if (!s) { closeModal('modal-status-viewer'); return; }
+        if (!s) { 
+            closeModal('modal-status-viewer'); 
+            return; 
+        }
         
         setupViewerListener(s.id);
         
         let mediaHtml = '';
         if (s.type === 'image' && s.mediaUrl) {
             mediaHtml = `<div class="status-image-wrapper" onclick="nextStatus()">
-                            <img src="${s.mediaUrl}" class="status-full-image" alt="Status">
+                            <img src="${s.mediaUrl}" class="status-full-image" alt="Status" style="max-width: 100%; max-height: 80vh; object-fit: contain;">
                          </div>`;
         } else {
             mediaHtml = `<div class="status-text-wrapper" onclick="nextStatus()">
-                            <div class="status-full-text">${escapeHtml(s.text)}</div>
+                            <div class="status-full-text" style="font-size: 24px; text-align: center; padding: 20px;">${escapeHtml(s.text)}</div>
                          </div>`;
         }
         
@@ -500,19 +636,30 @@ function showStatusViewerModal(status) {
             currentViewerCount = viewerCount;
             
             viewersButton = `
-                <button class="status-viewers-btn" onclick="showStatusViewersWithId('${currentStatusOwnerId}', '${s.id}')" style="background: rgba(0,0,0,0.6); border: none; font-size: 32px; cursor: pointer; color: white; padding: 12px 20px; border-radius: 60px; backdrop-filter: blur(8px); transition: transform 0.1s; display: inline-flex; align-items: center; gap: 8px;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'" title="Dilihat oleh">
+                <button class="status-viewers-btn" onclick="showStatusViewersWithId('${currentStatusOwnerId}', '${s.id}')" 
+                    style="background: rgba(0,0,0,0.6); border: none; font-size: 32px; cursor: pointer; color: white; padding: 12px 20px; border-radius: 60px; backdrop-filter: blur(8px); transition: transform 0.1s; display: inline-flex; align-items: center; gap: 8px;" 
+                    onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'" 
+                    title="Dilihat oleh">
                     👁️ <span style="font-size: 14px;">${viewerCount > 0 ? `<span style="background: rgba(255,255,255,0.3); border-radius: 20px; padding: 2px 6px; margin-left: 4px;">${viewerCount}</span> ` : ''}Lihat yang melihat${viewerCount === 0 ? ' (0)' : ''}</span>
                 </button>
             `;
             leftButtons = `
-                <button class="status-delete-btn" onclick="deleteCurrentStatus(event)" style="background: rgba(0,0,0,0.6); border: none; font-size: 32px; cursor: pointer; color: white; padding: 12px 20px; border-radius: 60px; backdrop-filter: blur(8px); transition: transform 0.1s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'" title="Hapus status">🗑️</button>
+                <button class="status-delete-btn" onclick="deleteCurrentStatus(event)" 
+                    style="background: rgba(0,0,0,0.6); border: none; font-size: 32px; cursor: pointer; color: white; padding: 12px 20px; border-radius: 60px; backdrop-filter: blur(8px); transition: transform 0.1s;" 
+                    onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'" 
+                    title="Hapus status">🗑️</button>
             `;
             rightButtons = `
-                <button class="status-replies-btn" onclick="showStatusRepliesModal('${s.id}')" style="background: rgba(0,0,0,0.6); border: none; font-size: 32px; cursor: pointer; color: white; padding: 12px 20px; border-radius: 60px; backdrop-filter: blur(8px); transition: transform 0.1s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'" title="Balasan">💬</button>
+                <button class="status-replies-btn" onclick="showStatusRepliesModal('${s.id}')" 
+                    style="background: rgba(0,0,0,0.6); border: none; font-size: 32px; cursor: pointer; color: white; padding: 12px 20px; border-radius: 60px; backdrop-filter: blur(8px); transition: transform 0.1s;" 
+                    onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'" 
+                    title="Balasan">💬</button>
             `;
         } else {
             rightButtons = `
-                <button class="status-reply-btn" onclick="openReplyToStatus('${s.id}', '${escapeHtml(s.userName)}')" style="background: #00bcd4; border: none; border-radius: 60px; padding: 12px 28px; font-size: 18px; font-weight: bold; cursor: pointer; color: white; box-shadow: 0 4px 12px rgba(0,0,0,0.3); transition: transform 0.1s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">💬 Balas</button>
+                <button class="status-reply-btn" onclick="openReplyToStatus('${s.id}', '${escapeHtml(s.userName)}')" 
+                    style="background: #00bcd4; border: none; border-radius: 60px; padding: 12px 28px; font-size: 18px; font-weight: bold; cursor: pointer; color: white; box-shadow: 0 4px 12px rgba(0,0,0,0.3); transition: transform 0.1s;" 
+                    onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">💬 Balas</button>
             `;
         }
         
@@ -552,9 +699,15 @@ function showStatusViewerModal(status) {
     
     updateContent();
     modal.classList.add('open');
+    
+    // Auto-next setiap 5 detik
     statusViewerInterval = setInterval(() => {
-        if (currentStatusIndex < currentStatusList.length - 1) nextStatus();
-        else { clearInterval(statusViewerInterval); closeModal('modal-status-viewer'); }
+        if (currentStatusIndex < currentStatusList.length - 1) {
+            nextStatus();
+        } else {
+            clearInterval(statusViewerInterval);
+            closeModal('modal-status-viewer');
+        }
     }, 5000);
 }
 
@@ -576,7 +729,7 @@ async function showStatusViewersWithId(userId, statusId) {
         const userSnapshots = await Promise.all(userPromises);
         
         const viewersData = [];
-        userSnapshots.forEach(snap => {
+        for (const snap of userSnapshots) {
             if (snap.exists()) {
                 const user = snap.val();
                 viewersData.push({
@@ -586,7 +739,7 @@ async function showStatusViewersWithId(userId, statusId) {
                     role: user.role
                 });
             }
-        });
+        }
         
         let modalHtml = `
             <div id="modal-status-viewers" class="modal-overlay open">
@@ -598,7 +751,7 @@ async function showStatusViewersWithId(userId, statusId) {
                     <div style="max-height: 60vh; overflow-y: auto; padding: 10px;">
         `;
         
-        viewersData.forEach(v => {
+        for (const v of viewersData) {
             modalHtml += `
                 <div style="display: flex; align-items: center; gap: 12px; padding: 10px; border-bottom: 1px solid var(--border);">
                     <img src="${v.photoUrl || getAvatarUrl(v.nama)}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;">
@@ -608,7 +761,7 @@ async function showStatusViewersWithId(userId, statusId) {
                     </div>
                 </div>
             `;
-        });
+        }
         
         modalHtml += `
                     </div>
@@ -636,7 +789,7 @@ async function showStatusViewers(event, statusId) {
     await showStatusViewersWithId(currentStatus.userId, statusId);
 }
 
-// ======================= BALAS STATUS + PREVIEW + INTEGRASI CHAT ========================
+// ======================= BALAS STATUS + INTEGRASI CHAT ========================
 function openReplyToStatus(statusId, ownerName) {
     let modalHtml = `
         <div id="modal-reply-status" class="modal-overlay open">
@@ -646,7 +799,7 @@ function openReplyToStatus(statusId, ownerName) {
                     <span onclick="closeModal('modal-reply-status')">✖</span>
                 </div>
                 <div class="form-group">
-                    <textarea id="replyMessage" rows="3" placeholder="Tulis balasan Anda..." style="width: 100%;"></textarea>
+                    <textarea id="replyMessage" rows="3" placeholder="Tulis balasan Anda..." style="width: 100%; padding: 12px; border-radius: 12px; border: 1px solid var(--border); background: var(--bg-input); color: var(--text-primary);"></textarea>
                 </div>
                 <div class="modal-actions">
                     <button class="btn-cancel" onclick="closeModal('modal-reply-status')">Batal</button>
@@ -674,6 +827,7 @@ async function sendStatusReply(statusId) {
     }
     
     try {
+        // Cari data status yang dibalas
         let targetStatus = null;
         for (let i = 0; i < currentStatusList.length; i++) {
             if (currentStatusList[i].id === statusId) {
@@ -699,6 +853,7 @@ async function sendStatusReply(statusId) {
         
         const chatMessageText = `📸 Balasan status dari ${ownerName}: ${statusPreview}\n\n💬 ${message}`;
         
+        // Simpan reply ke status_replies
         const replyId = `${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
         const replyData = {
             fromUid: currentUser.uid,
@@ -712,6 +867,7 @@ async function sendStatusReply(statusId) {
         };
         await db.ref(`status_replies/${statusId}/${replyId}`).set(replyData);
         
+        // Kirim sebagai chat pribadi
         const chatMessageId = `${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
         const timestamp = firebase.database.ServerValue.TIMESTAMP;
         
@@ -780,7 +936,7 @@ async function showStatusRepliesModal(statusId) {
     if (repliesList.length === 0) {
         modalHtml += `<div class="text-small" style="text-align:center; padding:20px;">📭 Belum ada balasan</div>`;
     } else {
-        repliesList.forEach(reply => {
+        for (const reply of repliesList) {
             modalHtml += `
                 <div style="display: flex; gap: 12px; margin-bottom: 15px; padding: 10px; background: var(--bg-hover); border-radius: 12px;">
                     <img src="${reply.fromPhoto || getAvatarUrl(reply.fromName)}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;">
@@ -791,7 +947,7 @@ async function showStatusRepliesModal(statusId) {
                     </div>
                 </div>
             `;
-        });
+        }
     }
     
     modalHtml += `
@@ -808,16 +964,19 @@ async function showStatusRepliesModal(statusId) {
     document.body.insertAdjacentHTML('beforeend', modalHtml);
 }
 
-// ======================= DELETE STATUS (DENGAN LOG) ========================
+// ======================= DELETE STATUS (DENGAN HAPUS GAMBAR DARI SUPABASE) ========================
 async function deleteCurrentStatus(event) {
     if (event) event.stopPropagation();
     if (!currentUser) return;
+    
     const currentStatus = currentStatusList[currentStatusIndex];
     if (!currentStatus) return;
+    
     if (currentStatus.userId !== currentUser.uid) {
         showToast("Anda hanya dapat menghapus status Anda sendiri!", "error");
         return;
     }
+    
     if (!confirm("Hapus status ini?")) return;
     
     const deleteBtn = document.querySelector('.status-delete-btn');
@@ -827,15 +986,18 @@ async function deleteCurrentStatus(event) {
     }
     
     try {
+        // Hapus gambar dari Supabase jika ada
         if (currentStatus.mediaUrl && currentStatus.mediaUrl.includes(SUPABASE_URL)) {
-            if (typeof deleteStatusImage === 'function') {
-                await deleteStatusImage(currentStatus.mediaUrl);
-            } else if (typeof deleteFromSupabase === 'function') {
+            if (typeof deleteFromSupabase === 'function') {
                 await deleteFromSupabase(currentStatus.mediaUrl);
+                console.log(`🗑️ Deleted status image: ${currentStatus.mediaUrl}`);
             }
         }
+        
+        // Hapus replies
         await db.ref(`status_replies/${currentStatus.id}`).remove();
         await db.ref(`statuses/${currentUser.uid}/${currentStatus.id}`).remove();
+        
         showToast("✅ Status dihapus", "success");
         
         // LOG: Hapus status
@@ -844,9 +1006,11 @@ async function deleteCurrentStatus(event) {
             logActivity('delete_status', `Menghapus status sendiri: ${statusPreview}${currentStatus.type === 'image' ? ' (gambar)' : ''}`);
         }
         
+        // Hapus dari daftar lokal
         currentStatusList.splice(currentStatusIndex, 1);
         if (currentStatusList.length === 0) {
             closeModal('modal-status-viewer');
+            // Refresh status bar
             if (statusesListener) {
                 db.ref('statuses').once('value');
             }
@@ -870,7 +1034,9 @@ function nextStatus() {
     if (currentStatusIndex < currentStatusList.length - 1) {
         currentStatusIndex++;
         showStatusViewerModal(currentStatusList[currentStatusIndex]);
-    } else closeModal('modal-status-viewer');
+    } else {
+        closeModal('modal-status-viewer');
+    }
 }
 
 function prevStatus() {
@@ -927,12 +1093,14 @@ function cleanupStatusSystem() {
     if (container) container.removeEventListener('click', handleStatusClick);
     lastStatusCount = 0;
     statusUiReadyListenerAdded = false;
+    clearFriendsCache();
     console.log("🧹 Status system cleaned up");
 }
 
 // ======================= INISIALISASI ========================
 setupStatusUiReadyListener();
 
+// Auto init jika currentUser sudah ada
 if (typeof window !== 'undefined' && window.currentUser && window.currentUser.uid && !statusesListener) {
     console.log("📸 status.js: currentUser already exists, initializing immediately");
     setTimeout(() => initStatusSystem(), 100);
@@ -942,6 +1110,7 @@ if (typeof window !== 'undefined' && window.currentUser && window.currentUser.ui
 window.initStatusSystem = initStatusSystem;
 window.openCreateStatusModal = openCreateStatusModal;
 window.previewStatusImage = previewStatusImage;
+window.removeStatusImage = removeStatusImage;
 window.createStatus = createStatus;
 window.openStatusViewer = openStatusViewer;
 window.nextStatus = nextStatus;
@@ -953,6 +1122,7 @@ window.openReplyToStatus = openReplyToStatus;
 window.sendStatusReply = sendStatusReply;
 window.showStatusRepliesModal = showStatusRepliesModal;
 window.cleanupStatusSystem = cleanupStatusSystem;
-window.isFriend = isFriend; // export untuk digunakan modul lain
+window.isFriend = isFriend;
+window.clearFriendsCache = clearFriendsCache;
 
-console.log("✅ status.js V4.9 loaded - Status hanya dapat dilihat oleh teman");
+console.log("✅ status.js V5.0 loaded - Fully synced with Supabase + Friends-only visibility!");
