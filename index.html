@@ -185,15 +185,15 @@
             display: none !important;
         }
         
-        /* AI ASSISTANT BUTTON */
-        #aiAssistantBtn {
+        /* AI ASSISTANT BUTTON - FIXED STYLES */
+        #aiAssistantBtn, .ai-assistant-floating-btn {
             position: fixed;
             bottom: 100px;
             right: 20px;
             width: 56px;
             height: 56px;
             border-radius: 50%;
-            background: linear-gradient(135deg, #00bcd4, #2196f3);
+            background: linear-gradient(135deg, #667eea, #764ba2);
             color: white;
             display: flex;
             align-items: center;
@@ -203,70 +203,12 @@
             z-index: 998;
             border: none;
             font-size: 28px;
-            transition: transform 0.2s;
+            transition: transform 0.2s, box-shadow 0.2s;
         }
         
-        #aiAssistantBtn:hover {
+        #aiAssistantBtn:hover, .ai-assistant-floating-btn:hover {
             transform: scale(1.1);
-        }
-        
-        /* AI CHAT MESSAGES */
-        .ai-message {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 12px;
-        }
-        
-        .ai-message.ai-user {
-            flex-direction: row-reverse;
-        }
-        
-        .ai-avatar {
-            width: 36px;
-            height: 36px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, #00bcd4, #2196f3);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 20px;
-            flex-shrink: 0;
-        }
-        
-        .ai-message.ai-user .ai-avatar {
-            background: var(--primary);
-        }
-        
-        .ai-bubble {
-            background: var(--bg-hover);
-            padding: 10px 15px;
-            border-radius: 18px;
-            max-width: 80%;
-            line-height: 1.5;
-            white-space: pre-wrap;
-        }
-        
-        .ai-message.ai-user .ai-bubble {
-            background: var(--primary);
-            color: white;
-        }
-        
-        .typing-dot {
-            display: inline-block;
-            width: 6px;
-            height: 6px;
-            border-radius: 50%;
-            background: #888;
-            margin: 0 2px;
-            animation: typing 1.4s infinite both;
-        }
-        
-        .typing-dot:nth-child(1) { animation-delay: -0.32s; }
-        .typing-dot:nth-child(2) { animation-delay: -0.16s; }
-        
-        @keyframes typing {
-            0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); }
-            40% { opacity: 1; transform: scale(1.2); }
+            box-shadow: 0 6px 20px rgba(0,0,0,0.4);
         }
         
         /* AI SUMMARY CARD STYLES */
@@ -484,7 +426,7 @@
                 justify-content: center;
                 padding-bottom: 10px;
             }
-            #aiAssistantBtn {
+            #aiAssistantBtn, .ai-assistant-floating-btn {
                 bottom: 80px;
                 right: 15px;
                 width: 48px;
@@ -650,6 +592,65 @@
             padding: 4px 12px;
             border-radius: 20px;
             font-size: 12px;
+        }
+
+        /* AI CHAT MESSAGES */
+        .ai-message {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+        
+        .ai-message.ai-user {
+            flex-direction: row-reverse;
+        }
+        
+        .ai-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            flex-shrink: 0;
+        }
+        
+        .ai-message.ai-user .ai-avatar {
+            background: var(--primary);
+        }
+        
+        .ai-bubble {
+            background: var(--bg-hover);
+            padding: 10px 15px;
+            border-radius: 18px;
+            max-width: 80%;
+            line-height: 1.5;
+            white-space: pre-wrap;
+        }
+        
+        .ai-message.ai-user .ai-bubble {
+            background: var(--primary);
+            color: white;
+        }
+        
+        .typing-dot {
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #888;
+            margin: 0 2px;
+            animation: typing 1.4s infinite both;
+        }
+        
+        .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+        .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+        
+        @keyframes typing {
+            0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); }
+            40% { opacity: 1; transform: scale(1.2); }
         }
     </style>
 </head>
@@ -936,7 +937,7 @@
                             <th style="padding:14px 12px;">Jabatan</th>
                             <th style="padding:14px 12px;">Status</th>
                             <th style="padding:14px 12px;">Aksi</th>
-                           </tr>
+                           </td>
                     </thead>
                     <tbody id="tbody-staff-attendance">
                         <tr><td colspan="9" style="text-align:center; padding:40px;">⏳ Memuat data...<\/td><\/tr>
@@ -949,7 +950,7 @@
         <div id="tab-students" class="tab-content role-admin role-guru role-developer">
             <div class="controls-bar"><div style="display:flex; gap:10px; flex-wrap:wrap; width:100%;"><input type="hidden" id="editMode" value="add"><div class="filter-group"><label>ID FP:</label><input type="number" id="newId" placeholder="ID" style="width:80px;"></div><div class="filter-group"><label>Nama:</label><input type="text" id="newNama" placeholder="Nama Siswa" style="width:200px;"></div><div class="filter-group"><label>Kelas:</label><select id="newKelas"></select></div><div class="filter-group"><label>Jurusan:</label><select id="newJurusan"></select></div><div class="filter-group"><label>Delay:</label><select id="delayUnit"><option value="minutes">Menit</option><option value="hours">Jam</option></select></div><div class="filter-group" id="delayMinutesGroup"><input type="number" id="delayMinutesValue" value="60" style="width:70px;"><span>menit</span></div><div class="filter-group" id="delayHoursGroup" style="display:none;"><select id="delayHoursValue"></select><span>jam</span></div><input type="hidden" id="newDelay" value="60"><button class="btn-action role-guru role-admin" id="btnSaveStudent" onclick="saveStudent()">➕ Simpan Siswa</button><button class="btn-action btn-danger hidden role-guru role-admin" id="btnCancelStudent" onclick="resetStudentForm()">Batal</button></div></div>
             <div class="controls-bar"><div class="filter-group"><label>Kelas:</label><select id="filterStudentKelas" onchange="renderStudentsTable()"><option value="all">Semua</option></select></div><div class="filter-group"><label>Jurusan:</label><select id="filterStudentJurusan" onchange="renderStudentsTable()"><option value="all">Semua</option></select></div><div class="search-box"><input type="text" id="searchStudentName" placeholder="🔍 Cari nama siswa..." oninput="renderStudentsTable()"></div></div>
-            <div class="table-container"><table><thead><tr><th>Foto</th><th>ID FP</th><th>Nama</th><th>Kelas</th><th>Jurusan</th><th>Delay</th><th>Aksi</th></tr></thead><tbody id="tbody-students"><tr><td colspan="7">Memuat data...<\/td><\/tr></tbody></table></div>
+            <div class="table-container"><tr><thead><tr><th>Foto</th><th>ID FP</th><th>Nama</th><th>Kelas</th><th>Jurusan</th><th>Delay</th><th>Aksi</th></tr></thead><tbody id="tbody-students"><tr><td colspan="7">Memuat data...<\/td><\/tr></tbody></table></div>
         </div>
 
         <!-- TAB STAFF (Data Staff) -->
@@ -1020,7 +1021,7 @@
         <div id="tab-chat" class="tab-content"><div class="chat-header-info" style="margin-bottom:15px;"><h3>💬 Pesan dengan Teman</h3><p class="text-small">Hanya bisa chat dengan teman yang sudah terdaftar.</p></div><div id="chatPanel" class="chat-panel" style="min-height:500px;"><div class="chat-loading" style="text-align:center; padding:40px; color:var(--text-muted);">⏳ Memuat fitur chat...</div></div></div>
 
         <!-- TAB LOGS -->
-        <div id="tab-logs" class="tab-content role-developer role-admin role-wakil role-staff-tu role-guru" style="display: none;"><div class="controls-bar"><div class="filter-group"><label>🔍 Filter Aksi:</label><select id="logActionFilter" onchange="renderLogsTable()"><option value="all">Semua Aksi</option></select></div><div class="filter-group"><label>📅 Mulai:</label><input type="date" id="logStartDate" onchange="renderLogsTable()"></div><div class="filter-group"><label>📅 Sampai:</label><input type="date" id="logEndDate" onchange="renderLogsTable()"></div><button class="btn-action btn-secondary" onclick="renderLogsTable()" style="margin-left:auto;">🔄 Refresh</button></div><div class="table-container"><table id="logsTable"><thead><tr><th>🕒 Waktu</th><th>👤 Pengguna</th><th>🎭 Role</th><th>📌 Aksi</th><th>📝 Detail</th><th>🌐 IP</th></tr></thead><tbody id="logsTbody"><tr><td colspan="6" style="text-align:center; padding:40px;">⏳ Memuat log aktivitas...</td></td></tbody></table><div id="logsPagination" style="display:flex; justify-content:center; gap:10px; margin-top:20px;"></div></div></div>
+        <div id="tab-logs" class="tab-content role-developer role-admin role-wakil role-staff-tu role-guru" style="display: none;"><div class="controls-bar"><div class="filter-group"><label>🔍 Filter Aksi:</label><select id="logActionFilter" onchange="renderLogsTable()"><option value="all">Semua Aksi</option></select></div><div class="filter-group"><label>📅 Mulai:</label><input type="date" id="logStartDate" onchange="renderLogsTable()"></div><div class="filter-group"><label>📅 Sampai:</label><input type="date" id="logEndDate" onchange="renderLogsTable()"></div><button class="btn-action btn-secondary" onclick="renderLogsTable()" style="margin-left:auto;">🔄 Refresh</button></div><div class="table-container"><table id="logsTable"><thead><tr><th>🕒 Waktu</th><th>👤 Pengguna</th><th>🎭 Role</th><th>📌 Aksi</th><th>📝 Detail</th><th>🌐 IP</th></tr></thead><tbody id="logsTbody"><tr><td colspan="6" style="text-align:center; padding:40px;">⏳ Memuat log aktivitas...</td></tr></tbody></table><div id="logsPagination" style="display:flex; justify-content:center; gap:10px; margin-top:20px;"></div></div></div>
 
         <!-- TAB CONFIG (Pengaturan) - AMAN, hanya untuk role yang diizinkan -->
         <div id="tab-config" class="tab-content role-admin role-guru role-wakil role-staff-tu role-developer" style="display: none;">
@@ -1163,7 +1164,7 @@
         </div>
 
         <!-- TAB GUIDE -->
-        <div id="tab-guide" class="tab-content role-admin role-guru role-developer"><div class="guide-container"><h3>📘 Panduan Sistem Absensi Fingerprint</h3><p class="text-small">Sistem Absensi berbasis sidik jari dengan ESP32 dan real-time monitoring</p><details open><summary>1. 📝 Pendaftaran Akun</summary><div class="guide-box"><h4>Cara Mendaftar sebagai Siswa:</h4><ol><li>Pastikan Anda sudah terdaftar di database siswa (ID Fingerprint sudah ada)</li><li>Klik "Daftar disini" pada halaman login</li><li>Pilih role "Siswa"</li><li>Masukkan ID Fingerprint yang diberikan guru</li><li>Masukkan Email dan Password (minimal 6 karakter)</li><li>Masukkan Kode Pendaftaran yang diberikan guru (bisa scan QR)</li><li>Klik "DAFTAR" dan tunggu konfirmasi</li></ol><h4>Cara Mendaftar sebagai Staff (Guru/Karyawan):</h4><ol><li>Klik "Daftar disini" pada halaman login</li><li>Pilih role "Staff"</li><li><strong>WAJIB mengisi ID Staff</strong> sesuai dengan yang tertera pada QR Code atau dari Admin</li><li>ID Staff akan DIVALIDASI dengan kode registrasi</li><li>Masukkan Email dan Password (minimal 6 karakter)</li><li>Masukkan Kode Pendaftaran Staff dari Admin (bisa scan QR)</li><li>Klik "DAFTAR" dan tunggu konfirmasi</li></ol><p class="text-small" style="color:#ff9800; margin-top:10px;">⚠️ <strong>Penting:</strong> ID Staff yang diinput akan dicocokkan dengan kode. Jika tidak sesuai, registrasi akan ditolak!</p></div></details><details><summary>2. 🔐 Login & Keamanan</summary><div class="guide-box"><h4>Cara Login:</h4><ol><li>Masukkan Email dan Password yang sudah didaftarkan</li><li>Klik tombol "MASUK"</li></ol><h4>Lupa Password?</h4><ol><li>Klik "Lupa Password?" di halaman login</li><li>Masukkan email yang terdaftar</li><li>Klik "Kirim Link"</li></ol></div></details><details><summary>3. 🤖 AI Assistant (Chat dengan AI)</summary><div class="guide-box"><h4>Perintah yang Didukung:</h4><ul><li><strong>📊 Data Siswa:</strong> "data siswa miftah", "id 1 siapa", "siswa kelas X", "siswa kelas X jurusan RPL"</li><li><strong>📈 Rekap & Statistik:</strong> "rekap miftah", "siswa paling prestasi", "statistik"</li><li><strong>✏️ Manajemen Data (Admin/Guru):</strong> "buat data siswa baru nama Titin id 8 kelas X jurusan Dev", "update siswa id 8 delay 90", "hapus siswa id 8"</li><li><strong>💬 Bantuan:</strong> "bantuan" atau "help"</li></ul><p>Klik tombol 💬 di pojok kanan bawah untuk membuka AI Assistant!</p></div></details><details><summary>4. 📱 Notifikasi WhatsApp & Pengingat</summary><div class="guide-box"><h4>Notifikasi Otomatis:</h4><ul><li>✅ Saat siswa masuk sekolah</li><li>⚠️ Jika siswa terlambat</li><li>🏠 Saat siswa pulang sekolah</li><li>❌ Jika siswa tidak hadir (Alpha)</li></ul><h4>🔔 Pengingat Absensi (Fitur Baru!):</h4><ul><li>Sistem akan mengirim pengingat otomatis jika belum absen 5 menit setelah jam masuk</li><li>Pengingat dikirim ke WhatsApp semua role (Siswa, Guru, Staff) yang nomornya terdaftar</li><li>Admin/Guru bisa mengirim pengingat manual di menu Pengaturan → "Kirim Pengingat Sekarang"</li><li>Pengingat hanya aktif pada jam 06:00 - 12:00 dan tidak di hari libur</li></ul><p class="text-small" style="color:#4caf50; margin-top:8px;">💡 Pastikan nomor WhatsApp sudah terdaftar di database (Data Siswa → Tombol WA / Data Staff → Tombol WA)</p></div></details><details><summary>5. 📝 Izin Online</summary><div class="guide-box"><h4>Cara Mengajukan Izin:</h4><ol><li>Buka tab "Izin Online"</li><li>Klik "Ajukan Izin Baru"</li><li>Pilih jenis izin (Sakit/Keperluan)</li><li>Isi tanggal dan alasan</li><li>Upload surat/dokumen pendukung (opsional)</li><li>Klik "Ajukan Izin"</li></ol><p>Guru/Admin akan menyetujui atau menolak izin yang diajukan.</p></div></details><details><summary>6. 👥 Manajemen Staff</summary><div class="guide-box"><h4>Cara Mengelola Guru/Karyawan:</h4><ol><li>Buka tab "Data Staff"</li><li>Isi form ID, Nama, Jabatan, dll</li><li>Klik "Simpan" untuk menambah staff</li><li>Klik tombol 👤 untuk membuat akun user untuk staff</li><li>Klik tombol 📱 untuk mengatur nomor WhatsApp staff</li></ol><h4>Absensi Staff:</h4><ol><li>Buka tab "Absensi Staff"</li><li>Klik "Absen Masuk Staff" untuk absen masuk</li><li>Klik "Absen Pulang Staff" untuk absen pulang</li><li>Export data ke Excel jika diperlukan</li></ol></div></details><div class="guide-footer"><hr><div class="text-small" style="text-align:center;"><p>📱 Sistem Absensi IoT - Fingerprint & Real-time</p><p>Dikembangkan oleh CV Haka Jaya | Versi 6.1 | © 2026</p></div></div></div></div>
+        <div id="tab-guide" class="tab-content role-admin role-guru role-developer"><div class="guide-container"><h3>📘 Panduan Sistem Absensi Fingerprint</h3><p class="text-small">Sistem Absensi berbasis sidik jari dengan ESP32 dan real-time monitoring</p><details open><summary>1. 📝 Pendaftaran Akun</summary><div class="guide-box"><h4>Cara Mendaftar sebagai Siswa:</h4><ol><li>Pastikan Anda sudah terdaftar di database siswa (ID Fingerprint sudah ada)</li><li>Klik "Daftar disini" pada halaman login</li><li>Pilih role "Siswa"</li><li>Masukkan ID Fingerprint yang diberikan guru</li><li>Masukkan Email dan Password (minimal 6 karakter)</li><li>Masukkan Kode Pendaftaran yang diberikan guru (bisa scan QR)</li><li>Klik "DAFTAR" dan tunggu konfirmasi</li></ol><h4>Cara Mendaftar sebagai Staff (Guru/Karyawan):</h4><ol><li>Klik "Daftar disini" pada halaman login</li><li>Pilih role "Staff"</li><li><strong>WAJIB mengisi ID Staff</strong> sesuai dengan yang tertera pada QR Code atau dari Admin</li><li>ID Staff akan DIVALIDASI dengan kode registrasi</li><li>Masukkan Email dan Password (minimal 6 karakter)</li><li>Masukkan Kode Pendaftaran Staff dari Admin (bisa scan QR)</li><li>Klik "DAFTAR" dan tunggu konfirmasi</li></ol><p class="text-small" style="color:#ff9800; margin-top:10px;">⚠️ <strong>Penting:</strong> ID Staff yang diinput akan dicocokkan dengan kode. Jika tidak sesuai, registrasi akan ditolak!</p></div></details><details><summary>2. 🔐 Login & Keamanan</summary><div class="guide-box"><h4>Cara Login:</h4><ol><li>Masukkan Email dan Password yang sudah didaftarkan</li><li>Klik tombol "MASUK"</li></ol><h4>Lupa Password?</h4><ol><li>Klik "Lupa Password?" di halaman login</li><li>Masukkan email yang terdaftar</li><li>Klik "Kirim Link"</li></ol></div></details><details><summary>3. 🤖 AI Assistant (Chat dengan AI)</summary><div class="guide-box"><h4>Perintah yang Didukung:</h4><ul><li><strong>📊 Data Siswa:</strong> "data siswa miftah", "id 1 siapa", "siswa kelas X", "siswa kelas X jurusan RPL"</li><li><strong>📈 Rekap & Statistik:</strong> "rekap miftah", "siswa paling prestasi", "statistik"</li><li><strong>✏️ Manajemen Data (Admin/Guru):</strong> "buat data siswa baru nama Titin id 8 kelas X jurusan Dev", "update siswa id 8 delay 90", "hapus siswa id 8"</li><li><strong>💬 Bantuan:</strong> "bantuan" atau "help"</li></ul><p>Klik tombol 🤖 di pojok kanan bawah untuk membuka AI Assistant!</p></div></details><details><summary>4. 📱 Notifikasi WhatsApp & Pengingat</summary><div class="guide-box"><h4>Notifikasi Otomatis:</h4><ul><li>✅ Saat siswa masuk sekolah</li><li>⚠️ Jika siswa terlambat</li><li>🏠 Saat siswa pulang sekolah</li><li>❌ Jika siswa tidak hadir (Alpha)</li></ul><h4>🔔 Pengingat Absensi (Fitur Baru!):</h4><ul><li>Sistem akan mengirim pengingat otomatis jika belum absen 5 menit setelah jam masuk</li><li>Pengingat dikirim ke WhatsApp semua role (Siswa, Guru, Staff) yang nomornya terdaftar</li><li>Admin/Guru bisa mengirim pengingat manual di menu Pengaturan → "Kirim Pengingat Sekarang"</li><li>Pengingat hanya aktif pada jam 06:00 - 12:00 dan tidak di hari libur</li></ul><p class="text-small" style="color:#4caf50; margin-top:8px;">💡 Pastikan nomor WhatsApp sudah terdaftar di database (Data Siswa → Tombol WA / Data Staff → Tombol WA)</p></div></details><details><summary>5. 📝 Izin Online</summary><div class="guide-box"><h4>Cara Mengajukan Izin:</h4><ol><li>Buka tab "Izin Online"</li><li>Klik "Ajukan Izin Baru"</li><li>Pilih jenis izin (Sakit/Keperluan)</li><li>Isi tanggal dan alasan</li><li>Upload surat/dokumen pendukung (opsional)</li><li>Klik "Ajukan Izin"</li></ol><p>Guru/Admin akan menyetujui atau menolak izin yang diajukan.</p></div></details><details><summary>6. 👥 Manajemen Staff</summary><div class="guide-box"><h4>Cara Mengelola Guru/Karyawan:</h4><ol><li>Buka tab "Data Staff"</li><li>Isi form ID, Nama, Jabatan, dll</li><li>Klik "Simpan" untuk menambah staff</li><li>Klik tombol 👤 untuk membuat akun user untuk staff</li><li>Klik tombol 📱 untuk mengatur nomor WhatsApp staff</li></ol><h4>Absensi Staff:</h4><ol><li>Buka tab "Absensi Staff"</li><li>Klik "Absen Masuk Staff" untuk absen masuk</li><li>Klik "Absen Pulang Staff" untuk absen pulang</li><li>Export data ke Excel jika diperlukan</li></ol></div></details><div class="guide-footer"><hr><div class="text-small" style="text-align:center;"><p>📱 Sistem Absensi IoT - Fingerprint & Real-time</p><p>Dikembangkan oleh CV Haka Jaya | Versi 6.1 | © 2026</p></div></div></div></div>
         
         <!-- TAB ANNOUNCEMENT LIST -->
         <div id="tab-announcement_list" class="tab-content role-admin role-guru role-developer"><div class="guide-container"><h3>📋 Daftar Semua Pengumuman</h3><div style="margin-bottom:15px;"><button class="btn-action btn-primary" onclick="openAnnouncementModal()">➕ Buat Pengumuman Baru</button></div><div id="fullAnnouncementList" class="full-announcement-list"><div style="text-align:center; padding:40px;">⏳ Memuat daftar pengumuman...</div></div></div></div>
@@ -1172,13 +1173,18 @@
         <div id="tab-izin" class="tab-content role-admin role-guru role-developer"><div class="izin-container"><div class="izin-header"><h3>📝 Izin Online</h3><p class="text-small">Ajukan izin sakit/keperluan keluarga secara online</p></div><div class="izin-actions"><button class="btn-action btn-primary" onclick="window.openAjukanIzinModal()">➕ Ajukan Izin Baru</button><div class="izin-filter"><button class="filter-btn" onclick="window.filterIzinList('all')">Semua</button><button class="filter-btn" onclick="window.filterIzinList('pending')">⏳ Menunggu</button><button class="filter-btn" onclick="window.filterIzinList('approved')">✅ Disetujui</button><button class="filter-btn" onclick="window.filterIzinList('rejected')">❌ Ditolak</button></div></div><div id="izinListContainer" class="izin-list"><div class="loading-spinner-small" style="text-align:center; padding:40px;">⏳ Memuat data izin...</div></div></div></div>
     </div>
 
+    <!-- AI ASSISTANT FLOATING BUTTON - Added manually for reliability -->
+    <button id="aiAssistantBtn" class="ai-assistant-floating-btn" onclick="openAIAssistantModal()" title="🤖 AI Assistant - Tanya Apa Saja">
+        🤖
+    </button>
+
     <!-- MODALS -->
     <div id="modal-profile" class="modal-overlay"><div class="modal-box"><div class="modal-title"><span>📸 Profil Saya</span><span onclick="closeModal('modal-profile')">✖</span></div><div class="profile-upload-wrapper" onclick="document.getElementById('profileFileInput').click()"><img id="profileImg" class="avatar-lg"><input type="file" id="profileFileInput" hidden accept="image/*" onchange="uploadProfilePhoto(this)"></div><div class="form-group"><input type="text" id="profileNameInput" placeholder="Nama Lengkap"></div><p id="profileEmail"></p><div class="form-group" id="group-subject"><input type="text" id="profileSubject" placeholder="Mata Pelajaran"></div><div class="form-group"><input type="text" id="profileKelas" placeholder="Kelas"></div><div class="form-group"><input type="text" id="profileJurusan" placeholder="Jurusan"></div><div class="modal-actions"><button class="btn-save" onclick="handleUpdateProfileInfo()">💾 Simpan</button><button class="btn-cancel" onclick="closeModal('modal-profile')">Tutup</button></div><hr><div style="text-align:center;"><button class="btn-action" onclick="openChangePasswordModal()">🔑 Ganti Password</button></div></div></div>
     <div id="modal-change-pass" class="modal-overlay"><div class="modal-box"><div class="modal-title"><span>🔑 Ganti Password</span><span onclick="closeModal('modal-change-pass')">✖</span></div><form onsubmit="handleChangePassword(event)"><div class="form-group"><input type="password" id="cpOld" placeholder="Password Lama" required></div><div class="form-group"><input type="password" id="cpNew" placeholder="Password Baru (min. 6)" required></div><div class="form-group"><input type="password" id="cpConfirm" placeholder="Konfirmasi" required></div><div class="modal-actions"><button type="button" class="btn-cancel" onclick="closeModal('modal-change-pass')">Batal</button><button type="submit" class="btn-save">Simpan</button></div></form></div></div>
     <div id="modal-forgot" class="modal-overlay"><div class="modal-box"><div class="modal-title"><span>🔐 Reset Password</span><span onclick="closeModal('modal-forgot')">✖</span></div><p>Masukkan email Anda</p><div class="form-group"><input type="email" id="forgotEmail" placeholder="Email"></div><div class="modal-actions"><button class="btn-cancel" onclick="closeModal('modal-forgot')">Batal</button><button class="btn-save" onclick="processForgot()">Kirim Link</button></div></div></div>
     <div id="modal-announcement" class="modal-overlay"><div class="modal-box"><div class="modal-title"><span>📢 Pengumuman</span><span onclick="closeModal('modal-announcement')">✖</span></div><input type="hidden" id="announcementId"><div class="form-group"><label>📝 Judul Pengumuman</label><input type="text" id="annTitle" placeholder="Masukkan judul pengumuman" class="form-control"></div><div class="form-group"><label>📄 Isi Pengumuman</label><textarea id="annMessage" rows="4" placeholder="Tulis isi pengumuman di sini..." class="form-control"></textarea></div><div class="form-group"><label>🎨 Prioritas</label><select id="annPriority" class="form-control"><option value="low">🔵 Rendah</option><option value="normal" selected>🟢 Normal</option><option value="high">🔴 Penting</option></select></div><div class="form-group"><label>🖼️ Gambar (Opsional)</label><input type="file" id="annImageInput" accept="image/*" onchange="previewAnnouncementImage(this)" class="form-control"><div id="annImagePreviewContainer" style="display:none; margin-top:10px; position:relative;"><img id="annImagePreview" style="max-width:100%; border-radius:12px; max-height:150px; object-fit:cover;"><button type="button" class="btn-icon" onclick="removeAnnouncementImage()" style="position:absolute; top:5px; right:5px; background:rgba(0,0,0,0.6); border-radius:50%; padding:5px;">🗑️</button></div><small class="text-small">Format: JPG, PNG. Maksimal 2MB.</small></div><div class="form-group"><label>⏰ Waktu Berakhir</label><select id="annExpiryType" onchange="toggleExpiryInput()" class="form-control"><option value="none">⏰ Tanpa Batas</option><option value="time">⏱️ Berdasarkan Jam</option><option value="date">📅 Berdasarkan Tanggal</option><option value="both">📅⏱️ Tanggal & Jam</option></select></div><div id="annExpiryDateGroup" class="form-group" style="display:none;"><label>📅 Tanggal Berakhir</label><input type="date" id="annExpiryDate" class="form-control"></div><div id="annExpiryTimeGroup" class="form-group" style="display:none;"><label>⏰ Jam Berakhir</label><input type="time" id="annExpiryTime" class="form-control"></div><div class="modal-actions"><button class="btn-cancel" onclick="closeModal('modal-announcement')">Batal</button><button class="btn-save" onclick="saveAnnouncement()">📢 Simpan Pengumuman</button></div></div></div>
     <div id="modal-ai-summary" class="modal-overlay"><div class="modal-box" style="max-width: 700px; max-height: 85vh; overflow-y: auto;"><div class="modal-title" style="display: flex; justify-content: space-between; align-items: center;"><span>🤖 AI Summary Absensi</span><span onclick="closeModal('modal-ai-summary')" style="cursor: pointer; font-size: 24px;">✖</span></div><div style="padding: 20px;" id="aiSummaryContent"><div style="text-align: center; padding: 40px;"><div style="font-size: 48px; margin-bottom: 16px;">🚀</div><h3>Memuat analisis...</h3><div class="loading-spinner" style="margin-top: 20px;"></div></div></div><div class="modal-actions" style="padding: 15px; border-top: 1px solid var(--border);"><button class="btn-action btn-success" onclick="exportAISummaryToPDF()" id="aiExportPdfBtn" style="display: none;">📄 Export PDF</button><button class="btn-action btn-secondary" onclick="copyAISummaryToClipboard()" id="aiCopyBtn" style="display: none;">📋 Copy ke Clipboard</button><button class="btn-cancel" onclick="closeModal('modal-ai-summary')">Tutup</button></div></div></div>
-    <div id="modal-ai-assistant" class="modal-overlay"><div class="modal-box" style="max-width: 600px; width: 90%; height: 80vh; display: flex; flex-direction: column; padding: 0;"><div class="modal-title" style="padding: 15px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;"><span>🤖 AI Assistant <small style="font-size: 11px; color: #888;" id="aiProviderBadge">Ready</small></span><span onclick="closeAIAssistantModal()" style="cursor: pointer; font-size: 24px;">✖</span></div><div id="aiChatMessages" style="flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 12px;"><div class="ai-message ai-bot"><div class="ai-avatar">🤖</div><div class="ai-bubble">Halo! Saya asisten AI untuk sistem absensi.<br><br>Saya bisa membantu:<br>• 🔍 Mencari data siswa<br>• 📊 Melihat rekap absensi<br>• 📈 Menampilkan statistik<br>• ✏️ Membantu operasional (tambah/edit/hapus data)<br><br><strong>Ketik "bantuan" untuk melihat semua perintah!</strong></div></div></div><div style="padding: 15px; border-top: 1px solid var(--border); display: flex; gap: 10px;"><input type="text" id="aiChatInput" placeholder="Tanyakan sesuatu... misal: 'data siswa kelas X'" style="flex: 1; padding: 12px; border-radius: 30px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary);"><button id="aiSendBtn" style="padding: 12px 20px; border-radius: 30px; background: linear-gradient(135deg, #00bcd4, #2196f3); border: none; color: white; cursor: pointer;">📤 Kirim</button></div></div></div>
+    <div id="modal-ai-assistant" class="modal-overlay"><div class="modal-box" style="max-width: 600px; width: 90%; height: 80vh; display: flex; flex-direction: column; padding: 0;"><div class="modal-title" style="padding: 15px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;"><span>🤖 AI Assistant <small style="font-size: 11px; color: #888;" id="aiProviderBadge">Ready</small></span><span onclick="closeAIAssistantModal()" style="cursor: pointer; font-size: 24px;">✖</span></div><div id="aiChatMessages" style="flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 12px;"><div class="ai-message ai-bot"><div class="ai-avatar">🤖</div><div class="ai-bubble">Halo! Saya asisten AI untuk sistem absensi.<br><br>Saya bisa membantu:<br>• 🔍 Mencari data siswa<br>• 📊 Melihat rekap absensi<br>• 📈 Menampilkan statistik<br>• ✏️ Membantu operasional (tambah/edit/hapus data)<br><br><strong>Ketik "bantuan" untuk melihat semua perintah!</strong></div></div></div><div style="padding: 15px; border-top: 1px solid var(--border); display: flex; gap: 10px;"><input type="text" id="aiChatInput" placeholder="Tanyakan sesuatu... misal: 'data siswa kelas X'" style="flex: 1; padding: 12px; border-radius: 30px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary);"><button id="aiSendBtn" style="padding: 12px 20px; border-radius: 30px; background: linear-gradient(135deg, #667eea, #764ba2); border: none; color: white; cursor: pointer;">📤 Kirim</button></div></div></div>
     <div id="modal-parent-contact" class="modal-overlay"><div class="modal-box" style="max-width:450px;"><div class="modal-title"><span>📱 WhatsApp Orang Tua</span><span onclick="closeModal('modal-parent-contact')">✖</span></div><div style="padding:20px;"><div class="form-group"><label>👨‍🎓 Siswa</label><input type="text" id="parentStudentName" readonly style="background:var(--bg-hover);"></div><div class="form-group"><label>📱 Nomor WhatsApp Orang Tua</label><input type="tel" id="parentPhoneNumber" placeholder="Contoh: 08123456789 atau 628123456789"><small class="text-small">Format: 08xxxxxxxxx atau 628xxxxxxxxx</small></div><div class="form-group"><label>👤 Hubungan</label><select id="parentRelation"><option value="orang_tua">Orang Tua</option><option value="ayah">Ayah</option><option value="ibu">Ibu</option><option value="wali">Wali</option></select></div><div class="modal-actions"><button class="btn-cancel" onclick="closeModal('modal-parent-contact')">Batal</button><button class="btn-save" onclick="saveParentContactFromModal()">💾 Simpan</button></div></div></div></div>
     <div id="modal-ajukan-izin" class="modal-overlay"><div class="modal-box" style="max-width:550px;"><div class="modal-title"><span>📝 Ajukan Izin</span><span onclick="closeModal('modal-ajukan-izin')">✖</span></div><div style="padding:20px;"><form id="formAjukanIzin" onsubmit="submitIzin(event)"><div class="form-group"><label>📋 Jenis Izin</label><select id="izinType" required><option value="sakit">🤒 Sakit</option><option value="keperluan">📝 Keperluan Keluarga</option></select></div><div class="form-group"><label>📅 Tanggal Mulai</label><input type="date" id="izinStartDate" required></div><div class="form-group"><label>📅 Tanggal Selesai</label><input type="date" id="izinEndDate" required></div><div class="form-group"><label>📝 Alasan / Keterangan</label><textarea id="izinReason" rows="4" placeholder="Jelaskan alasan izin..." required></textarea></div><div class="form-group"><label>📎 Lampiran (Opsional)</label><input type="file" id="izinAttachment" accept=".pdf,.jpg,.jpeg,.png"><small class="text-small">Format: PDF, JPG, PNG. Maksimal 2MB</small><div id="attachmentPreview" style="display:none; margin-top:10px;"><span id="attachmentName"></span><button type="button" class="btn-icon" onclick="clearAttachment()">✖</button></div></div><div class="modal-actions"><button type="button" class="btn-cancel" onclick="closeModal('modal-ajukan-izin')">Batal</button><button type="submit" class="btn-save">📤 Ajukan Izin</button></div></form></div></div></div>
     <div id="modal-simulate-staff-in" class="modal-overlay"><div class="modal-box" style="max-width:500px;"><div class="modal-title"><span>📷 Absen Masuk Staff</span><span onclick="closeModal('modal-simulate-staff-in')">✖</span></div><div style="padding:20px;"><div class="form-group"><label>🔍 Cari Staff (Nama atau ID)</label><input type="text" id="simulateStaffSearchInput" placeholder="Ketik nama atau ID staff..."></div><div id="simulateStaffList" style="max-height:200px; overflow-y:auto; border:1px solid var(--border); border-radius:8px; margin-bottom:15px;"></div><input type="hidden" id="selectedStaffId"><input type="hidden" id="selectedStaffName"><input type="hidden" id="selectedStaffJabatan"><div id="simulateStaffWarning" class="text-small" style="color:#ff9800;"></div></div><div class="modal-actions"><button class="btn-cancel" onclick="closeModal('modal-simulate-staff-in')">Batal</button><button class="btn-save" onclick="executeSimulateStaffIn()">✅ Simpan Absen Masuk</button></div></div></div>
@@ -1740,10 +1746,20 @@
         }
         
         function openAIAssistantModal() {
-            if (typeof window.openAIAssistantModal === 'function') window.openAIAssistantModal();
-            else {
+            console.log("🤖 Opening AI Assistant Modal");
+            if (typeof window.openAIAssistantModal === 'function') {
+                window.openAIAssistantModal();
+            } else {
+                console.log("⚠️ window.openAIAssistantModal not available, using fallback");
                 var modal = document.getElementById('modal-ai-assistant');
-                if (modal) modal.classList.add('open');
+                if (modal) {
+                    modal.classList.add('open');
+                } else {
+                    console.error("❌ modal-ai-assistant not found!");
+                    if (typeof showToast === 'function') {
+                        showToast("❌ AI Assistant sedang dimuat, coba lagi nanti", "error");
+                    }
+                }
             }
         }
         
@@ -1800,6 +1816,18 @@
                     initAttendanceReminder();
                 }
             }, 1500);
+            
+            // Show AI Assistant button if role has access
+            setTimeout(function() {
+                if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'guru' || currentUser.role === 'developer' || currentUser.role === 'wakil_kepala' || currentUser.role === 'staff_tu')) {
+                    console.log("✅ AI Assistant button should be visible for role:", currentUser.role);
+                    var aiBtn = document.getElementById('aiAssistantBtn');
+                    if (aiBtn) {
+                        aiBtn.style.display = 'flex';
+                        console.log("✅ AI Assistant button shown");
+                    }
+                }
+            }, 2000);
         });
         
         function showToast(msg,type){ var t=document.getElementById('toast'); if(t){ t.textContent=msg; t.style.borderLeftColor=type==='error'?'#f44336':'#00bcd4'; t.className='toast show'; setTimeout(function(){ t.className=t.className.replace('show',''); },3000); } }
@@ -1820,6 +1848,92 @@
         window.toggleGenerateInput = toggleGenerateInput;
         window.toggleRegisterInput = toggleRegisterInput;
         window.refreshCodesTable = refreshCodesTable;
+    </script>
+
+    <!-- ======================= FORCE AI ASSISTANT BUTTON - FINAL GUARANTEE ======================= -->
+    <script>
+    (function() {
+        console.log("🔧 FORCE AI BUTTON SCRIPT STARTED");
+        
+        function ensureAIButton() {
+            var aiBtn = document.getElementById('aiAssistantBtn');
+            
+            // Create if not exists
+            if (!aiBtn) {
+                console.log("⚠️ AI button not found, creating...");
+                aiBtn = document.createElement('button');
+                aiBtn.id = 'aiAssistantBtn';
+                aiBtn.className = 'ai-assistant-floating-btn';
+                aiBtn.innerHTML = '🤖';
+                aiBtn.title = '🤖 AI Assistant - Tanya Apa Saja';
+                aiBtn.style.cssText = 'position:fixed; bottom:100px; right:20px; width:56px; height:56px; border-radius:50%; background:linear-gradient(135deg,#667eea,#764ba2); color:white; display:flex; align-items:center; justify-content:center; cursor:pointer; box-shadow:0 4px 15px rgba(0,0,0,0.3); z-index:9999; border:none; font-size:28px; transition:transform 0.2s,box-shadow 0.2s;';
+                aiBtn.onmouseenter = function() { this.style.transform = 'scale(1.1)'; this.style.boxShadow = '0 6px 20px rgba(0,0,0,0.4)'; };
+                aiBtn.onmouseleave = function() { this.style.transform = 'scale(1)'; this.style.boxShadow = '0 4px 15px rgba(0,0,0,0.3)'; };
+                aiBtn.onclick = function() {
+                    if (typeof window.openAIAssistantModal === 'function') {
+                        window.openAIAssistantModal();
+                    } else if (typeof openAIAssistantModal === 'function') {
+                        openAIAssistantModal();
+                    } else {
+                        var modal = document.getElementById('modal-ai-assistant');
+                        if (modal) modal.classList.add('open');
+                        else if (typeof showToast === 'function') showToast('🤖 AI Assistant sedang dimuat...', 'info');
+                    }
+                };
+                document.body.appendChild(aiBtn);
+                console.log("✅ AI Assistant button created by force script");
+            }
+            
+            // Check role and show/hide
+            if (window.currentUser) {
+                var role = window.currentUser.role;
+                var allowedRoles = ['admin', 'guru', 'developer', 'wakil_kepala', 'staff_tu'];
+                if (allowedRoles.includes(role)) {
+                    aiBtn.style.display = 'flex';
+                    console.log("✅ AI Assistant button FORCE SHOWN for role:", role);
+                } else {
+                    aiBtn.style.display = 'none';
+                    console.log("🔒 AI Assistant button hidden for role:", role);
+                }
+            } else {
+                aiBtn.style.display = 'none';
+                console.log("⏳ AI Assistant button waiting for currentUser");
+            }
+        }
+        
+        // Run immediately
+        ensureAIButton();
+        
+        // Run when DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', function() {
+                setTimeout(ensureAIButton, 100);
+            });
+        } else {
+            setTimeout(ensureAIButton, 100);
+        }
+        
+        // Interval checker
+        var checkCount = 0;
+        var checkInterval = setInterval(function() {
+            if (window.currentUser) {
+                ensureAIButton();
+                if (checkCount > 10) clearInterval(checkInterval);
+            }
+            checkCount++;
+            if (checkCount > 30) clearInterval(checkInterval);
+        }, 1000);
+        
+        // Listen for events
+        window.addEventListener('uiReady', function() {
+            setTimeout(ensureAIButton, 200);
+        });
+        window.addEventListener('dataReady', function() {
+            setTimeout(ensureAIButton, 200);
+        });
+        
+        console.log("🔧 FORCE AI BUTTON SCRIPT COMPLETED");
+    })();
     </script>
 
     <div class="branding-footer">
