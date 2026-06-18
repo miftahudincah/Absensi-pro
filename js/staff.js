@@ -1,6 +1,10 @@
-// staff.js - VERSION 3.2 (FIXED PHOTO SYNC)
+// staff.js - VERSION 3.4 (DENGAN WHATSAPP INTEGRASI)
 // Manajemen Data Guru/Karyawan dengan Sinkronisasi penuh ke Akun User
-// PERBAIKAN: Foto profil sekarang benar-benar sinkron dari akun user
+// PERUBAHAN V3.4: 
+//   - Menambahkan integrasi WhatsApp untuk notifikasi staff
+//   - Menampilkan nomor HP staff di tabel dengan ikon WhatsApp
+//   - Menambahkan tombol test WhatsApp untuk staff
+//   - Sinkronisasi nomor HP antara staff dan user auth
 // ============================================================================
 
 let staffDataReadyListenerAdded = false;
@@ -286,350 +290,6 @@ async function syncAllStaffFromUserAccounts() {
     }
 }
 
-// ======================= NOTIFIKASI WHATSAPP UNTUK STAFF ========================
-async function sendStaffWhatsAppNotification(staffId, staffName, type, time, date = null) {
-    if (typeof window.WHATSAPP_CONFIG === 'undefined' || !window.WHATSAPP_CONFIG.enabled) {
-        console.log('📱 WhatsApp notification disabled for staff');
-        return;
-    }
-    
-    if (type === 'check_in' && !window.WHATSAPP_CONFIG.sendOnCheckIn) return;
-    if (type === 'check_out' && !window.WHATSAPP_CONFIG.sendOnCheckOut) return;
-    
-    try {
-        let phoneNumber = null;
-        
-        const staffContactSnapshot = await db.ref(`staff_contacts/${staffId}`).once('value');
-        const staffContactData = staffContactSnapshot.val();
-        
-        if (staffContactData && staffContactData.phoneNumber) {
-            phoneNumber = staffContactData.phoneNumber;
-        } else {
-            const staffSnapshot = await db.ref(`staff/${staffId}`).once('value');
-            const staffData = staffSnapshot.val();
-            if (staffData && staffData.noHp) {
-                phoneNumber = staffData.noHp;
-            }
-        }
-        
-        // Cari dari users_auth
-        if (!phoneNumber && window.dbData && window.dbData.users_auth) {
-            const userAuth = window.dbData.users_auth.find(u => u.staffId == staffId || u.uid == staffId);
-            if (userAuth && userAuth.noHp) {
-                phoneNumber = userAuth.noHp;
-            }
-        }
-        
-        if (!phoneNumber) {
-            console.log(`📱 No WhatsApp number for staff ${staffName} (ID: ${staffId})`);
-            return;
-        }
-        
-        let formattedNumber = phoneNumber.replace(/[^0-9]/g, '');
-        if (formattedNumber.startsWith('0')) formattedNumber = '62' + formattedNumber.substring(1);
-        if (!formattedNumber.startsWith('62')) formattedNumber = '62' + formattedNumber;
-        
-        const today = date || new Date().toISOString().split('T')[0];
-        const formattedDate = formatIndonesianDate(today);
-        
-        let title = '';
-        let message = '';
-        
-        switch(type) {
-            case 'check_in':
-                title = '✅ Absen Masuk Staff';
-                message = `*${staffName}* telah absen masuk pada pukul *${time}*.\n\n📅 Tanggal: ${formattedDate}\n\nSelamat bekerja! 👨‍🏫✨`;
-                break;
-            case 'check_out':
-                title = '🏠 Absen Pulang Staff';
-                message = `*${staffName}* telah absen pulang pada pukul *${time}*.\n\n📅 Tanggal: ${formattedDate}\n\nSemoga sampai rumah dengan selamat. 🏡`;
-                break;
-        }
-        
-        if (typeof sendViaFonnte === 'function') {
-            const fullMessage = `*📢 SISTEM ABSENSI SEKOLAH*\n\n*${title}*\n\n${message}\n\n---\n📱 Sistem Absensi IoT - Real-time`;
-            const result = await sendViaFonnte(formattedNumber, fullMessage);
-            if (result) {
-                console.log(`📱 WhatsApp sent to staff ${staffName}: ${type}`);
-                await db.ref(`staff_notifications_log/${staffId}/${Date.now()}`).set({
-                    type: type,
-                    phoneNumber: formattedNumber,
-                    time: time,
-                    date: today,
-                    sentAt: firebase.database.ServerValue.TIMESTAMP
-                });
-            }
-        }
-        
-    } catch (error) {
-        console.error('Send staff notification error:', error);
-    }
-}
-
-function formatIndonesianDate(dateStr) {
-    if (!dateStr) return '';
-    const parts = dateStr.split('-');
-    if (parts.length !== 3) return dateStr;
-    const bulan = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
-    return `${parts[2]} ${bulan[parseInt(parts[1]) - 1]} ${parts[0]}`;
-}
-
-async function saveStaffContact(staffId, staffName, phoneNumber, relation = 'staff') {
-    if (!window.currentUser || (window.currentUser.role !== 'admin' && window.currentUser.role !== 'developer')) {
-        if (window.showToast) window.showToast('⛔ Hanya Admin dan Developer yang dapat mengedit kontak staff!', 'error');
-        return false;
-    }
-    
-    let formattedNumber = phoneNumber.replace(/[^0-9]/g, '');
-    if (formattedNumber.startsWith('0')) formattedNumber = '62' + formattedNumber.substring(1);
-    if (!formattedNumber.startsWith('62')) formattedNumber = '62' + formattedNumber;
-    
-    try {
-        await db.ref(`staff_contacts/${staffId}`).set({
-            staffId: staffId,
-            staffName: staffName,
-            phoneNumber: formattedNumber,
-            rawNumber: phoneNumber,
-            relation: relation,
-            updatedBy: window.currentUser.nama || window.currentUser.email,
-            updatedAt: firebase.database.ServerValue.TIMESTAMP
-        });
-        
-        // Update juga di node staff dan users_auth
-        await db.ref(`staff/${staffId}/noHp`).set(formattedNumber);
-        
-        // Update di users_auth jika ada
-        const userAuth = window.dbData?.users_auth?.find(u => u.staffId == staffId);
-        if (userAuth) {
-            await db.ref(`users_auth/${userAuth.uid}/noHp`).set(formattedNumber);
-        }
-        
-        if (window.showToast) window.showToast(`✅ Nomor WhatsApp ${staffName} berhasil disimpan!`, 'success');
-        
-        if (typeof window.logActivity === 'function') {
-            window.logActivity('save_staff_contact', `Simpan kontak staff ${staffName} (ID: ${staffId}) - ${formattedNumber}`);
-        }
-        
-        return true;
-    } catch (error) {
-        console.error('Save staff contact error:', error);
-        if (window.showToast) window.showToast('❌ Gagal menyimpan nomor', 'error');
-        return false;
-    }
-}
-
-async function getStaffContact(staffId) {
-    try {
-        const snapshot = await db.ref(`staff_contacts/${staffId}`).once('value');
-        return snapshot.val();
-    } catch (error) {
-        console.error('Get staff contact error:', error);
-        return null;
-    }
-}
-
-// ======================= FUNGSI CLOSE MODAL ========================
-function closeStaffContactModal() {
-    const modal = document.getElementById('modal-staff-contact');
-    if (modal) {
-        modal.classList.remove('open');
-        modal.style.display = 'none';
-        setTimeout(() => {
-            if (modal && modal.parentNode) {
-                modal.remove();
-            }
-        }, 300);
-    }
-}
-
-function closeStaffPhotoModal() {
-    const modal = document.getElementById('modal-staff-photo');
-    if (modal) {
-        modal.classList.remove('open');
-        modal.style.display = 'none';
-        setTimeout(() => {
-            if (modal && modal.parentNode) {
-                modal.remove();
-            }
-        }, 300);
-    }
-}
-
-if (typeof window.closeModal === 'function') {
-    const originalCloseModal = window.closeModal;
-    window.closeModal = function(modalId) {
-        if (modalId === 'modal-staff-contact') {
-            closeStaffContactModal();
-            return;
-        }
-        if (modalId === 'modal-staff-photo') {
-            closeStaffPhotoModal();
-            return;
-        }
-        originalCloseModal(modalId);
-    };
-} else {
-    window.closeModal = function(modalId) {
-        if (modalId === 'modal-staff-contact') {
-            closeStaffContactModal();
-            return;
-        }
-        if (modalId === 'modal-staff-photo') {
-            closeStaffPhotoModal();
-            return;
-        }
-        const modal = document.getElementById(modalId);
-        if (modal) {
-            modal.classList.remove('open');
-            modal.style.display = 'none';
-        }
-    };
-}
-
-// ======================= MODAL STAFF CONTACT ========================
-function openStaffContactModal(staffId, staffName) {
-    const modalId = 'modal-staff-contact';
-    let existingModal = document.getElementById(modalId);
-    if (existingModal) existingModal.remove();
-    
-    db.ref(`staff_contacts/${staffId}`).once('value', (snapshot) => {
-        const contact = snapshot.val();
-        let existingNumber = '';
-        let existingRelation = 'staff';
-        
-        if (contact && contact.rawNumber) {
-            existingNumber = contact.rawNumber;
-            existingRelation = contact.relation || 'staff';
-        }
-        
-        const modalHtml = `
-            <div id="${modalId}" class="modal-overlay open" style="display:flex; align-items:center; justify-content:center; z-index:10000;">
-                <div class="modal-box" style="max-width: 450px; background:var(--bg-card); border-radius:20px;">
-                    <div class="modal-title" style="display:flex; justify-content:space-between; align-items:center; padding:15px 20px; border-bottom:1px solid var(--border);">
-                        <span>📱 WhatsApp Staff - ${escapeHtmlStaff(staffName)}</span>
-                        <span class="close-staff-modal" style="cursor:pointer; font-size:24px;">✖</span>
-                    </div>
-                    <div style="padding: 20px;">
-                        <div class="form-group">
-                            <label>👤 Staff</label>
-                            <input type="text" id="staffContactName" value="${escapeHtmlStaff(staffName)}" readonly style="background: var(--bg-hover); width:100%; padding:10px; border-radius:8px;">
-                        </div>
-                        <div class="form-group">
-                            <label>📱 Nomor WhatsApp</label>
-                            <input type="tel" id="staffContactPhone" placeholder="Contoh: 08123456789 atau 628123456789" value="${escapeHtmlStaff(existingNumber)}" style="width:100%; padding:10px; border-radius:8px; border:1px solid var(--border); background:var(--bg-input);">
-                            <small class="text-small" style="color: var(--text-muted);">Format: 08xxxxxxxxx atau 628xxxxxxxxx</small>
-                        </div>
-                        <div class="form-group">
-                            <label>👤 Hubungan</label>
-                            <select id="staffContactRelation" style="width:100%; padding:10px; border-radius:8px; border:1px solid var(--border); background:var(--bg-input);">
-                                <option value="staff" ${existingRelation === 'staff' ? 'selected' : ''}>Staff</option>
-                                <option value="guru" ${existingRelation === 'guru' ? 'selected' : ''}>Guru</option>
-                                <option value="karyawan" ${existingRelation === 'karyawan' ? 'selected' : ''}>Karyawan</option>
-                                <option value="pribadi" ${existingRelation === 'pribadi' ? 'selected' : ''}>Pribadi</option>
-                            </select>
-                        </div>
-                        <div class="modal-actions" style="display:flex; gap:10px; justify-content:flex-end; margin-top:20px;">
-                            <button class="btn-cancel close-staff-modal" style="padding:8px 20px; border-radius:20px; border:none; cursor:pointer;">Batal</button>
-                            <button class="btn-save" onclick="saveStaffContactFromModal('${staffId}', '${escapeHtmlStaff(staffName)}')" style="padding:8px 20px; border-radius:20px; border:none; background:#4caf50; color:white; cursor:pointer;">💾 Simpan Nomor</button>
-                        </div>
-                        <div class="text-small" style="margin-top: 15px; text-align: center; color: var(--text-muted);">
-                            <hr>
-                            📱 <strong>Test Kirim Pesan</strong><br>
-                            <button class="btn-action btn-success" onclick="testSendStaffWhatsApp('${staffId}', '${escapeHtmlStaff(staffName)}')" style="margin-top: 8px; padding: 6px 12px; font-size: 0.75rem;">
-                                🔔 Kirim Test WhatsApp
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-        document.body.insertAdjacentHTML('beforeend', modalHtml);
-        
-        document.querySelectorAll('.close-staff-modal').forEach(btn => {
-            btn.addEventListener('click', closeStaffContactModal);
-        });
-        
-        const modalOverlay = document.getElementById(modalId);
-        if (modalOverlay) {
-            modalOverlay.addEventListener('click', function(e) {
-                if (e.target === modalOverlay) {
-                    closeStaffContactModal();
-                }
-            });
-        }
-        
-        const escHandler = function(e) {
-            if (e.key === 'Escape') {
-                closeStaffContactModal();
-                document.removeEventListener('keydown', escHandler);
-            }
-        };
-        document.addEventListener('keydown', escHandler);
-    });
-}
-
-async function saveStaffContactFromModal(staffId, staffName) {
-    const phoneNumber = document.getElementById('staffContactPhone')?.value.trim();
-    const relation = document.getElementById('staffContactRelation')?.value;
-    
-    if (!phoneNumber) {
-        if (window.showToast) window.showToast('Masukkan nomor WhatsApp!', 'error');
-        return;
-    }
-    
-    await saveStaffContact(staffId, staffName, phoneNumber, relation);
-    closeStaffContactModal();
-}
-
-async function testSendStaffWhatsApp(staffId, staffName) {
-    let phoneNumber = null;
-    
-    const staffContactSnapshot = await db.ref(`staff_contacts/${staffId}`).once('value');
-    const staffContactData = staffContactSnapshot.val();
-    
-    if (staffContactData && staffContactData.phoneNumber) {
-        phoneNumber = staffContactData.phoneNumber;
-    }
-    
-    if (!phoneNumber) {
-        if (window.showToast) window.showToast(`❌ Nomor WhatsApp untuk ${staffName} belum diisi!`, 'error');
-        return;
-    }
-    
-    if (typeof sendViaFonnte !== 'function') {
-        if (window.showToast) window.showToast('❌ Fungsi WhatsApp tidak tersedia. Pastikan whatsapp-notif.js sudah dimuat.', 'error');
-        return;
-    }
-    
-    const testMessage = `🧪 *TEST NOTIFIKASI WHATSAPP - STAFF*
-
-Halo *${staffName}*, ini adalah pesan test dari **Sistem Absensi Sekolah**.
-
-*Staff:* ${staffName}
-*Waktu Test:* ${new Date().toLocaleString('id-ID')}
-
-Jika Anda menerima pesan ini, berarti notifikasi WhatsApp untuk staff berhasil terintegrasi! ✅
-
----
-📱 Sistem Absensi IoT - Real-time`;
-    
-    if (window.showToast) window.showToast('📤 Mengirim pesan test...', 'info');
-    
-    const result = await sendViaFonnte(phoneNumber, testMessage);
-    
-    if (result) {
-        if (window.showToast) window.showToast(`✅ Pesan test berhasil dikirim ke ${phoneNumber}`, 'success');
-        if (typeof window.logActivity === 'function') {
-            window.logActivity('test_staff_whatsapp', `Test WhatsApp ke staff ${staffName} (${phoneNumber}) - BERHASIL`);
-        }
-    } else {
-        if (window.showToast) window.showToast(`❌ Gagal mengirim ke ${phoneNumber}. Cek API Key dan koneksi.`, 'error');
-        if (typeof window.logActivity === 'function') {
-            window.logActivity('test_staff_whatsapp', `Test WhatsApp ke staff ${staffName} (${phoneNumber}) - GAGAL`);
-        }
-    }
-}
-
 // ======================= FUNGSI FILTER ========================
 function filterStaffList(staffList) {
     if (!staffList) return [];
@@ -887,7 +547,7 @@ async function getStaffList(forceRefresh = false) {
     return staffList;
 }
 
-// ======================= RENDER TABEL STAFF (DENGAN FOTO YANG BENAR) ========================
+// ======================= RENDER TABEL STAFF (DENGAN WHATSAPP) ========================
 async function renderStaffTable() {
     console.log("👥 renderStaffTable dipanggil");
     
@@ -1009,7 +669,6 @@ async function renderStaffTable() {
         
         const canEdit = canManageStaff();
         tbody.innerHTML = '';
-        const canManageWhatsApp = window.currentUser && (window.currentUser.role === 'admin' || window.currentUser.role === 'developer');
         
         for (const staff of filteredStaff) {
             // Gunakan foto dari akun user jika ada
@@ -1031,16 +690,11 @@ async function renderStaffTable() {
                 ? `<span style="background:#4caf50; color:white; font-size:10px; padding:3px 8px; border-radius:20px; margin-left:6px;" title="Email akun: ${userAccountInfo?.email || '-'}">✓ Berakun</span>` 
                 : '<span style="background:#ff9800; color:white; font-size:10px; padding:3px 8px; border-radius:20px; margin-left:6px;" title="Belum memiliki akun login">❌ Belum Berakun</span>';
             
-            // Badge WhatsApp
-            let hasWhatsApp = false;
-            let whatsAppNumber = staff.noHp && staff.noHp !== '-' ? staff.noHp : null;
-            if (!whatsAppNumber && userAccountInfo && userAccountInfo.noHp) {
-                whatsAppNumber = userAccountInfo.noHp;
-            }
-            hasWhatsApp = !!whatsAppNumber;
-            
+            // ========== WHATSAPP BADGE ==========
+            const phoneNumber = staff.noHp || userAccountInfo?.noHp || '';
+            const hasWhatsApp = phoneNumber && phoneNumber !== '-' && phoneNumber !== '';
             const waBadge = hasWhatsApp 
-                ? `<span style="background:#25D366; color:white; font-size:10px; padding:3px 8px; border-radius:20px; margin-left:6px;" title="Nomor WhatsApp: ${whatsAppNumber}">📱 WA</span>` 
+                ? `<span style="background:#25D366; color:white; font-size:10px; padding:3px 8px; border-radius:20px; margin-left:6px;" title="Nomor WhatsApp: ${escapeHtmlStaff(phoneNumber)}">📱 WA</span>` 
                 : '';
             
             // Jabatan dengan icon
@@ -1062,10 +716,18 @@ async function renderStaffTable() {
             let displayEmail = staff.email && staff.email !== '-' ? staff.email : (userAccountInfo?.email || '-');
             
             if (displayPhone && displayPhone !== '-') {
-                kontakHtml += `<div style="display:flex; align-items:center; gap:4px; margin-bottom:4px;"><span style="font-size:14px;">📱</span> <span style="font-size:13px;">${escapeHtmlStaff(displayPhone)}</span></div>`;
+                const formattedPhone = formatPhoneDisplay(displayPhone);
+                kontakHtml += `<div style="display:flex; align-items:center; gap:4px; margin-bottom:4px;">
+                    <span style="font-size:14px; color:#25D366;">📱</span> 
+                    <span style="font-size:13px;">${escapeHtmlStaff(formattedPhone)}</span>
+                    ${hasWhatsApp ? `<span style="font-size:10px; color:#25D366;">(WA)</span>` : ''}
+                </div>`;
             }
             if (displayEmail && displayEmail !== '-') {
-                kontakHtml += `<div style="display:flex; align-items:center; gap:4px;"><span style="font-size:14px;">✉️</span> <span style="font-size:13px;">${escapeHtmlStaff(displayEmail)}</span></div>`;
+                kontakHtml += `<div style="display:flex; align-items:center; gap:4px;">
+                    <span style="font-size:14px;">✉️</span> 
+                    <span style="font-size:13px;">${escapeHtmlStaff(displayEmail)}</span>
+                </div>`;
             }
             if (!kontakHtml) {
                 kontakHtml = '<span style="color: var(--text-muted); font-size:12px;">-</span>';
@@ -1076,10 +738,15 @@ async function renderStaffTable() {
                 ? '<div><span style="background:#2196f3; color:white; font-size:9px; padding:2px 6px; border-radius:12px;" title="Data diambil dari akun user">👥 Dari Akun User</span></div>' 
                 : '<div><span style="background:#ff9800; color:white; font-size:9px; padding:2px 6px; border-radius:12px;" title="Data ditambahkan manual">📁 Data Manual</span></div>';
             
-            // Action buttons
+            // ========== ACTION BUTTONS (DENGAN WHATSAPP) ==========
             let actionButtons = '';
             if (canEdit) {
                 const isFromUserAuth = staff.source === 'user_auth' || staff.fromUserAuth;
+                
+                // Tombol test WhatsApp (jika ada nomor)
+                const waTestBtn = hasWhatsApp 
+                    ? `<button onclick="testStaffWhatsApp('${safeId}', '${safeNama}', '${escapeHtmlStaff(displayPhone)}')" class="staff-action-btn wa-test" title="Test Kirim WA" style="background:#25D366; color:white; border:none; border-radius:10px; padding:6px 10px; cursor:pointer; font-size:14px;">📱</button>` 
+                    : '';
                 
                 if (!isFromUserAuth) {
                     actionButtons = `
@@ -1087,8 +754,8 @@ async function renderStaffTable() {
                             <button onclick="editStaff('${safeId}')" class="staff-action-btn edit" title="Edit Staff">✏️</button>
                             <button onclick="deleteStaff('${safeId}', '${safeNama}')" class="staff-action-btn delete" title="Hapus Staff">🗑️</button>
                             ${!hasAccount ? `<button onclick="createStaffUserAccount('${safeId}', '${safeNama}', '${escapeHtmlStaff(displayEmail)}')" class="staff-action-btn create-account" title="Buat Akun User">👤</button>` : ''}
-                            ${canManageWhatsApp ? `<button onclick="openStaffContactModal('${safeId}', '${safeNama}')" class="staff-action-btn whatsapp" title="Set WhatsApp">📱</button>` : ''}
                             ${hasAccount && userAccountInfo?.photoUrl ? `<button onclick="refreshStaffPhoto('${safeId}')" class="staff-action-btn refresh" title="Refresh Foto">🔄</button>` : ''}
+                            ${waTestBtn}
                         </div>
                     `;
                 } else {
@@ -1096,8 +763,8 @@ async function renderStaffTable() {
                         <div style="display:flex; gap:6px; flex-wrap:wrap;">
                             <button onclick="viewUserAccount('${staff.userId || safeId}')" class="staff-action-btn view" title="Lihat Akun">👁️</button>
                             <button onclick="deleteUserAccount('${staff.userId || safeId}', '${safeNama}')" class="staff-action-btn delete" title="Hapus Akun">🗑️</button>
-                            ${canManageWhatsApp ? `<button onclick="openStaffContactModal('${safeId}', '${safeNama}')" class="staff-action-btn whatsapp" title="Set WhatsApp">📱</button>` : ''}
                             <button onclick="refreshStaffPhoto('${safeId}')" class="staff-action-btn refresh" title="Refresh Foto">🔄</button>
+                            ${waTestBtn}
                         </div>
                     `;
                 }
@@ -1115,32 +782,32 @@ async function renderStaffTable() {
                                  onerror="this.src='https://ui-avatars.com/api/?name=${initial}&background=ff9800&color=fff&size=100&bold=true'"
                                  onclick="showStaffPhotoModal('${safeId}', '${safeNama}', this.src)">
                         </div>
-                    </div>
+                    </td>
                     <td style="padding:12px;">
                         <strong style="font-family: monospace; font-size: 14px;">${safeId}</strong>
                         ${sourceBadge}
-                    </div>
+                    </td>
                     <td style="padding:12px;">
                         <div style="font-weight: 600; font-size: 15px;">${safeNama}</div>
                         <div style="display:flex; gap:4px; margin-top:4px; flex-wrap:wrap;">${accountBadge} ${waBadge}</div>
-                    </div>
+                    </td>
                     <td style="padding:12px;">
                         <div style="display:flex; align-items:center; gap:6px;">
                             <span style="font-size: 18px;">${jabatanIcon}</span>
                             <span>${escapeHtmlStaff(jabatanDisplay)}</span>
                         </div>
-                    </div>
+                    </td>
                     <td style="padding:12px;">
                         <span style="background: var(--bg-input); padding:4px 10px; border-radius:20px; font-size:12px;">
                             ${escapeHtmlStaff(staff.departemen || '-')}
                         </span>
-                    </div>
+                    </td>
                     <td style="padding:12px;">
                         ${kontakHtml}
-                    </div>
+                    </td>
                     <td style="padding:12px; text-align:center;">
                         ${actionButtons}
-                    </div>
+                    </td>
                 </tr>
             `;
         }
@@ -1165,6 +832,66 @@ async function renderStaffTable() {
     }
 }
 
+/**
+ * Format nomor telepon untuk tampilan
+ * @param {string} phone - Nomor telepon
+ * @returns {string} Nomor yang diformat
+ */
+function formatPhoneDisplay(phone) {
+    if (!phone) return '-';
+    // Hapus semua karakter non-digit
+    const cleaned = phone.replace(/\D/g, '');
+    if (cleaned.length <= 4) return cleaned;
+    if (cleaned.length <= 8) return cleaned.substring(0, 4) + '-' + cleaned.substring(4);
+    if (cleaned.length <= 12) return cleaned.substring(0, 4) + '-' + cleaned.substring(4, 8) + '-' + cleaned.substring(8);
+    return cleaned.substring(0, 4) + '-' + cleaned.substring(4, 8) + '-' + cleaned.substring(8, 12) + '-' + cleaned.substring(12);
+}
+
+/**
+ * Test kirim WhatsApp ke staff
+ */
+async function testStaffWhatsApp(staffId, staffName, phoneNumber) {
+    if (!phoneNumber || phoneNumber === '-') {
+        showToast("❌ Tidak ada nomor WhatsApp untuk staff ini!", "error");
+        return;
+    }
+    
+    if (typeof sendWhatsAppMessage !== 'function') {
+        showToast("❌ Fungsi WhatsApp tidak tersedia!", "error");
+        return;
+    }
+    
+    const schoolName = document.getElementById('schoolNameDisplay')?.innerText || 'Sekolah';
+    const message = `*🧪 TEST NOTIFIKASI STAFF - ${schoolName}*
+
+Halo *${staffName}*,
+
+Ini adalah pesan test dari Sistem Absensi.
+
+👤 *Staff:* ${staffName}
+🆔 *ID:* ${staffId}
+
+✅ Sistem WhatsApp berjalan dengan baik!
+📱 Anda akan menerima notifikasi saat Anda absen masuk/pulang.
+
+--- 
+📱 *Sistem Absensi IoT*
+🔔 Test dikirim: ${new Date().toLocaleString('id-ID')}`;
+    
+    showToast(`📤 Mengirim test WA ke ${formatPhoneDisplay(phoneNumber)}...`, "info");
+    
+    const result = await sendWhatsAppMessage(phoneNumber, message, 'test_staff');
+    
+    if (result.success) {
+        showToast(`✅ Test WA berhasil dikirim ke ${formatPhoneDisplay(phoneNumber)}`, "success");
+        if (typeof logActivity === 'function') {
+            logActivity('test_whatsapp_staff', `Test WA ke staff ${staffName} (${staffId})`);
+        }
+    } else {
+        showToast(`❌ Gagal mengirim test WA: ${result.error || 'Unknown error'}`, "error");
+    }
+}
+
 function updateStaffStatistics(staffList, filteredCount = null) {
     if (!isStaffMenuVisible()) return;
     
@@ -1186,6 +913,7 @@ function updateStaffStatistics(staffList, filteredCount = null) {
     const total = staffList.length;
     const displayCount = filteredCount !== null ? filteredCount : total;
     let withAccount = 0;
+    let withWhatsApp = 0;
     let syncedCount = 0;
     
     if (window.dbData && window.dbData.users_auth) {
@@ -1193,7 +921,12 @@ function updateStaffStatistics(staffList, filteredCount = null) {
             window.dbData.users_auth.some(u => u.uid === s.id || u.staffId === s.id || u.email === s.email || u.nama === s.nama)).length;
         syncedCount = staffList.filter(s => s.fromUserAuth || window.dbData.users_auth.some(u => u.staffId == s.id)).length;
     }
+    
+    // Hitung staff dengan WhatsApp
+    withWhatsApp = staffList.filter(s => s.noHp && s.noHp !== '-' && s.noHp !== '').length;
+    
     const withoutAccount = total - withAccount;
+    const withoutWhatsApp = total - withWhatsApp;
     const fromUserAuth = staffList.filter(s => s.source === 'user_auth' || s.fromUserAuth).length;
     const fromStaffNode = staffList.filter(s => s.source === 'staff' && !s.fromUserAuth).length;
     
@@ -1213,6 +946,14 @@ function updateStaffStatistics(staffList, filteredCount = null) {
             <div style="display:flex; align-items:center; gap:8px;">
                 <span style="font-size:20px;">❌</span>
                 <div><strong style="font-size:18px; color:#f44336;">${withoutAccount}</strong><br><span style="font-size:11px; color:var(--text-muted);">Belum Berakun</span></div>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px;">
+                <span style="font-size:20px; color:#25D366;">📱</span>
+                <div><strong style="font-size:18px; color:#25D366;">${withWhatsApp}</strong><br><span style="font-size:11px; color:var(--text-muted);">Ada WhatsApp</span></div>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px;">
+                <span style="font-size:20px;">📱</span>
+                <div><strong style="font-size:18px; color:#888;">${withoutWhatsApp}</strong><br><span style="font-size:11px; color:var(--text-muted);">Tanpa WhatsApp</span></div>
             </div>
             <div style="display:flex; align-items:center; gap:8px;">
                 <span style="font-size:20px;">👥</span>
@@ -1243,6 +984,7 @@ function showStaffPhotoModal(staffId, staffName, photoUrl) {
             <small>✅ Akun terhubung: <strong>${escapeHtmlStaff(userAccountInfo.email || '-')}</strong></small><br>
             <small>👤 Nama akun: <strong>${escapeHtmlStaff(userAccountInfo.nama || '-')}</strong></small>
             ${userAccountInfo.photoUrl ? `<small>📸 Foto profil: <strong>Tersedia</strong></small>` : '<small>📸 Foto profil: <strong>Belum diupload</strong></small>'}
+            ${userAccountInfo.noHp ? `<small>📱 WhatsApp: <strong>${escapeHtmlStaff(userAccountInfo.noHp)}</strong></small>` : ''}
            </div>`
         : '<div style="margin-top: 12px; padding: 10px; background: rgba(255, 152, 0, 0.1); border-radius: 12px;"><small>⚠️ Staff ini belum memiliki akun user. Klik tombol 👤 untuk membuat akun.</small></div>';
     
@@ -1285,6 +1027,19 @@ function showStaffPhotoModal(staffId, staffName, photoUrl) {
                 closeStaffPhotoModal();
             }
         });
+    }
+}
+
+function closeStaffPhotoModal() {
+    const modal = document.getElementById('modal-staff-photo');
+    if (modal) {
+        modal.classList.remove('open');
+        modal.style.display = 'none';
+        setTimeout(() => {
+            if (modal && modal.parentNode) {
+                modal.remove();
+            }
+        }, 300);
     }
 }
 
@@ -1355,7 +1110,8 @@ function saveStaff() {
         }).then(() => {
             if (window.showToast) window.showToast("✅ Guru/Karyawan berhasil ditambahkan!");
             if (typeof window.logActivity === 'function') {
-                window.logActivity('add_staff', `Tambah staff: ${nama} (ID: ${id})`);
+                const phoneInfo = noHp ? `, WA: ${noHp}` : '';
+                window.logActivity('add_staff', `Tambah staff: ${nama} (ID: ${id})${phoneInfo}`);
             }
             resetStaffForm();
             staffListLoaded = false;
@@ -1369,7 +1125,8 @@ function saveStaff() {
         window.firebase.database().ref(`staff/${id}`).update(staffData).then(() => {
             if (window.showToast) window.showToast("✅ Data guru/karyawan berhasil diupdate!");
             if (typeof window.logActivity === 'function') {
-                window.logActivity('edit_staff', `Edit staff: ${nama} (ID: ${id})`);
+                const phoneInfo = noHp ? `, WA: ${noHp}` : '';
+                window.logActivity('edit_staff', `Edit staff: ${nama} (ID: ${id})${phoneInfo}`);
             }
             resetStaffForm();
             staffListLoaded = false;
@@ -1882,7 +1639,7 @@ function addStaffTab() {
             </div>
         `;
         
-        // Tambahkan CSS untuk tombol aksi
+        // Tambahkan CSS untuk tombol aksi (DENGAN WHATSAPP)
         const style = document.createElement('style');
         style.textContent = `
             .staff-action-btn {
@@ -1903,12 +1660,12 @@ function addStaffTab() {
             .staff-action-btn.delete:hover { background: #d32f2f; transform: scale(1.05); }
             .staff-action-btn.create-account { background: #4caf50; color: white; }
             .staff-action-btn.create-account:hover { background: #388e3c; transform: scale(1.05); }
-            .staff-action-btn.whatsapp { background: #25D366; color: white; }
-            .staff-action-btn.whatsapp:hover { background: #128C7E; transform: scale(1.05); }
             .staff-action-btn.view { background: #00bcd4; color: white; }
             .staff-action-btn.view:hover { background: #0097a7; transform: scale(1.05); }
             .staff-action-btn.refresh { background: #9c27b0; color: white; }
             .staff-action-btn.refresh:hover { background: #7b1fa2; transform: scale(1.05); }
+            .staff-action-btn.wa-test { background: #25D366; color: white; }
+            .staff-action-btn.wa-test:hover { background: #128C7E; transform: scale(1.05); }
             
             .filter-btn {
                 transition: all 0.2s;
@@ -1930,7 +1687,7 @@ function addStaffTab() {
         document.head.appendChild(style);
         
         dashboardSection.insertAdjacentHTML('beforeend', staffTabHtml);
-        console.log("✅ Staff tab content added with full sync support");
+        console.log("✅ Staff tab content added with WhatsApp integration");
     }
 }
 
@@ -1978,20 +1735,15 @@ window.setStaffFilter = setStaffFilter;
 window.searchStaff = searchStaff;
 window.clearSearch = clearSearch;
 window.resetStaffFilters = resetStaffFilters;
-window.sendStaffWhatsAppNotification = sendStaffWhatsAppNotification;
-window.saveStaffContact = saveStaffContact;
-window.getStaffContact = getStaffContact;
-window.openStaffContactModal = openStaffContactModal;
-window.saveStaffContactFromModal = saveStaffContactFromModal;
-window.testSendStaffWhatsApp = testSendStaffWhatsApp;
-window.closeStaffContactModal = closeStaffContactModal;
 window.closeStaffPhotoModal = closeStaffPhotoModal;
 window.syncStaffFromUserAccount = syncStaffFromUserAccount;
 window.syncAllStaffFromUserAccounts = syncAllStaffFromUserAccounts;
 window.setupStaffSyncListeners = setupStaffSyncListeners;
 window.refreshStaffPhoto = refreshStaffPhoto;
+window.testStaffWhatsApp = testStaffWhatsApp;
+window.formatPhoneDisplay = formatPhoneDisplay;
 
-console.log("✅ staff.js V3.2 loaded - FIXED PHOTO SYNC! Foto staff sekarang benar-benar sinkron dari akun user");
+console.log("✅ staff.js V3.4 loaded - DENGAN WhatsApp integration! No HP staff tersinkron dengan akun user.");
 
 // Auto-initialize when DOM ready
 if (document.readyState === 'loading') {

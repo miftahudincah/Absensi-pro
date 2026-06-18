@@ -1,11 +1,13 @@
-// students.js - VERSION 4.0 (DENGAN TOMBOL WHATSAPP UNTUK ADMIN/GURU/DEVELOPER)
+// students.js - VERSION 4.2 (DENGAN WHATSAPP INTEGRASI)
 // ======================= MANAJEMEN DATA SISWA =======================
 // Fitur: CRUD siswa, sinkronisasi dengan ESP32, delay per siswa,
 //        dukungan kelas & jurusan dinamis dari pengaturan sekolah,
 //        real-time update, import/export CSV.
-// PERUBAHAN V4.0: 
-//   - Menambahkan tombol WhatsApp untuk input nomor orang tua
-//   - Developer memiliki akses penuh seperti Admin/Guru
+// PERUBAHAN V4.2: 
+//   - Menambahkan field parentPhone untuk notifikasi WhatsApp
+//   - Menambahkan input nomor HP orang tua di form
+//   - Menampilkan nomor HP orang tua di tabel siswa
+//   - Menyimpan parentPhone ke Firebase
 // ====================================================================
 
 let studentFormResetTimer = null;
@@ -151,228 +153,6 @@ function showStudentPhotoModal(studentId, studentName, photoUrl) {
     const existingModal = document.getElementById('modal-student-photo');
     if (existingModal) existingModal.remove();
     document.body.insertAdjacentHTML('beforeend', modalHtml);
-}
-
-// ======================= FUNGSI WHATSAPP ORANG TUA ========================
-
-/**
- * Modal input nomor WhatsApp orang tua
- */
-function openParentWhatsAppModal(studentId, studentName) {
-    if (!canEditStudents()) {
-        showToast("⛔ Hanya Admin, Guru, dan Developer yang dapat mengatur nomor WhatsApp!", "error");
-        return;
-    }
-    
-    // Load existing data
-    getParentContact(studentId).then(contact => {
-        let existingNumber = '';
-        let existingRelation = 'orang_tua';
-        
-        if (contact && contact.rawNumber) {
-            existingNumber = contact.rawNumber;
-            existingRelation = contact.relation || 'orang_tua';
-        }
-        
-        let modalHtml = `
-            <div id="modal-wa-student" class="modal-overlay open">
-                <div class="modal-box" style="max-width: 450px;">
-                    <div class="modal-title">
-                        <span>📱 WhatsApp Orang Tua - ${escapeHtmlStudents(studentName)}</span>
-                        <span onclick="closeModal('modal-wa-student')">✖</span>
-                    </div>
-                    <div style="padding: 20px;">
-                        <div class="form-group">
-                            <label>👨‍🎓 Siswa</label>
-                            <input type="text" id="waStudentName" value="${escapeHtmlStudents(studentName)}" readonly style="background: var(--bg-hover);">
-                        </div>
-                        <div class="form-group">
-                            <label>📱 Nomor WhatsApp Orang Tua</label>
-                            <input type="tel" id="waPhoneNumber" placeholder="Contoh: 08123456789 atau 628123456789" value="${escapeHtmlStudents(existingNumber)}">
-                            <small class="text-small" style="color: var(--text-muted);">Format: 08xxxxxxxxx atau 628xxxxxxxxx</small>
-                        </div>
-                        <div class="form-group">
-                            <label>👤 Hubungan</label>
-                            <select id="waRelation">
-                                <option value="orang_tua" ${existingRelation === 'orang_tua' ? 'selected' : ''}>Orang Tua</option>
-                                <option value="ayah" ${existingRelation === 'ayah' ? 'selected' : ''}>Ayah</option>
-                                <option value="ibu" ${existingRelation === 'ibu' ? 'selected' : ''}>Ibu</option>
-                                <option value="wali" ${existingRelation === 'wali' ? 'selected' : ''}>Wali</option>
-                            </select>
-                        </div>
-                        <div class="modal-actions">
-                            <button class="btn-cancel" onclick="closeModal('modal-wa-student')">Batal</button>
-                            <button class="btn-save" onclick="saveParentWhatsAppNumber('${studentId}', '${escapeHtmlStudents(studentName)}')">💾 Simpan Nomor</button>
-                        </div>
-                        <div class="text-small" style="margin-top: 15px; text-align: center; color: var(--text-muted);">
-                            <hr>
-                            📱 <strong>Test Kirim Pesan</strong><br>
-                            <button class="btn-action btn-success" onclick="testSendWhatsApp('${studentId}', '${escapeHtmlStudents(studentName)}')" style="margin-top: 8px; padding: 6px 12px; font-size: 0.75rem;">
-                                🔔 Kirim Test WhatsApp
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-        
-        const existingModal = document.getElementById('modal-wa-student');
-        if (existingModal) existingModal.remove();
-        document.body.insertAdjacentHTML('beforeend', modalHtml);
-    }).catch(() => {
-        // Jika error, tetap tampilkan modal kosong
-        let modalHtml = `
-            <div id="modal-wa-student" class="modal-overlay open">
-                <div class="modal-box" style="max-width: 450px;">
-                    <div class="modal-title">
-                        <span>📱 WhatsApp Orang Tua - ${escapeHtmlStudents(studentName)}</span>
-                        <span onclick="closeModal('modal-wa-student')">✖</span>
-                    </div>
-                    <div style="padding: 20px;">
-                        <div class="form-group">
-                            <label>👨‍🎓 Siswa</label>
-                            <input type="text" id="waStudentName" value="${escapeHtmlStudents(studentName)}" readonly style="background: var(--bg-hover);">
-                        </div>
-                        <div class="form-group">
-                            <label>📱 Nomor WhatsApp Orang Tua</label>
-                            <input type="tel" id="waPhoneNumber" placeholder="Contoh: 08123456789 atau 628123456789">
-                            <small class="text-small" style="color: var(--text-muted);">Format: 08xxxxxxxxx atau 628xxxxxxxxx</small>
-                        </div>
-                        <div class="form-group">
-                            <label>👤 Hubungan</label>
-                            <select id="waRelation">
-                                <option value="orang_tua">Orang Tua</option>
-                                <option value="ayah">Ayah</option>
-                                <option value="ibu">Ibu</option>
-                                <option value="wali">Wali</option>
-                            </select>
-                        </div>
-                        <div class="modal-actions">
-                            <button class="btn-cancel" onclick="closeModal('modal-wa-student')">Batal</button>
-                            <button class="btn-save" onclick="saveParentWhatsAppNumber('${studentId}', '${escapeHtmlStudents(studentName)}')">💾 Simpan Nomor</button>
-                        </div>
-                        <div class="text-small" style="margin-top: 15px; text-align: center; color: var(--text-muted);">
-                            <hr>
-                            📱 <strong>Test Kirim Pesan</strong><br>
-                            <button class="btn-action btn-success" onclick="testSendWhatsApp('${studentId}', '${escapeHtmlStudents(studentName)}')" style="margin-top: 8px; padding: 6px 12px; font-size: 0.75rem;">
-                                🔔 Kirim Test WhatsApp
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-        
-        const existingModal = document.getElementById('modal-wa-student');
-        if (existingModal) existingModal.remove();
-        document.body.insertAdjacentHTML('beforeend', modalHtml);
-    });
-}
-
-/**
- * Mendapatkan kontak orang tua dari database
- */
-async function getParentContact(studentId) {
-    try {
-        const snapshot = await db.ref(`parent_contacts/${studentId}`).once('value');
-        return snapshot.val();
-    } catch (error) {
-        console.error('Get parent contact error:', error);
-        return null;
-    }
-}
-
-/**
- * Menyimpan nomor WhatsApp orang tua
- */
-async function saveParentWhatsAppNumber(studentId, studentName) {
-    const phoneNumber = document.getElementById('waPhoneNumber')?.value.trim();
-    const relation = document.getElementById('waRelation')?.value;
-    
-    if (!phoneNumber) {
-        showToast('Masukkan nomor WhatsApp!', 'error');
-        return;
-    }
-    
-    // Format nomor
-    let formattedNumber = phoneNumber.replace(/[^0-9]/g, '');
-    if (formattedNumber.startsWith('0')) formattedNumber = '62' + formattedNumber.substring(1);
-    if (!formattedNumber.startsWith('62')) formattedNumber = '62' + formattedNumber;
-    
-    try {
-        await db.ref(`parent_contacts/${studentId}`).set({
-            studentId: studentId,
-            studentName: studentName,
-            phoneNumber: formattedNumber,
-            rawNumber: phoneNumber,
-            relation: relation,
-            updatedBy: currentUser?.nama || currentUser?.email || 'Admin',
-            updatedAt: firebase.database.ServerValue.TIMESTAMP
-        });
-        
-        // Update juga di data siswa
-        await db.ref(`users/${studentId}/wa_ortu`).set(formattedNumber);
-        
-        showToast(`✅ Nomor WhatsApp ${studentName} berhasil disimpan!`, 'success');
-        
-        if (typeof logActivity === 'function') {
-            logActivity('save_parent_contact', `Simpan kontak orang tua ${studentName} (ID: ${studentId}) - ${formattedNumber}`);
-        }
-        
-        closeModal('modal-wa-student');
-        
-    } catch (error) {
-        console.error('Save parent contact error:', error);
-        showToast('❌ Gagal menyimpan nomor: ' + error.message, 'error');
-    }
-}
-
-/**
- * Test kirim WhatsApp ke nomor orang tua siswa
- */
-async function testSendWhatsApp(studentId, studentName) {
-    // Ambil nomor dari database
-    const contact = await getParentContact(studentId);
-    
-    if (!contact || !contact.phoneNumber) {
-        showToast(`❌ Nomor WhatsApp untuk ${studentName} belum diisi!`, 'error');
-        return;
-    }
-    
-    if (typeof sendViaFonnte !== 'function') {
-        showToast('❌ Fungsi WhatsApp tidak tersedia. Pastikan whatsapp-notif.js sudah dimuat.', 'error');
-        return;
-    }
-    
-    const testMessage = `🧪 *TEST NOTIFIKASI WHATSAPP*
-
-Halo, ini adalah pesan test dari **Sistem Absensi Sekolah**.
-
-*Siswa:* ${studentName}
-*Waktu Test:* ${new Date().toLocaleString('id-ID')}
-
-Jika Anda menerima pesan ini, berarti notifikasi WhatsApp berhasil terintegrasi! ✅
-
-Terima kasih.
-
----
-📱 Sistem Absensi IoT - Real-time`;
-    
-    showToast('📤 Mengirim pesan test...', 'info');
-    
-    const result = await sendViaFonnte(contact.phoneNumber, testMessage);
-    
-    if (result) {
-        showToast(`✅ Pesan test berhasil dikirim ke ${contact.rawNumber}`, 'success');
-        if (typeof logActivity === 'function') {
-            logActivity('test_whatsapp', `Test WhatsApp ke ${studentName} (${contact.rawNumber}) - BERHASIL`);
-        }
-    } else {
-        showToast(`❌ Gagal mengirim ke ${contact.rawNumber}. Cek API Key dan koneksi.`, 'error');
-        if (typeof logActivity === 'function') {
-            logActivity('test_whatsapp', `Test WhatsApp ke ${studentName} (${contact.rawNumber}) - GAGAL`);
-        }
-    }
 }
 
 // ======================= EVENT LISTENER DATA READY ========================
@@ -691,7 +471,7 @@ function formatDelayDisplay(delayMinutes) {
     return `${menit} menit`;
 }
 
-// ======================= RENDER TABEL SISWA (DENGAN FILTER ROLE) =======================
+// ======================= RENDER TABEL SISWA (DENGAN WHATSAPP) =======================
 
 function renderStudentsTable(retryCount = 0) {
     const MAX_RETRY = 5;
@@ -714,10 +494,10 @@ function renderStudentsTable(retryCount = 0) {
             let table = tableContainer.querySelector('table');
             if (!table) {
                 table = document.createElement('table');
-                // UPDATE HEADER: Tambah kolom Foto dan Aksi
-                table.innerHTML = '<thead><tr><th>Foto</th><th>ID FP</th><th>Nama</th><th>Kelas</th><th>Jurusan</th><th>Delay</th><th>Aksi</th></tr></thead>';
+                // UPDATE HEADER: Tambah kolom Foto, No HP Orang Tua, dan Aksi
+                table.innerHTML = '<thead><tr><th>Foto</th><th>ID FP</th><th>Nama</th><th>Kelas</th><th>Jurusan</th><th>Delay</th><th>📱 WA Orang Tua</th><th>Aksi</th></tr></thead>';
                 tableContainer.appendChild(table);
-                console.log("students.js: Created table dynamically with photo column");
+                console.log("students.js: Created table dynamically with photo and WA columns");
             }
             tbody = document.createElement('tbody');
             tbody.id = 'tbody-students';
@@ -739,22 +519,20 @@ function renderStudentsTable(retryCount = 0) {
     
     if (typeof dbData === 'undefined' || !dbData.users) {
         console.log("⏳ students.js: dbData.users not ready yet");
-        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:30px;">⏳ Memuat data siswa...</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:30px;">⏳ Memuat data siswa...</td></tr>`;
         return;
     }
     
     if (dbData.users.length === 0) {
         console.log("📭 students.js: Tidak ada data siswa");
-        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:30px;">📭 Belum ada data siswa. Silakan tambah siswa melalui form di atas.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:30px;">📭 Belum ada data siswa. Silakan tambah siswa melalui form di atas.</td></tr>`;
         updateStudentStatistics();
         return;
     }
     
     // ========== FILTER DATA BERDASARKAN ROLE ==========
     let data = [...dbData.users];
-    // Perbaikan: isSiswa hanya true jika role === 'siswa', developer tetap dapat akses penuh
     const isSiswa = (currentUser && currentUser.role === 'siswa');
-    // Perbaikan: canEdit untuk Admin, Guru, dan Developer
     const canEdit = canEditStudents();
     
     if (isSiswa) {
@@ -798,15 +576,15 @@ function renderStudentsTable(retryCount = 0) {
     
     if (data.length === 0) {
         if (isSiswa) {
-            tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:30px;">📭 Tidak ada teman sekelas dengan kelas dan jurusan yang sama.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:30px;">📭 Tidak ada teman sekelas dengan kelas dan jurusan yang sama.</td></tr>`;
         } else {
-            tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:30px;">📭 Data siswa tidak ditemukan.${search ? '<br><small>Coba kata kunci lain</small>' : ''}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:30px;">📭 Data siswa tidak ditemukan.${search ? '<br><small>Coba kata kunci lain</small>' : ''}</td></tr>`;
         }
         updateStudentStatistics();
         return;
     }
 
-    // RENDER SISWA DENGAN FOTO DAN TOMBOL AKSI (untuk Admin/Guru/Developer)
+    // RENDER SISWA DENGAN FOTO, NOMOR HP, DAN TOMBOL AKSI
     for (const s of data) {
         const isNew = s.createdAt && (Date.now() - s.createdAt < 300000);
         const photoUrl = getStudentPhotoUrl(s.id, s.nama);
@@ -818,17 +596,26 @@ function renderStudentsTable(retryCount = 0) {
             ? '<span class="badge-account" style="background:#4caf50; font-size:10px; margin-left:6px; padding:2px 6px; border-radius:20px;">✓ Berakun</span>' 
             : '<span class="badge-no-account" style="background:#888; font-size:10px; margin-left:6px; padding:2px 6px; border-radius:20px;">❌ Belum Berakun</span>';
         
-        // ========== PERBAIKAN: Tombol Aksi untuk Admin, Guru, dan Developer ==========
+        // Tampilkan nomor WhatsApp orang tua jika ada
+        const parentPhone = s.parentPhone || s.noHp || '';
+        const phoneDisplay = parentPhone ? 
+            `<span style="font-size:12px; color:#25D366;">📱 ${formatPhoneDisplay(parentPhone)}</span>` : 
+            '<span style="font-size:11px; color:#888;">-</span>';
+        
+        // Tombol WA untuk test kirim notifikasi (opsional)
+        const waTestBtn = parentPhone ? 
+            `<button class="btn-icon" onclick="testStudentWhatsApp('${s.id}', '${escapeHtmlStudents(s.nama)}', '${parentPhone}')" title="Test Kirim WA" style="background:#25D366; color:white; border:none; border-radius:8px; padding:4px 8px; cursor:pointer; font-size:12px;">📱</button>` : 
+            '';
+        
+        // ========== TOMBOL AKSI ==========
         let actionCell = '';
         if (canEdit) {
             actionCell = `
                 <td style="white-space: nowrap;">
                     <button class="btn-icon edit" onclick="editStudent('${s.id}')" title="Edit Siswa" style="margin-right: 5px;">✏️</button>
                     <button class="btn-icon delete" onclick="deleteStudentWithFP('${s.id}')" title="Hapus Siswa" style="margin-right: 5px;">🗑️</button>
-                    <button class="btn-wa" onclick="openParentWhatsAppModal('${s.id}', '${escapeHtmlStudents(s.nama)}')" title="Input Nomor WhatsApp Orang Tua">
-                        📱 WA
-                    </button>
-                 </td>
+                    ${waTestBtn}
+                </td>
             `;
         } else {
             actionCell = '<td style="display: none;"></td>';
@@ -843,19 +630,78 @@ function renderStudentsTable(retryCount = 0) {
                          onerror="this.src='https://ui-avatars.com/api/?name=${studentInitial}&background=00bcd4&color=fff&size=100&bold=true'"
                          onclick="showStudentPhotoModal('${s.id}', '${escapeHtmlStudents(s.nama)}', this.src)"
                          title="Klik untuk perbesar foto">
-                 </td>
+                </td>
                 <td><strong>${s.id}</strong>${isNew ? '<br><span class="badge-new-student">NEW</span>' : ''}</td>
                 <td>${escapeHtmlStudents(s.nama)}${accountBadge}</td>
                 <td>${s.kelas || '-'}</td>
                 <td>${s.jurusan || '-'}</td>
                 <td><span class="delay-badge">⏱️ ${formatDelayDisplay(s.delayOut)}</span></td>
+                <td>${phoneDisplay}</td>
                 ${actionCell}
-             </tr>
+            </tr>
         `;
     }
     
     updateStudentStatistics();
     console.log(`✅ renderStudentsTable selesai, menampilkan ${data.length} siswa${isSiswa ? ' (filtered by kelas/jurusan)' : ''}, canEdit: ${canEdit}`);
+}
+
+/**
+ * Format nomor telepon untuk tampilan
+ * @param {string} phone - Nomor telepon
+ * @returns {string} Nomor yang diformat
+ */
+function formatPhoneDisplay(phone) {
+    if (!phone) return '-';
+    // Hapus semua karakter non-digit
+    const cleaned = phone.replace(/\D/g, '');
+    if (cleaned.length <= 4) return cleaned;
+    if (cleaned.length <= 8) return cleaned.substring(0, 4) + '-' + cleaned.substring(4);
+    if (cleaned.length <= 12) return cleaned.substring(0, 4) + '-' + cleaned.substring(4, 8) + '-' + cleaned.substring(8);
+    return cleaned.substring(0, 4) + '-' + cleaned.substring(4, 8) + '-' + cleaned.substring(8, 12) + '-' + cleaned.substring(12);
+}
+
+/**
+ * Test kirim WhatsApp ke orang tua siswa
+ */
+async function testStudentWhatsApp(studentId, studentName, phoneNumber) {
+    if (!phoneNumber) {
+        showToast("❌ Tidak ada nomor WhatsApp untuk siswa ini!", "error");
+        return;
+    }
+    
+    if (typeof sendWhatsAppMessage !== 'function') {
+        showToast("❌ Fungsi WhatsApp tidak tersedia!", "error");
+        return;
+    }
+    
+    const schoolName = document.getElementById('schoolNameDisplay')?.innerText || 'Sekolah';
+    const message = `*🧪 TEST NOTIFIKASI - ${schoolName}*
+
+Halo, ini adalah pesan test dari Sistem Absensi.
+
+👨‍🎓 *Siswa:* ${studentName}
+🆔 *ID:* ${studentId}
+
+✅ Sistem WhatsApp berjalan dengan baik!
+📱 Anda akan menerima notifikasi saat anak Anda absen.
+
+--- 
+📱 *Sistem Absensi IoT*
+🔔 Test dikirim: ${new Date().toLocaleString('id-ID')}`;
+    
+    showToast(`📤 Mengirim test WA ke ${phoneNumber}...`, "info");
+    
+    const result = await sendWhatsAppMessage(phoneNumber, message, 'test');
+    
+    if (result.success) {
+        showToast(`✅ Test WA berhasil dikirim ke ${formatPhoneDisplay(phoneNumber)}`, "success");
+        if (typeof logActivity === 'function') {
+            logActivity('test_whatsapp_student', `Test WA ke orang tua ${studentName} (${studentId})`);
+        }
+    } else {
+        showToast(`❌ Gagal mengirim test WA: ${result.error || 'Unknown error'}`, "error");
+    }
 }
 
 // ======================= UPDATE STATISTIK =======================
@@ -891,6 +737,10 @@ function updateStudentStatistics() {
     const withAccount = dbData.users_auth?.filter(u => u.fpId && filteredData.some(s => s.id == u.fpId)).length || 0;
     const withoutAccount = total - withAccount;
     
+    // Hitung jumlah siswa yang memiliki nomor WhatsApp
+    const withWhatsApp = filteredData.filter(s => s.parentPhone || s.noHp).length;
+    const withoutWhatsApp = total - withWhatsApp;
+    
     const kelasCount = {}, jurusanCount = {};
     filteredData.forEach(s => {
         if (s.kelas) kelasCount[s.kelas] = (kelasCount[s.kelas] || 0) + 1;
@@ -904,13 +754,15 @@ function updateStudentStatistics() {
             <div><span style="color:#4a90e2;">👥 Total Siswa:</span> <strong>${total}</strong></div>
             <div><span style="color:#4caf50;">✅ Sudah Berakun:</span> <strong>${withAccount}</strong></div>
             <div><span style="color:#f44336;">❌ Belum Berakun:</span> <strong>${withoutAccount}</strong></div>
+            <div><span style="color:#25D366;">📱 Ada WA:</span> <strong>${withWhatsApp}</strong></div>
+            <div><span style="color:#888;">📱 Tanpa WA:</span> <strong>${withoutWhatsApp}</strong></div>
             <div><span style="color:#4a90e2;">📚 Kelas Terbanyak:</span> <strong>${topKelas ? `${topKelas[0]} (${topKelas[1]})` : '-'}</strong></div>
             <div><span style="color:#4a90e2;">🎓 Jurusan Terbanyak:</span> <strong>${topJurusan ? `${topJurusan[0]} (${topJurusan[1]})` : '-'}</strong></div>
         </div>
     `;
 }
 
-// ======================= CRUD SISWA =======================
+// ======================= CRUD SISWA (DENGAN PARENT PHONE) =======================
 
 function saveStudent() {
     if (!canEditStudents()) {
@@ -923,6 +775,7 @@ function saveStudent() {
     const jurusan = document.getElementById('newJurusan')?.value;
     const delay = getDelayInMinutes();
     const mode = document.getElementById('editMode')?.value;
+    const parentPhone = document.getElementById('parentPhoneInput')?.value?.trim() || '';
 
     if (!nama || !idStr) { showToast("⚠️ ID dan Nama wajib diisi!", "error"); return; }
     if (!kelas) { showToast("⚠️ Pilih Kelas!", "error"); return; }
@@ -936,6 +789,7 @@ function saveStudent() {
         kelas: kelas,
         jurusan: jurusan,
         delayOut: delay,
+        parentPhone: parentPhone, // TAMBAHKAN INI
         updatedAt: firebase.database.ServerValue.TIMESTAMP
     };
     if (mode === 'add') studentData.createdAt = firebase.database.ServerValue.TIMESTAMP;
@@ -955,7 +809,8 @@ function saveStudent() {
             
             if (typeof logActivity === 'function') {
                 const action = mode === 'add' ? 'add_student' : 'edit_student';
-                const details = `${action}: ${nama} (ID: ${idStr}, Kelas: ${kelas}, Jurusan: ${jurusan}, Delay: ${delay} menit)`;
+                const phoneInfo = parentPhone ? `, WA: ${parentPhone}` : '';
+                const details = `${action}: ${nama} (ID: ${idStr}, Kelas: ${kelas}, Jurusan: ${jurusan}, Delay: ${delay} menit${phoneInfo})`;
                 logActivity(action, details);
             }
             
@@ -965,7 +820,12 @@ function saveStudent() {
             resetStudentForm();
             const authUser = dbData.users_auth?.find(u => u.fpId == idStr);
             if (authUser) {
-                db.ref(`users_auth/${authUser.uid}`).update({ nama, kelas, jurusan });
+                db.ref(`users_auth/${authUser.uid}`).update({ 
+                    nama, 
+                    kelas, 
+                    jurusan,
+                    noHp: parentPhone // Sinkronkan nomor ke user auth
+                });
                 if (currentUser.uid === authUser.uid) {
                     currentUser.nama = nama;
                     currentUser.kelas = kelas;
@@ -974,6 +834,9 @@ function saveStudent() {
                     if (typeof updateUserInterface === 'function') updateUserInterface();
                 }
             }
+            
+            // Refresh tabel
+            renderStudentsTable();
         })
         .catch(err => showToast("❌ Gagal: " + err.message, "error"))
         .finally(() => {
@@ -997,6 +860,7 @@ function editStudent(id) {
     document.getElementById('newKelas').value = s.kelas;
     document.getElementById('newJurusan').value = s.jurusan;
     setDelayFormValue(s.delayOut || 60);
+    document.getElementById('parentPhoneInput').value = s.parentPhone || s.noHp || '';
     document.getElementById('editMode').value = 'edit';
     const btnSave = document.getElementById('btnSaveStudent');
     const btnCancel = document.getElementById('btnCancelStudent');
@@ -1012,6 +876,7 @@ function resetStudentForm() {
     document.getElementById('newNama').value = '';
     document.getElementById('newKelas').value = '';
     document.getElementById('newJurusan').value = '';
+    document.getElementById('parentPhoneInput').value = '';
     setDelayFormValue(60);
     document.getElementById('editMode').value = 'add';
     const btnSave = document.getElementById('btnSaveStudent');
@@ -1091,10 +956,16 @@ function importStudentsFromCSV(csvText) {
             const kelas = parts[2].trim();
             const jurusan = parts[3].trim();
             const delay = parts[4] ? parseInt(parts[4].trim()) : 60;
+            const parentPhone = parts[5] ? parts[5].trim() : '';
             if (id && nama && kelas && jurusan) {
                 importedNames.push(`${nama} (ID: ${id})`);
                 db.ref(`users/${id}`).set({
-                    id: parseInt(id), nama, kelas, jurusan, delayOut: delay,
+                    id: parseInt(id), 
+                    nama, 
+                    kelas, 
+                    jurusan, 
+                    delayOut: delay,
+                    parentPhone: parentPhone,
                     createdAt: firebase.database.ServerValue.TIMESTAMP
                 }).then(() => success++).catch(() => fail++);
             } else fail++;
@@ -1125,9 +996,9 @@ function exportStudentsToCSV() {
         });
     }
     
-    let csv = "\uFEFFID,Nama,Kelas,Jurusan,Delay (menit)\n";
+    let csv = "\uFEFFID,Nama,Kelas,Jurusan,Delay (menit),No WhatsApp Orang Tua\n";
     dataToExport.forEach(s => {
-        csv += `"${s.id}","${escapeCsv(s.nama)}","${s.kelas || '-'}","${s.jurusan || '-'}","${s.delayOut || 60}"\n`;
+        csv += `"${s.id}","${escapeCsv(s.nama)}","${s.kelas || '-'}","${s.jurusan || '-'}","${s.delayOut || 60}","${s.parentPhone || s.noHp || ''}"\n`;
     });
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
@@ -1272,9 +1143,7 @@ window.getStudentPhotoUrl = getStudentPhotoUrl;
 window.refreshStudentPhotoCache = refreshStudentPhotoCache;
 window.showStudentPhotoModal = showStudentPhotoModal;
 // Ekspor fungsi WhatsApp
-window.openParentWhatsAppModal = openParentWhatsAppModal;
-window.saveParentWhatsAppNumber = saveParentWhatsAppNumber;
-window.getParentContact = getParentContact;
-window.testSendWhatsApp = testSendWhatsApp;
+window.testStudentWhatsApp = testStudentWhatsApp;
+window.formatPhoneDisplay = formatPhoneDisplay;
 
-console.log("✅ students.js V4.0 loaded - Dengan tombol WhatsApp untuk input nomor orang tua (Admin/Guru/Developer)");
+console.log("✅ students.js V4.2 loaded - DENGAN WhatsApp integration! Field parentPhone untuk notifikasi orang tua.");

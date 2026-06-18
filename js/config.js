@@ -19,22 +19,40 @@ const firebaseConfig = {
 // PERINGATAN: Di production, pindahkan upload ke Cloud Function
 const IMGBB_KEY = "67650d8ee67ebb8bba94f3bb2c72eb4f";
 
-// ==================== WHATSAPP GATEWAY CONFIG ====================
-// Gunakan Fonnte API: https://fonnte.com (daftar gratis, 100 pesan/hari)
-// Cara setup:
-// 1. Daftar di https://fonnte.com
-// 2. Verifikasi nomor WhatsApp
-// 3. Dapatkan API Key dari dashboard
-// 4. API Key sudah diisi dengan key asli Anda
+// ==================== KONFIGURASI WHATSAPP ====================
+// Fitur notifikasi WhatsApp untuk absensi siswa & staff
+// Menggunakan backend API: https://backendtest-azure.vercel.app/
+// ============================================================================
+
 const WHATSAPP_CONFIG = {
-    gateway: 'fonnte',           // 'fonnte', 'waba', 'wati'
-    fonnteApiKey: '2VoL53ZrVsDPxwDTNPdY', // API Key asli dari Fonnte
-    enabled: true,               // Aktifkan/nonaktifkan notifikasi WA
-    sendOnCheckIn: true,         // Notifikasi saat masuk
-    sendOnCheckOut: true,        // Notifikasi saat pulang
-    sendOnLate: true,            // Notifikasi jika terlambat
-    sendOnAbsent: true,          // Notifikasi jika alpha (tidak hadir)
-    senderNumber: ''             // Nomor pengirim (opsional, kosongkan jika pakai default)
+    // ========== FITUR UTAMA ==========
+    enabled: true,                    // AKTIFKAN WhatsApp notifications
+    backendUrl: "https://backendtest-azure.vercel.app/api/whatsapp/send",
+    
+    // ========== KONFIGURASI FONNTE ==========
+    // API Key Fonnte - Dapatkan dari dashboard Fonnte
+    // https://fonnte.com/dashboard
+    fonnteApiKey: "YOUR_FONNTE_API_KEY_HERE", // GANTI DENGAN API KEY ASLI
+    
+    // ========== PENGATURAN NOTIFIKASI ==========
+    // Siswa - Notifikasi ke Orang Tua
+    sendStudentCheckIn: true,         // Kirim notifikasi saat siswa absen masuk
+    sendStudentCheckOut: true,        // Kirim notifikasi saat siswa absen pulang
+    sendStudentLate: true,            // Kirim notifikasi saat siswa terlambat
+    
+    // Staff - Notifikasi ke Staff
+    sendStaffCheckIn: true,           // Kirim notifikasi saat staff absen masuk
+    sendStaffCheckOut: true,          // Kirim notifikasi saat staff absen pulang
+    
+    // Pengingat Absensi (5 menit setelah jam masuk)
+    sendReminder: true,               // Kirim pengingat jika belum absen
+    
+    // ========== PENGATURAN LAINNYA ==========
+    senderNumber: '',                 // Nomor pengirim (opsional)
+    retryOnFailure: true,             // Coba ulang jika gagal
+    maxRetries: 3,                    // Maksimal percobaan ulang
+    retryDelay: 5000,                 // Delay antar percobaan (ms)
+    timeout: 30000                    // Timeout request (ms)
 };
 
 // ==================== KONFIGURASI IZIN ONLINE ====================
@@ -182,6 +200,85 @@ function getRolePriority(role) {
     return priorities[role] || 99;
 }
 
+// ==================== FUNGSI UTILITY WHATSAPP ====================
+
+/**
+ * Cek apakah WhatsApp diaktifkan
+ * @returns {boolean}
+ */
+function isWhatsAppEnabled() {
+    return WHATSAPP_CONFIG && WHATSAPP_CONFIG.enabled === true;
+}
+
+/**
+ * Mendapatkan URL backend WhatsApp
+ * @returns {string}
+ */
+function getWhatsAppBackendUrl() {
+    return WHATSAPP_CONFIG?.backendUrl || 'https://backendtest-azure.vercel.app/api/whatsapp/send';
+}
+
+/**
+ * Mendapatkan API Key Fonnte
+ * @returns {string}
+ */
+function getFonnteApiKey() {
+    return WHATSAPP_CONFIG?.fonnteApiKey || '';
+}
+
+/**
+ * Cek apakah Fonnte API Key sudah dikonfigurasi
+ * @returns {boolean}
+ */
+function isFonnteConfigured() {
+    const key = getFonnteApiKey();
+    return key && key !== 'YOUR_FONNTE_API_KEY_HERE' && key !== '';
+}
+
+/**
+ * Mendapatkan konfigurasi notifikasi untuk tipe tertentu
+ * @param {string} type - Tipe notifikasi (student_check_in, student_check_out, dll)
+ * @returns {boolean}
+ */
+function isNotificationEnabled(type) {
+    if (!WHATSAPP_CONFIG || !WHATSAPP_CONFIG.enabled) return false;
+    
+    const typeMap = {
+        'student_check_in': 'sendStudentCheckIn',
+        'student_check_out': 'sendStudentCheckOut',
+        'student_late': 'sendStudentLate',
+        'staff_check_in': 'sendStaffCheckIn',
+        'staff_check_out': 'sendStaffCheckOut',
+        'reminder': 'sendReminder'
+    };
+    
+    const configKey = typeMap[type];
+    if (configKey && WHATSAPP_CONFIG[configKey] !== undefined) {
+        return WHATSAPP_CONFIG[configKey] === true;
+    }
+    
+    return true; // default enabled
+}
+
+/**
+ * Log status WhatsApp
+ */
+function logWhatsAppStatus() {
+    console.log('📱 WhatsApp Status:', {
+        enabled: isWhatsAppEnabled(),
+        backendUrl: getWhatsAppBackendUrl(),
+        fonnteConfigured: isFonnteConfigured(),
+        notifications: {
+            studentCheckIn: isNotificationEnabled('student_check_in'),
+            studentCheckOut: isNotificationEnabled('student_check_out'),
+            studentLate: isNotificationEnabled('student_late'),
+            staffCheckIn: isNotificationEnabled('staff_check_in'),
+            staffCheckOut: isNotificationEnabled('staff_check_out'),
+            reminder: isNotificationEnabled('reminder')
+        }
+    });
+}
+
 // ==================== INISIALISASI FIREBASE ====================
 
 // Pastikan Firebase SDK sudah dimuat sebelum inisialisasi
@@ -277,7 +374,18 @@ function checkFirebaseConnection() {
 }
 
 // ==================== EKSPOR KE GLOBAL ====================
+// Ekspor WHATSAPP_CONFIG ke global
 window.WHATSAPP_CONFIG = WHATSAPP_CONFIG;
+
+// Ekspor fungsi WhatsApp utility
+window.isWhatsAppEnabled = isWhatsAppEnabled;
+window.getWhatsAppBackendUrl = getWhatsAppBackendUrl;
+window.getFonnteApiKey = getFonnteApiKey;
+window.isFonnteConfigured = isFonnteConfigured;
+window.isNotificationEnabled = isNotificationEnabled;
+window.logWhatsAppStatus = logWhatsAppStatus;
+
+// Ekspor konfigurasi lainnya
 window.IZIN_CONFIG = IZIN_CONFIG;
 window.IMGBB_KEY = IMGBB_KEY;
 window.firebaseConfig = firebaseConfig;
@@ -299,4 +407,12 @@ setTimeout(() => {
   checkFirebaseConnection();
 }, 1000);
 
-console.log("✅ config.js loaded - Firebase, WhatsApp Gateway, Role Management (Kepala Sekolah, Wakil Kepala Sekolah, Staff TU, Guru, Developer, Siswa) siap digunakan");
+// Log status WhatsApp
+setTimeout(() => {
+  logWhatsAppStatus();
+}, 2000);
+
+console.log("✅ config.js loaded - Firebase, Role Management, dan WHATSAPP_CONFIG siap digunakan!");
+console.log("📱 WhatsApp notifications:", WHATSAPP_CONFIG.enabled ? '✅ ENABLED' : '❌ DISABLED');
+console.log("🔗 Backend URL:", WHATSAPP_CONFIG.backendUrl);
+console.log("🔑 Fonnte API Key:", WHATSAPP_CONFIG.fonnteApiKey ? (WHATSAPP_CONFIG.fonnteApiKey !== 'YOUR_FONNTE_API_KEY_HERE' ? '✅ Configured' : '⚠️ Using default (not configured)') : '❌ Not set');

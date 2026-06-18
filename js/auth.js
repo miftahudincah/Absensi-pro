@@ -1,12 +1,14 @@
-// auth.js - VERSION 5.3 (REGISTRATION ONLY: SISWA & STAFF)
+// auth.js - VERSION 5.4 (DENGAN WHATSAPP INTEGRASI)
 // Fitur: Registrasi langsung, QR Scanner, Upload foto profil ke Supabase
 // Role yang didukung: developer, admin (Kepala Sekolah), wakil_kepala, staff_tu, guru, siswa
-// PERUBAHAN V5.3: 
+// PERUBAHAN V5.4: 
 //   - Registrasi hanya 2 pilihan: SISWA dan STAFF (Guru & Karyawan)
 //   - Menghapus pilihan "Guru (Legacy)"
 //   - Staff WAJIB mengisi ID Staff saat registrasi
 //   - Validasi ID Staff harus sesuai dengan linkedId di kode
 //   - Sama seperti sistem registrasi siswa yang terkunci ID
+//   - TAMBAHAN: Menyimpan nomor WhatsApp orang tua saat registrasi siswa
+//   - TAMBAHAN: Menyimpan nomor HP staff saat registrasi staff
 // ============================================================================
 
 let lastRegisterAttempt = 0;
@@ -367,6 +369,7 @@ async function handleRegister(e) {
     const codeInput = document.getElementById('regCode').value.trim().toUpperCase();
     const email = document.getElementById('regEmail').value.trim();
     const pass = document.getElementById('regPassword').value;
+    const parentPhone = document.getElementById('regParentPhone')?.value?.trim() || '';
 
     // ========== VALIDASI DASAR ==========
     if (!regType || !codeInput || !email || !pass) {
@@ -404,13 +407,23 @@ async function handleRegister(e) {
             showToast("❌ Masukkan ID Siswa! ID wajib diisi.", "error"); 
             return; 
         }
-        extraData = { fpId: inputId };
+        extraData = { 
+            fpId: inputId,
+            parentPhone: parentPhone // TAMBAHKAN INI
+        };
+        
+        // Validasi format nomor WhatsApp (opsional)
+        if (parentPhone && !/^[0-9]{10,15}$/.test(parentPhone.replace(/[^0-9]/g, ''))) {
+            showToast("⚠️ Format nomor WhatsApp tidak valid! Gunakan angka saja (10-15 digit).", "warning");
+            // Tetap lanjutkan, hanya warning
+        }
     } 
     // ============ REGISTRASI STAFF (GURU & KARYAWAN) ============
     else if (regType === 'staff') {
         const staffId = document.getElementById('regStaffId')?.value.trim();
         const staffNama = document.getElementById('regStaffNama')?.value.trim();
         const staffEmail = document.getElementById('regStaffEmail')?.value.trim();
+        const staffPhone = document.getElementById('regStaffPhone')?.value?.trim() || '';
         
         // ========== VALIDASI WAJIB: ID Staff harus diisi! ==========
         if (!staffId) {
@@ -421,8 +434,15 @@ async function handleRegister(e) {
         extraData = { 
             staffId: staffId,
             staffNama: staffNama || null,
-            staffEmail: staffEmail || null
+            staffEmail: staffEmail || null,
+            staffPhone: staffPhone // TAMBAHKAN INI
         };
+        
+        // Validasi format nomor WhatsApp (opsional)
+        if (staffPhone && !/^[0-9]{10,15}$/.test(staffPhone.replace(/[^0-9]/g, ''))) {
+            showToast("⚠️ Format nomor WhatsApp tidak valid! Gunakan angka saja (10-15 digit).", "warning");
+            // Tetap lanjutkan, hanya warning
+        }
     }
 
     const btn = document.getElementById('btnRegSubmit');
@@ -478,7 +498,16 @@ async function handleRegister(e) {
             userData.kelas = student.kelas;
             userData.jurusan = student.jurusan;
             userData.fpId = fpId;
+            userData.parentPhone = extraData.parentPhone || student.parentPhone || student.noHp || ''; // TAMBAHKAN
+            userData.noHp = extraData.parentPhone || student.parentPhone || student.noHp || ''; // Sinkronkan ke noHp
             userName = student.nama;
+            
+            // UPDATE data siswa dengan parentPhone jika belum ada
+            if (extraData.parentPhone && !student.parentPhone) {
+                await db.ref(`users/${fpId}/parentPhone`).set(extraData.parentPhone);
+                await db.ref(`users/${fpId}/noHp`).set(extraData.parentPhone);
+                console.log(`📱 Parent phone saved for student ${fpId}: ${extraData.parentPhone}`);
+            }
         }
         // ============ REGISTRASI STAFF (DENGAN ID WAJIB) ============
         else if (regType === 'staff') {
@@ -508,7 +537,7 @@ async function handleRegister(e) {
                     userData.jabatan = staffData.jabatan;
                     userData.departemen = staffData.departemen || '';
                     userData.staffId = codeData.linkedId;
-                    userData.noHp = staffData.noHp || '';
+                    userData.noHp = extraData.staffPhone || staffData.noHp || ''; // TAMBAHKAN
                     userName = staffData.nama;
                     
                     // VALIDASI OPSIONAL: Nama staff harus sesuai (jika diinput)
@@ -516,11 +545,18 @@ async function handleRegister(e) {
                         await user.delete();
                         throw new Error(`❌ Nama staff tidak sesuai! Staff dengan ID ${codeData.linkedId} terdaftar sebagai: ${staffData.nama}`);
                     }
+                    
+                    // UPDATE data staff dengan noHp jika belum ada
+                    if (extraData.staffPhone && !staffData.noHp) {
+                        await db.ref(`staff/${codeData.linkedId}/noHp`).set(extraData.staffPhone);
+                        console.log(`📱 Staff phone saved for ${codeData.linkedId}: ${extraData.staffPhone}`);
+                    }
                 } else {
                     // Jika data staff tidak ditemukan di node staff, gunakan data dari kode
                     userRole = codeData.targetRole || 'guru';
                     userData.nama = codeData.linkedName || extraData.staffNama || email.split('@')[0];
                     userData.staffId = codeData.linkedId;
+                    userData.noHp = extraData.staffPhone || ''; // TAMBAHKAN
                     userName = userData.nama;
                 }
             } 
@@ -575,8 +611,14 @@ async function handleRegister(e) {
                 userData.jabatan = matchedStaff.jabatan;
                 userData.departemen = matchedStaff.departemen || '';
                 userData.staffId = matchedStaffId;
-                userData.noHp = matchedStaff.noHp || '';
+                userData.noHp = extraData.staffPhone || matchedStaff.noHp || ''; // TAMBAHKAN
                 userName = matchedStaff.nama;
+                
+                // UPDATE data staff dengan noHp jika diperlukan
+                if (extraData.staffPhone && !matchedStaff.noHp) {
+                    await db.ref(`staff/${matchedStaffId}/noHp`).set(extraData.staffPhone);
+                    console.log(`📱 Staff phone saved for ${matchedStaffId}: ${extraData.staffPhone}`);
+                }
             }
         }
 
@@ -607,12 +649,13 @@ async function handleRegister(e) {
         // LOG: Registrasi berhasil
         try {
             const roleDisplay = getRoleDisplayName(userRole);
+            const phoneInfo = userData.parentPhone ? `, WA: ${userData.parentPhone}` : (userData.noHp ? `, WA: ${userData.noHp}` : '');
             await db.ref('logs').push({
                 action: 'register',
                 userId: user.uid,
                 userName: userName,
                 userRole: userRole,
-                details: `Registrasi berhasil sebagai ${roleDisplay} dengan email ${email}${regType === 'staff' ? ` (Staff - ID: ${extraData.staffId})` : ''}`,
+                details: `Registrasi berhasil sebagai ${roleDisplay} dengan email ${email}${regType === 'staff' ? ` (Staff - ID: ${extraData.staffId})` : ''}${phoneInfo}`,
                 timestamp: firebase.database.ServerValue.TIMESTAMP,
                 userAgent: navigator.userAgent.substring(0, 200)
             });
@@ -630,13 +673,17 @@ async function handleRegister(e) {
         const staffIdField = document.getElementById('regStaffId');
         const staffNamaField = document.getElementById('regStaffNama');
         const staffEmailField = document.getElementById('regStaffEmail');
+        const staffPhoneField = document.getElementById('regStaffPhone');
         if (staffIdField) staffIdField.value = '';
         if (staffNamaField) staffNamaField.value = '';
         if (staffEmailField) staffEmailField.value = '';
+        if (staffPhoneField) staffPhoneField.value = '';
         
         // Reset field siswa
         const regGeneratedId = document.getElementById('regGeneratedId');
+        const regParentPhone = document.getElementById('regParentPhone');
         if (regGeneratedId) regGeneratedId.value = '';
+        if (regParentPhone) regParentPhone.value = '';
         
     } catch (error) {
         console.error(error);
@@ -857,4 +904,5 @@ window.getRoleDisplayName = getRoleDisplayName;
 window.getRoleIcon = getRoleIcon;
 window.updateUserInterfaceByRole = updateUserInterfaceByRole;
 
-console.log("✅ auth.js V5.3 loaded - REGISTRATION ONLY: SISWA & STAFF (Guru & Karyawan) dengan validasi ID wajib!");
+console.log("✅ auth.js V5.4 loaded - REGISTRATION ONLY: SISWA & STAFF dengan validasi ID wajib & WhatsApp integration!");
+console.log("📱 WhatsApp: parentPhone untuk siswa, noHp untuk staff disimpan saat registrasi.");

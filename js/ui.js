@@ -1,7 +1,10 @@
-// ui.js - VERSION 6.1 (DENGAN AI ASSISTANT AUTO-INIT)
+// ui.js - VERSION 6.2 (DENGAN WHATSAPP EDIT DI PROFIL)
 // Berisi fungsi-fungsi antarmuka pengguna, modal, profil, dan inisialisasi dashboard
 // Role yang didukung: developer, admin (Kepala Sekolah), wakil_kepala, staff_tu, guru, siswa
-// PERUBAHAN V6.1: Menambahkan auto-inisialisasi AI Assistant untuk Admin, Guru, Developer
+// PERUBAHAN V6.2: 
+//   - Menambahkan fitur edit WhatsApp di menu profil untuk semua role kecuali siswa
+//   - Sinkronisasi WhatsApp ke node staff dan user auth
+//   - Validasi format nomor WhatsApp
 // ============================================================================
 
 // ======================== GLOBAL UI STATE ========================
@@ -135,6 +138,20 @@ function getClassIconForHeader(className) {
     if (className.includes('XI')) return '🔧';
     if (className.includes('XII')) return '🚀';
     return '🏫';
+}
+
+/**
+ * Format nomor telepon untuk tampilan
+ * @param {string} phone - Nomor telepon
+ * @returns {string} Nomor yang diformat
+ */
+function formatPhoneDisplay(phone) {
+    if (!phone) return '-';
+    const cleaned = phone.replace(/\D/g, '');
+    if (cleaned.length <= 4) return cleaned;
+    if (cleaned.length <= 8) return cleaned.substring(0, 4) + '-' + cleaned.substring(4);
+    if (cleaned.length <= 12) return cleaned.substring(0, 4) + '-' + cleaned.substring(4, 8) + '-' + cleaned.substring(8);
+    return cleaned.substring(0, 4) + '-' + cleaned.substring(4, 8) + '-' + cleaned.substring(8, 12) + '-' + cleaned.substring(12);
 }
 
 /**
@@ -561,7 +578,6 @@ function initApp() {
     setupPhotoRealtimeListener();
     
     // ======================== AI ASSISTANT AUTO-INITIALIZATION ========================
-    // Inisialisasi AI Assistant untuk Admin, Guru, dan Developer
     setTimeout(() => {
         if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'guru' || currentUser.role === 'developer')) {
             console.log("🤖 Auto-initializing AI Assistant for role:", currentUser.role);
@@ -1670,37 +1686,111 @@ function renderDashboardTasks() {
     });
 }
 
-// ======================== PROFIL & MODALS ========================
+// ======================== PROFIL & MODALS (DENGAN WHATSAPP) ========================
+
+/**
+ * Buka modal profil dengan dukungan WhatsApp untuk non-siswa
+ */
 function openProfileModal() {
     const modal = document.getElementById('modal-profile');
-    if (!modal) return;
+    if (!modal) {
+        console.warn("Modal profile not found!");
+        return;
+    }
     modal.classList.add('open');
-    if (!currentUser) return;
+    if (!currentUser) {
+        console.warn("No current user!");
+        return;
+    }
+    
+    console.log("📱 Opening profile modal for user:", currentUser.nama, "Role:", currentUser.role);
+    
+    // ========== SET FOTO PROFIL ==========
     const profileImg = document.getElementById('profileImg');
     if (profileImg) {
         profileImg.src = currentUser.photoUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser.nama || 'User')}&background=random`;
     }
+    
+    // ========== SET NAMA ==========
     const profileNameInput = document.getElementById('profileNameInput');
-    if (profileNameInput) profileNameInput.value = currentUser.nama || '';
+    if (profileNameInput) {
+        profileNameInput.value = currentUser.nama || '';
+    }
+    
+    // ========== SET EMAIL ==========
     const profileEmail = document.getElementById('profileEmail');
-    if (profileEmail) profileEmail.textContent = currentUser.email || '';
+    if (profileEmail) {
+        profileEmail.textContent = currentUser.email || '';
+    }
+    
+    // ========== SET KELAS & JURUSAN ==========
     const profileKelas = document.getElementById('profileKelas');
-    if (profileKelas) profileKelas.value = currentUser.kelas || '';
+    if (profileKelas) {
+        profileKelas.value = currentUser.kelas || '';
+    }
+    
     const profileJurusan = document.getElementById('profileJurusan');
-    if (profileJurusan) profileJurusan.value = currentUser.jurusan || '';
+    if (profileJurusan) {
+        profileJurusan.value = currentUser.jurusan || '';
+    }
+    
+    // ========== SET SUBJECT & BIDANG ==========
     const profileSubject = document.getElementById('profileSubject');
-    if (profileSubject) profileSubject.value = currentUser.subject || '';
+    if (profileSubject) {
+        profileSubject.value = currentUser.subject || '';
+    }
+    
     const profileBidang = document.getElementById('profileBidang');
-    if (profileBidang) profileBidang.value = currentUser.bidang || '';
+    if (profileBidang) {
+        profileBidang.value = currentUser.bidang || '';
+    }
+    
+    // ========== SET WHATSAPP (HANYA UNTUK NON-SISWA) ==========
+    const profileWhatsApp = document.getElementById('profileWhatsApp');
+    const whatsappGroup = document.getElementById('group-profile-whatsapp');
+    
+    // Tampilkan input WhatsApp hanya untuk non-siswa
+    const isSiswa = currentUser.role === 'siswa';
+    
+    if (profileWhatsApp) {
+        // Ambil nomor WhatsApp dari berbagai sumber
+        let waNumber = currentUser.noHp || '';
+        
+        // Jika tidak ada, coba dari data staff (untuk staff/guru)
+        if (!waNumber && currentUser.role !== 'siswa' && currentUser.staffId) {
+            const staffData = dbData?.staff?.find(s => s.id == currentUser.staffId);
+            if (staffData && staffData.noHp) {
+                waNumber = staffData.noHp;
+            }
+        }
+        
+        // Jika masih tidak ada, coba dari data user auth lainnya
+        if (!waNumber && currentUser.role !== 'siswa') {
+            const userAuth = dbData?.users_auth?.find(u => u.uid == currentUser.uid);
+            if (userAuth && userAuth.noHp) {
+                waNumber = userAuth.noHp;
+            }
+        }
+        
+        profileWhatsApp.value = waNumber || '';
+        console.log("📱 WhatsApp number loaded:", waNumber || '(kosong)');
+    }
+    
+    if (whatsappGroup) {
+        // Sembunyikan untuk siswa, tampilkan untuk lainnya
+        whatsappGroup.style.display = isSiswa ? 'none' : 'block';
+        console.log("📱 WhatsApp group visibility:", isSiswa ? 'hidden (siswa)' : 'shown');
+    }
 
+    // ========== ROLE-BASED FORM VISIBILITY ==========
     const nameInput = document.getElementById('profileNameInput');
     const kelasInput = document.getElementById('profileKelas');
     const jurusanInput = document.getElementById('profileJurusan');
     const subjectGroup = document.getElementById('group-subject');
-    const bidangGroup = document.getElementById('group-bidang');
     const saveBtn = document.querySelector('#modal-profile .btn-save');
     let delayGroup = document.getElementById('group-profile-delay');
     
+    // Create delay group if not exists (for siswa)
     if (!delayGroup) {
         const jurusanDiv = document.getElementById('profileJurusan')?.parentElement;
         if (jurusanDiv && currentUser.role === 'siswa') {
@@ -1719,7 +1809,6 @@ function openProfileModal() {
         if (kelasInput) { kelasInput.readOnly = true; kelasInput.style.cssText = 'border:none;background:transparent'; }
         if (jurusanInput) { jurusanInput.readOnly = true; jurusanInput.style.cssText = 'border:none;background:transparent'; }
         if (subjectGroup) subjectGroup.style.display = 'none';
-        if (bidangGroup) bidangGroup.style.display = 'none';
         if (saveBtn) saveBtn.style.display = 'none';
         if (delayGroup) delayGroup.style.display = 'block';
         updateProfileDelayDisplay();
@@ -1728,25 +1817,26 @@ function openProfileModal() {
         if (kelasInput) { kelasInput.readOnly = true; kelasInput.style.cssText = 'border:none;background:transparent;color:#888'; }
         if (jurusanInput) { jurusanInput.readOnly = true; jurusanInput.style.cssText = 'border:none;background:transparent;color:#888'; }
         if (subjectGroup) subjectGroup.style.display = 'block';
-        if (bidangGroup) bidangGroup.style.display = 'none';
         if (saveBtn) saveBtn.style.display = 'block';
         if (delayGroup) delayGroup.style.display = 'none';
+        // WhatsApp group sudah ditampilkan
     } else if (currentUser.role === 'wakil_kepala' || currentUser.role === 'staff_tu') {
         if (nameInput) { nameInput.readOnly = false; nameInput.style.cssText = 'border:1px solid var(--border);background:#2c2c2c;color:#fff'; }
         if (kelasInput) { kelasInput.readOnly = true; kelasInput.style.cssText = 'border:none;background:transparent;color:#888'; }
         if (jurusanInput) { jurusanInput.readOnly = true; jurusanInput.style.cssText = 'border:none;background:transparent;color:#888'; }
         if (subjectGroup) subjectGroup.style.display = 'none';
-        if (bidangGroup) bidangGroup.style.display = 'block';
         if (saveBtn) saveBtn.style.display = 'block';
         if (delayGroup) delayGroup.style.display = 'none';
+        // WhatsApp group sudah ditampilkan
     } else {
+        // Admin/Developer
         if (nameInput) { nameInput.readOnly = false; nameInput.style.cssText = 'border:1px solid var(--border);background:#2c2c2c;color:#fff'; }
         if (kelasInput) { kelasInput.readOnly = true; kelasInput.style.cssText = 'border:none;background:transparent;color:#888'; }
         if (jurusanInput) { jurusanInput.readOnly = true; jurusanInput.style.cssText = 'border:none;background:transparent;color:#888'; }
         if (subjectGroup) subjectGroup.style.display = 'none';
-        if (bidangGroup) bidangGroup.style.display = 'none';
         if (saveBtn) saveBtn.style.display = 'block';
         if (delayGroup) delayGroup.style.display = 'none';
+        // WhatsApp group sudah ditampilkan
     }
 }
 
@@ -1779,18 +1869,39 @@ function closeModal(id) {
     if (modal) modal.classList.remove('open');
 }
 
-// ======================== UPDATE PROFIL ========================
+// ======================== UPDATE PROFIL (DENGAN WHATSAPP) ========================
+
+/**
+ * Handle update profile info dengan dukungan WhatsApp untuk non-siswa
+ */
 function handleUpdateProfileInfo() {
-    if (!currentUser) { showToast('Anda harus login terlebih dahulu!', 'error'); return; }
-    if (currentUser.role === 'siswa') { showToast('Siswa tidak dapat mengubah data profil. Hubungi Admin/Guru.', 'error'); return; }
+    if (!currentUser) { 
+        showToast('Anda harus login terlebih dahulu!', 'error'); 
+        return; 
+    }
+    
+    if (currentUser.role === 'siswa') { 
+        showToast('Siswa tidak dapat mengubah data profil. Hubungi Admin/Guru.', 'error'); 
+        return; 
+    }
     
     const newNama = document.getElementById('profileNameInput').value.trim();
     const newKelas = document.getElementById('profileKelas')?.value.toUpperCase() || '';
     const newJurusan = document.getElementById('profileJurusan')?.value || '';
     const newSubject = document.getElementById('profileSubject')?.value || '';
     const newBidang = document.getElementById('profileBidang')?.value || '';
+    const newWhatsApp = document.getElementById('profileWhatsApp')?.value?.trim() || '';
     
-    if (!newNama) { showToast('Nama wajib diisi!', 'error'); return; }
+    if (!newNama) { 
+        showToast('Nama wajib diisi!', 'error'); 
+        return; 
+    }
+    
+    // Validasi format nomor WhatsApp (opsional)
+    if (newWhatsApp && !/^[0-9]{10,15}$/.test(newWhatsApp.replace(/[^0-9]/g, ''))) {
+        showToast('⚠️ Format nomor WhatsApp tidak valid! Gunakan angka saja (10-15 digit).', 'warning');
+        // Tetap lanjutkan, hanya warning
+    }
     
     const btn = document.querySelector('#modal-profile .btn-save');
     if (!btn) return;
@@ -1803,6 +1914,7 @@ function handleUpdateProfileInfo() {
     const oldJurusan = currentUser.jurusan;
     const oldSubject = currentUser.subject;
     const oldBidang = currentUser.bidang;
+    const oldWhatsApp = currentUser.noHp || '';
     
     const updateData = { 
         nama: newNama, 
@@ -1812,16 +1924,49 @@ function handleUpdateProfileInfo() {
         bidang: newBidang
     };
     
+    // Tambahkan WhatsApp jika bukan siswa
+    if (currentUser.role !== 'siswa') {
+        updateData.noHp = newWhatsApp;
+    }
+    
     db.ref(`users_auth/${currentUser.uid}`).update(updateData)
         .then(() => {
+            // Update currentUser
             currentUser.nama = newNama;
             currentUser.kelas = newKelas;
             currentUser.jurusan = newJurusan;
             currentUser.subject = newSubject;
             currentUser.bidang = newBidang;
-            if (typeof saveUserToLocalStorage === 'function') saveUserToLocalStorage(currentUser);
+            if (currentUser.role !== 'siswa') {
+                currentUser.noHp = newWhatsApp;
+            }
+            
+            if (typeof saveUserToLocalStorage === 'function') {
+                saveUserToLocalStorage(currentUser);
+            }
+            
+            // ====== SINKRONISASI KE NODE STAFF ======
+            if (currentUser.role !== 'siswa' && currentUser.staffId) {
+                const staffUpdates = { noHp: newWhatsApp };
+                db.ref(`staff/${currentUser.staffId}`).update(staffUpdates)
+                    .then(() => console.log(`✅ Staff ${currentUser.staffId} WhatsApp updated: ${newWhatsApp || '(kosong)'}`))
+                    .catch(err => console.warn('Failed to update staff WhatsApp:', err));
+            }
+            
+            // ====== SINKRONISASI KE NODE STAFF (jika tidak ada staffId tapi ada uid) ======
+            if (currentUser.role !== 'siswa' && !currentUser.staffId) {
+                // Cari staff berdasarkan uid
+                const staffData = dbData?.staff?.find(s => s.userId == currentUser.uid);
+                if (staffData) {
+                    db.ref(`staff/${staffData.id}/noHp`).set(newWhatsApp)
+                        .then(() => console.log(`✅ Staff ${staffData.id} WhatsApp updated via uid: ${newWhatsApp || '(kosong)'}`))
+                        .catch(err => console.warn('Failed to update staff WhatsApp:', err));
+                }
+            }
+            
             showToast('✅ Profil berhasil diperbarui');
             
+            // ====== LOG ACTIVITY ======
             if (typeof logActivity === 'function') {
                 let changes = [];
                 if (oldNama !== newNama) changes.push(`nama: ${oldNama} → ${newNama}`);
@@ -1829,6 +1974,9 @@ function handleUpdateProfileInfo() {
                 if (oldJurusan !== newJurusan) changes.push(`jurusan: ${oldJurusan} → ${newJurusan}`);
                 if (oldSubject !== newSubject) changes.push(`subject: ${oldSubject} → ${newSubject}`);
                 if (oldBidang !== newBidang) changes.push(`bidang: ${oldBidang} → ${newBidang}`);
+                if (oldWhatsApp !== newWhatsApp && currentUser.role !== 'siswa') {
+                    changes.push(`WhatsApp: ${oldWhatsApp || 'kosong'} → ${newWhatsApp || 'kosong'}`);
+                }
                 if (changes.length) {
                     logActivity('update_profile', `Memperbarui profil: ${changes.join(', ')}`);
                 } else {
@@ -1836,11 +1984,14 @@ function handleUpdateProfileInfo() {
                 }
             }
             
+            // ====== UPDATE UI ======
             document.getElementById('userProfileDisplay').textContent = newNama;
             if (currentUser.role === 'siswa' && currentUser.fpId) {
                 db.ref(`users/${currentUser.fpId}`).update({ nama: newNama, kelas: newKelas, jurusan: newJurusan });
             }
             closeModal('modal-profile');
+            
+            // Refresh semua tabel
             if (typeof window.populateFilters === 'function') {
                 try { window.populateFilters(); } catch(e) {}
             }
@@ -1850,9 +2001,22 @@ function handleUpdateProfileInfo() {
             if (typeof renderUsersTable === 'function') {
                 try { renderUsersTable(); } catch(e) {}
             }
+            if (typeof renderStaffTable === 'function') {
+                try { renderStaffTable(); } catch(e) {}
+            }
+            
+            // Refresh avatar
+            refreshAllAvatars();
+            
         })
-        .catch(err => { console.error('Update profile error:', err); showToast('❌ Gagal update: ' + err.message, 'error'); })
-        .finally(() => { btn.innerText = originalText; btn.disabled = false; });
+        .catch(err => { 
+            console.error('Update profile error:', err); 
+            showToast('❌ Gagal update: ' + err.message, 'error'); 
+        })
+        .finally(() => { 
+            btn.innerText = originalText; 
+            btn.disabled = false; 
+        });
 }
 
 function handleChangePassword(e) {
@@ -2194,6 +2358,7 @@ window.ensureChatRendered = ensureChatRendered;
 window.refreshAllAvatars = refreshAllAvatars;
 window.setupPhotoRealtimeListener = setupPhotoRealtimeListener;
 window.validateAndFixCurrentUser = validateAndFixCurrentUser;
+window.formatPhoneDisplay = formatPhoneDisplay;
 
 // Role helper exports
 window.getRoleDisplayName = getRoleDisplayName;
@@ -2218,4 +2383,4 @@ window.applySidebarRolePermissions = applySidebarRolePermissions;
 // Debug function
 window.debugAttendanceData = debugAttendanceData;
 
-console.log("✅ ui.js V6.1 loaded - Dengan AI Assistant auto-initialization untuk Admin, Guru, Developer");
+console.log("✅ ui.js V6.2 loaded - Dengan fitur edit WhatsApp di menu profil untuk semua role kecuali siswa!");
