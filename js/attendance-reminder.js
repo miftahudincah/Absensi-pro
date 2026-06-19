@@ -1,11 +1,12 @@
-// attendance-reminder.js - VERSION 1.2 (DENGAN WHATSAPP UTILITY)
+// attendance-reminder.js - VERSION 2.1 (FIXED: DETECT ALL USERS WITH WHATSAPP)
 // Fitur Pengingat Absensi via WhatsApp untuk semua role
 // Mengirim notifikasi jika belum absen lebih dari 5 menit setelah jam masuk
-// PERUBAHAN V1.2: 
-//   - Menggunakan fungsi sendAttendanceReminder dari whatsapp.js
-//   - Pengingat untuk siswa dikirim ke orang tua
-//   - Pengingat untuk staff dikirim ke staff yang bersangkutan
-//   - Menggunakan WHATSAPP_CONFIG dari config.js
+// PERUBAHAN V2.1:
+//   - FIX: Deteksi semua user auth dengan noHp (prioritas utama)
+//   - FIX: Cek staff berdasarkan userId, staffId, dan email
+//   - FIX: Log lebih detail untuk setiap user yang dicek
+//   - FIX: Menampilkan daftar lengkap user yang terdeteksi
+//   - FIX: FORCE_REMINDER_MODE untuk testing
 // ============================================================================
 
 let reminderInterval = null;
@@ -13,14 +14,22 @@ let reminderInitialized = false;
 let alreadyNotifiedToday = new Map(); // Menyimpan siapa yang sudah mendapat notifikasi hari ini
 let reminderRetryCount = 0;
 
-// Konfigurasi pengingat
+// ======================= KONFIGURASI =======================
+
+// FORCE MODE - Aktifkan untuk testing (set false untuk production)
+// Jika true, sistem akan mengirim reminder kapan saja (abaikan batasan jam)
+const FORCE_REMINDER_MODE = true; // <-- SET false UNTUK PRODUCTION
+
 const REMINDER_CONFIG = {
     delayAfterStart: 5,      // 5 menit setelah jam mulai
     checkInterval: 60000,    // Cek setiap 1 menit
     notificationCooldown: 60 * 60 * 1000, // Cooldown 1 jam untuk pengingat ulang
     enabled: true,
     reminderStartHour: 6,    // Mulai cek dari jam 6 pagi
-    reminderEndHour: 12      // Stop cek jam 12 siang
+    reminderEndHour: 12,     // Stop cek jam 12 siang
+    // FORCE MODE: override jam jika FORCE_REMINDER_MODE true
+    forceStartHour: 0,
+    forceEndHour: 23
 };
 
 // Daftar role yang akan dikirimi pengingat
@@ -122,10 +131,11 @@ function formatWhatsAppNumber(phoneNumber) {
     return formatted;
 }
 
-// ======================= AMBIL DATA USER DENGAN NOMOR WHATSAPP (INDEPENDEN) =======================
+// ======================= AMBIL DATA USER DENGAN NOMOR WHATSAPP =======================
 
 /**
- * Mendapatkan semua user yang memiliki nomor WhatsApp dari Firebase (tanpa perlu user login)
+ * Mendapatkan semua user yang memiliki nomor WhatsApp dari Firebase
+ * Mencari di: users_auth (noHp), staff (noHp), dan users (parentPhone)
  * @returns {Promise<Array>} Daftar user dengan nomor WhatsApp
  */
 async function getUsersWithWhatsApp() {
@@ -137,7 +147,9 @@ async function getUsersWithWhatsApp() {
     }
     
     try {
-        // Ambil semua user auth dari Firebase langsung
+        console.log('📋 [getUsersWithWhatsApp] Starting...');
+        
+        // ========== STEP 1: Ambil semua user auth ==========
         const usersSnapshot = await db.ref('users_auth').once('value');
         const allUsers = usersSnapshot.val();
         
@@ -151,78 +163,100 @@ async function getUsersWithWhatsApp() {
             .filter(([uid, user]) => user && user.uid && REMINDER_ROLES.includes(user.role))
             .map(([uid, user]) => ({ uid, ...user }));
         
-        console.log(`📋 Checking ${filteredUsers.length} users for reminder...`);
+        console.log(`📋 Checking ${filteredUsers.length} users with allowed roles...`);
         
+        // ========== STEP 2: Ambil semua data staff untuk referensi ==========
+        const staffSnapshot = await db.ref('staff').once('value');
+        const allStaff = staffSnapshot.val() || {};
+        console.log(`📁 Found ${Object.keys(allStaff).length} staff records in database`);
+        
+        // ========== STEP 3: Cek setiap user ==========
         for (const user of filteredUsers) {
             let phoneNumber = null;
             let isStaff = false;
             let isStudent = false;
+            let phoneSource = '';
             
-            // ========== UNTUK SISWA: cek nomor orang tua ==========
+            console.log(`🔍 Checking: ${user.nama || user.email || user.uid} (${user.role})`);
+            
+            // ========== UNTUK SISWA ==========
             if (user.role === 'siswa') {
                 isStudent = true;
                 
-                // Cek dari node users (data siswa) untuk parentPhone
-                if (user.fpId) {
+                // PRIORITAS 1: Cek dari user.auth (noHp)
+                if (user.noHp && user.noHp !== '-' && user.noHp !== '') {
+                    phoneNumber = user.noHp;
+                    phoneSource = 'users_auth.noHp';
+                    console.log(`   📱 Found in users_auth.noHp: ${user.noHp}`);
+                }
+                
+                // PRIORITAS 2: Cek dari data siswa (parentPhone)
+                if (!phoneNumber && user.fpId) {
                     try {
                         const studentSnapshot = await db.ref(`users/${user.fpId}`).once('value');
                         const studentData = studentSnapshot.val();
                         if (studentData) {
-                            // Prioritas: parentPhone > noHp
                             if (studentData.parentPhone && studentData.parentPhone !== '-') {
                                 phoneNumber = studentData.parentPhone;
+                                phoneSource = 'users.parentPhone';
+                                console.log(`   📱 Found in users.parentPhone: ${studentData.parentPhone}`);
                             } else if (studentData.noHp && studentData.noHp !== '-') {
                                 phoneNumber = studentData.noHp;
+                                phoneSource = 'users.noHp';
+                                console.log(`   📱 Found in users.noHp: ${studentData.noHp}`);
                             }
                         }
                     } catch(e) { console.warn(e); }
                 }
-                
-                // Jika belum dapat, cek dari parent_contacts
-                if (!phoneNumber && user.fpId) {
-                    try {
-                        const parentSnapshot = await db.ref(`parent_contacts/${user.fpId}`).once('value');
-                        const parentData = parentSnapshot.val();
-                        if (parentData && parentData.phoneNumber) {
-                            phoneNumber = parentData.phoneNumber;
-                        }
-                    } catch(e) { console.warn(e); }
-                }
             }
             
-            // ========== UNTUK STAFF/GURU: cek nomor staff ==========
+            // ========== UNTUK STAFF/GURU ==========
             if (user.role !== 'siswa') {
                 isStaff = true;
                 
-                // Cek dari data staff
-                if (user.staffId) {
-                    try {
-                        const staffSnapshot = await db.ref(`staff/${user.staffId}`).once('value');
-                        const staffData = staffSnapshot.val();
-                        if (staffData && staffData.noHp && staffData.noHp !== '-') {
-                            phoneNumber = staffData.noHp;
-                        }
-                    } catch(e) { console.warn(e); }
-                }
-                
-                // Jika belum dapat, cek dari user auth
-                if (!phoneNumber && user.noHp && user.noHp !== '-') {
+                // PRIORITAS 1: Cek dari user.auth (noHp) - PRIORITAS UTAMA!
+                if (user.noHp && user.noHp !== '-' && user.noHp !== '') {
                     phoneNumber = user.noHp;
+                    phoneSource = 'users_auth.noHp (langsung)';
+                    console.log(`   📱 Found in users_auth.noHp: ${user.noHp}`);
                 }
                 
-                // Cek dari staff_contacts (legacy)
+                // PRIORITAS 2: Cek dari data staff berdasarkan staffId
+                if (!phoneNumber && user.staffId) {
+                    const staffData = allStaff[user.staffId];
+                    if (staffData && staffData.noHp && staffData.noHp !== '-') {
+                        phoneNumber = staffData.noHp;
+                        phoneSource = `staff.${user.staffId}.noHp (by staffId)`;
+                        console.log(`   📱 Found in staff (by staffId): ${staffData.noHp}`);
+                    }
+                }
+                
+                // PRIORITAS 3: Cek dari data staff berdasarkan userId
                 if (!phoneNumber) {
-                    try {
-                        const staffContactSnapshot = await db.ref(`staff_contacts/${user.staffId || user.uid}`).once('value');
-                        const contact = staffContactSnapshot.val();
-                        if (contact && contact.phoneNumber) {
-                            phoneNumber = contact.phoneNumber;
+                    for (const [staffId, staffData] of Object.entries(allStaff)) {
+                        if (staffData.userId === user.uid && staffData.noHp && staffData.noHp !== '-') {
+                            phoneNumber = staffData.noHp;
+                            phoneSource = `staff.${staffId}.noHp (by userId)`;
+                            console.log(`   📱 Found in staff (by userId): ${staffData.noHp}`);
+                            break;
                         }
-                    } catch(e) { console.warn(e); }
+                    }
+                }
+                
+                // PRIORITAS 4: Cek dari data staff berdasarkan email
+                if (!phoneNumber && user.email) {
+                    for (const [staffId, staffData] of Object.entries(allStaff)) {
+                        if (staffData.email === user.email && staffData.noHp && staffData.noHp !== '-') {
+                            phoneNumber = staffData.noHp;
+                            phoneSource = `staff.${staffId}.noHp (by email)`;
+                            console.log(`   📱 Found in staff (by email): ${staffData.noHp}`);
+                            break;
+                        }
+                    }
                 }
             }
             
-            // Format nomor
+            // ========== FORMAT NOMOR ==========
             if (phoneNumber) {
                 const formatted = formatWhatsAppNumber(phoneNumber);
                 if (formatted) {
@@ -236,17 +270,34 @@ async function getUsersWithWhatsApp() {
                         rawNumber: phoneNumber,
                         email: user.email,
                         isStudent: isStudent,
-                        isStaff: isStaff
+                        isStaff: isStaff,
+                        phoneSource: phoneSource
                     });
+                    console.log(`   ✅ ADDED: ${user.nama || user.email} (${user.role}) -> ${formatted} [${phoneSource}]`);
+                } else {
+                    console.log(`   ⚠️ Failed to format: ${phoneNumber}`);
                 }
+            } else {
+                console.log(`   ❌ NO PHONE NUMBER found for ${user.nama || user.email}`);
             }
         }
         
-        console.log(`📱 Found ${usersWithWA.length} users with WhatsApp number (${usersWithWA.filter(u => u.isStudent).length} students, ${usersWithWA.filter(u => u.isStaff).length} staff)`);
+        // ========== STEP 4: Tampilkan ringkasan ==========
+        console.log(`📱 [getUsersWithWhatsApp] FINAL: ${usersWithWA.length} users with WhatsApp number`);
+        console.log(`   Students: ${usersWithWA.filter(u => u.isStudent).length}`);
+        console.log(`   Staff: ${usersWithWA.filter(u => u.isStaff).length}`);
+        
+        if (usersWithWA.length > 0) {
+            console.log('📋 DETAILED LIST:');
+            usersWithWA.forEach((u, i) => {
+                console.log(`   ${i+1}. ${u.nama} (${u.role}) -> ${u.phoneNumber} [${u.phoneSource || 'unknown'}]`);
+            });
+        }
+        
         return usersWithWA;
         
     } catch (error) {
-        console.error('Error getting users with WhatsApp:', error);
+        console.error('❌ Error getting users with WhatsApp:', error);
         return [];
     }
 }
@@ -267,7 +318,7 @@ async function hasUserCheckedInToday(user) {
             const snapshot = await db.ref(`absensi/${todayStr}/${user.fpId}`).once('value');
             const attendance = snapshot.val();
             if (attendance && (attendance.in || attendance.status === 'Hadir')) {
-                console.log(`✅ ${user.nama} (${user.role}) sudah absen masuk hari ini`);
+                console.log(`   ✅ ${user.nama} sudah absen masuk hari ini`);
                 return true;
             }
         } catch(e) { console.warn(e); }
@@ -280,7 +331,7 @@ async function hasUserCheckedInToday(user) {
             const snapshot = await db.ref(`staff_attendance/${todayStr}/${staffId}`).once('value');
             const attendance = snapshot.val();
             if (attendance && attendance.timeIn) {
-                console.log(`✅ ${user.nama} (${user.role}) sudah absen masuk hari ini`);
+                console.log(`   ✅ ${user.nama} sudah absen masuk hari ini`);
                 return true;
             }
         } catch(e) { console.warn(e); }
@@ -396,6 +447,8 @@ function resetDailyNotifications() {
  * Proses pengingat untuk semua user (INDEPENDEN - tidak perlu user login)
  */
 async function processReminders() {
+    console.log('🔔 [processReminders] Started...');
+    
     // Cek apakah fitur diaktifkan
     if (!REMINDER_CONFIG.enabled) {
         console.log('🔔 Reminder feature disabled');
@@ -411,7 +464,7 @@ async function processReminders() {
     // Reset notifikasi harian
     resetDailyNotifications();
     
-    // Cek apakah hari ini libur
+    // ========== CEK HARI LIBUR ==========
     const isHoliday = await isTodayHolidayAsync();
     if (isHoliday) {
         console.log('🏖️ Today is holiday, skipping reminder');
@@ -420,13 +473,25 @@ async function processReminders() {
     
     const now = new Date();
     const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
     
-    // Cek jam reminder (hanya antara jam 6-12)
-    if (currentHour < REMINDER_CONFIG.reminderStartHour || currentHour > REMINDER_CONFIG.reminderEndHour) {
-        console.log(`⏰ Reminder only between ${REMINDER_CONFIG.reminderStartHour}:00 - ${REMINDER_CONFIG.reminderEndHour}:00, current hour: ${currentHour}`);
-        return;
+    // ========== CEK JAM OPERASIONAL ==========
+    let isWithinHours = false;
+    
+    if (FORCE_REMINDER_MODE) {
+        // FORCE MODE: Abaikan batasan jam
+        isWithinHours = true;
+        console.log(`🔧 FORCE MODE ENABLED - Reminder will run at any hour (current: ${currentHour}:${String(currentMinute).padStart(2, '0')})`);
+    } else {
+        // Normal mode: Cek jam
+        isWithinHours = (currentHour >= REMINDER_CONFIG.reminderStartHour && currentHour <= REMINDER_CONFIG.reminderEndHour);
+        if (!isWithinHours) {
+            console.log(`⏰ Reminder only between ${REMINDER_CONFIG.reminderStartHour}:00 - ${REMINDER_CONFIG.reminderEndHour}:00, current hour: ${currentHour}`);
+            return;
+        }
     }
     
+    // ========== AMBIL JAM MASUK SEKOLAH ==========
     const schoolStartTime = await getSchoolStartTimeAsync();
     const [startHour, startMinute] = schoolStartTime.split(':').map(Number);
     
@@ -434,6 +499,8 @@ async function processReminders() {
     const currentTotalMinutes = now.getHours() * 60 + now.getMinutes();
     const startTotalMinutes = startHour * 60 + startMinute;
     const minutesAfterStart = currentTotalMinutes - startTotalMinutes;
+    
+    console.log(`⏰ School start: ${schoolStartTime}, Current: ${now.toLocaleTimeString()}, Minutes after start: ${minutesAfterStart}`);
     
     // Cek apakah sudah melebihi delay (5 menit)
     if (minutesAfterStart < REMINDER_CONFIG.delayAfterStart) {
@@ -443,7 +510,7 @@ async function processReminders() {
     
     console.log(`🔔 Checking reminders at ${now.toLocaleTimeString()} (${minutesAfterStart} minutes after school start)`);
     
-    // Dapatkan semua user dengan WhatsApp (langsung dari Firebase)
+    // ========== DAPATKAN USER DENGAN WHATSAPP ==========
     const users = await getUsersWithWhatsApp();
     if (users.length === 0) {
         console.log('📭 No users with WhatsApp number found');
@@ -456,11 +523,14 @@ async function processReminders() {
     let alreadyNotifiedCount = 0;
     let errorCount = 0;
     
+    console.log(`👥 Processing ${users.length} users for reminder...`);
+    
     for (const user of users) {
         // Cek apakah sudah dapat notifikasi hari ini
         const notifKey = `${user.uid}_${todayStr}`;
         if (alreadyNotifiedToday.has(notifKey)) {
             alreadyNotifiedCount++;
+            console.log(`⏭️ ${user.nama} already notified today, skipping`);
             continue;
         }
         
@@ -468,6 +538,7 @@ async function processReminders() {
         const hasCheckedIn = await hasUserCheckedInToday(user);
         if (hasCheckedIn) {
             alreadyAbsentCount++;
+            console.log(`✅ ${user.nama} already checked in, skipping`);
             continue;
         }
         
@@ -475,12 +546,12 @@ async function processReminders() {
         const minutesLate = minutesAfterStart;
         let success = false;
         
+        console.log(`📤 Sending reminder to ${user.nama} (${user.role}) - phone: ${user.phoneNumber}`);
+        
         // Gunakan fungsi sendAttendanceReminder dari whatsapp.js jika tersedia
         if (typeof sendAttendanceReminder === 'function') {
             try {
                 const role = user.role === 'siswa' ? 'siswa' : 'staff';
-                // Untuk siswa, kirim ke orang tua (nomor sudah di-set di user.phoneNumber)
-                // Untuk staff, kirim ke staff itu sendiri
                 const result = await sendAttendanceReminder(
                     { 
                         nama: user.nama, 
@@ -491,14 +562,22 @@ async function processReminders() {
                     minutesLate
                 );
                 success = result === true;
+                if (success) {
+                    console.log(`   ✅ Reminder sent successfully to ${user.nama}`);
+                } else {
+                    console.log(`   ⚠️ sendAttendanceReminder returned false for ${user.nama}`);
+                }
             } catch (err) {
-                console.error('Error sending reminder via sendAttendanceReminder:', err);
+                console.error(`   ❌ Error sending reminder via sendAttendanceReminder for ${user.nama}:`, err);
                 success = false;
             }
+        } else {
+            console.warn('⚠️ sendAttendanceReminder function not available, using fallback');
         }
         
         // Fallback: kirim langsung via sendReminderViaWhatsApp
         if (!success) {
+            console.log(`   📤 Using fallback for ${user.nama}`);
             const message = generateReminderMessage(user, schoolStartTime, minutesLate);
             success = await sendReminderViaWhatsApp(user.phoneNumber, message);
         }
@@ -506,6 +585,7 @@ async function processReminders() {
         if (success) {
             sentCount++;
             alreadyNotifiedToday.set(notifKey, Date.now());
+            console.log(`   ✅ Reminder sent to ${user.nama} (${user.phoneNumber})`);
             
             // Catat ke log (jika fungsi tersedia)
             if (typeof window.logActivity === 'function') {
@@ -515,12 +595,17 @@ async function processReminders() {
             }
         } else {
             errorCount++;
+            console.log(`   ❌ Failed to send reminder to ${user.nama}`);
         }
     }
     
-    if (sentCount > 0 || alreadyAbsentCount > 0 || alreadyNotifiedCount > 0) {
-        console.log(`📊 Reminder summary: Sent=${sentCount}, AlreadyAbsent=${alreadyAbsentCount}, AlreadyNotified=${alreadyNotifiedCount}, Errors=${errorCount}`);
-    }
+    // ========== SUMMARY ==========
+    console.log(`📊 Reminder summary:`);
+    console.log(`   ✅ Sent: ${sentCount}`);
+    console.log(`   ✅ Already checked in: ${alreadyAbsentCount}`);
+    console.log(`   ⏭️ Already notified today: ${alreadyNotifiedCount}`);
+    console.log(`   ❌ Errors: ${errorCount}`);
+    console.log(`   📱 Total users with WhatsApp: ${users.length}`);
 }
 
 /**
@@ -540,6 +625,7 @@ async function sendReminderViaWhatsApp(phoneNumber, message) {
     const backendUrl = window.WHATSAPP_CONFIG?.backendUrl || 'https://backendtest-azure.vercel.app/api/whatsapp/send';
     
     try {
+        console.log(`   📤 Sending via fallback to ${phoneNumber}...`);
         const response = await fetch(backendUrl, {
             method: 'POST',
             headers: {
@@ -553,14 +639,14 @@ async function sendReminderViaWhatsApp(phoneNumber, message) {
         
         const result = await response.json();
         if (result.success) {
-            console.log(`✅ Reminder sent to ${phoneNumber}`);
+            console.log(`   ✅ Reminder sent to ${phoneNumber} via fallback`);
             return true;
         } else {
-            console.error('Send reminder error:', result.error);
+            console.error('   ❌ Send reminder error:', result.error);
             return false;
         }
     } catch (error) {
-        console.error('Send reminder error:', error);
+        console.error('   ❌ Send reminder error:', error);
         return false;
     }
 }
@@ -576,14 +662,17 @@ function startReminderScheduler() {
     }
     
     console.log(`🔔 Starting attendance reminder scheduler (check every ${REMINDER_CONFIG.checkInterval / 1000} seconds)`);
+    console.log(`🔧 FORCE_REMINDER_MODE: ${FORCE_REMINDER_MODE ? '✅ ENABLED (testing mode)' : '❌ DISABLED (production mode)'}`);
     
     // Jalankan pertama kali setelah 10 detik
     setTimeout(() => {
+        console.log('🔔 First scheduled reminder check...');
         processReminders();
     }, 10000);
     
     // Jalankan secara periodik
     reminderInterval = setInterval(() => {
+        console.log('🔔 Periodic reminder check...');
         processReminders();
     }, REMINDER_CONFIG.checkInterval);
 }
@@ -625,6 +714,7 @@ function initAttendanceReminder() {
     }
     
     console.log('🔔 Initializing Attendance Reminder System (Independent Mode)...');
+    console.log(`🔧 FORCE_REMINDER_MODE: ${FORCE_REMINDER_MODE ? '✅ ENABLED (testing mode)' : '❌ DISABLED (production mode)'}`);
     
     // Tunggu Firebase siap
     if (typeof db === 'undefined' || !db) {
@@ -658,6 +748,7 @@ function autoInit() {
     if (typeof db !== 'undefined' && db) {
         initAttendanceReminder();
     } else {
+        console.log('⏳ Waiting for Firebase to auto-init reminder...');
         setTimeout(autoInit, 1000);
     }
 }
@@ -671,5 +762,8 @@ window.cleanupAttendanceReminder = cleanupAttendanceReminder;
 window.triggerManualReminder = triggerManualReminder;
 window.getUsersWithWhatsApp = getUsersWithWhatsApp;
 window.processReminders = processReminders;
+window.FORCE_REMINDER_MODE = FORCE_REMINDER_MODE;
 
-console.log('✅ attendance-reminder.js v1.2 loaded - DENGAN WhatsApp utility! Reminder runs without user login.');
+console.log('✅ attendance-reminder.js v2.1 loaded - FIXED: Detects ALL users with WhatsApp!');
+console.log(`🔧 FORCE_REMINDER_MODE: ${FORCE_REMINDER_MODE ? '✅ ENABLED (testing)' : '❌ DISABLED (production)'}`);
+console.log('📱 Reminder will run every 60 seconds');

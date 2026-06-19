@@ -1,10 +1,10 @@
-// staff.js - VERSION 3.4 (DENGAN WHATSAPP INTEGRASI)
+// staff.js - VERSION 3.5 (FIXED: SYNC noHp FROM STAFF TO USER AUTH)
 // Manajemen Data Guru/Karyawan dengan Sinkronisasi penuh ke Akun User
-// PERUBAHAN V3.4: 
-//   - Menambahkan integrasi WhatsApp untuk notifikasi staff
-//   - Menampilkan nomor HP staff di tabel dengan ikon WhatsApp
-//   - Menambahkan tombol test WhatsApp untuk staff
-//   - Sinkronisasi nomor HP antara staff dan user auth
+// PERUBAHAN V3.5: 
+//   - FIX: Memastikan noHp dari staff tersinkron ke users_auth
+//   - FIX: Menambahkan fungsi syncNoHpToAllUsers untuk update massal
+//   - FIX: Auto-sync noHp saat staff ditambah/diedit
+//   - FIX: Log lebih detail untuk tracking sinkronisasi
 // ============================================================================
 
 let staffDataReadyListenerAdded = false;
@@ -137,6 +137,7 @@ async function refreshStaffPhoto(staffId) {
 }
 
 // ======================= SINKRONISASI DATA STAFF DARI AKUN USER ========================
+
 /**
  * Sinkronkan data staff dari user auth
  * Memastikan data staff selalu up-to-date dengan akun user
@@ -287,6 +288,129 @@ async function syncAllStaffFromUserAccounts() {
     staffListLoaded = false;
     if (document.getElementById('tab-staff')?.classList.contains('active')) {
         renderStaffTable();
+    }
+}
+
+// ======================= SINKRONISASI noHp DARI STAFF KE USER AUTH ========================
+
+/**
+ * Sinkronkan noHp dari staff ke users_auth untuk semua user
+ * Fungsi ini akan mencari staff yang memiliki userId dan noHp,
+ * lalu mengupdate users_auth dengan noHp tersebut
+ */
+async function syncNoHpToAllUsers() {
+    console.log("🔄 [syncNoHpToAllUsers] Starting...");
+    
+    if (!window.dbData || !window.dbData.users_auth) {
+        console.log("⏳ Users auth data not ready yet");
+        return;
+    }
+    
+    try {
+        // Ambil semua data staff dari Firebase langsung
+        const staffSnapshot = await db.ref('staff').once('value');
+        const staffData = staffSnapshot.val() || {};
+        console.log(`📁 Found ${Object.keys(staffData).length} staff records`);
+        
+        // Ambil semua user auth
+        const usersSnapshot = await db.ref('users_auth').once('value');
+        const usersData = usersSnapshot.val() || {};
+        console.log(`👥 Found ${Object.keys(usersData).length} user accounts`);
+        
+        let updatedCount = 0;
+        let skippedCount = 0;
+        let noMatchCount = 0;
+        
+        for (const [uid, user] of Object.entries(usersData)) {
+            // Skip jika bukan staff (siswa tidak perlu noHp di users_auth)
+            if (user.role === 'siswa') {
+                skippedCount++;
+                continue;
+            }
+            
+            let phoneNumber = null;
+            let source = '';
+            let staffIdFound = null;
+            
+            // ========== STRATEGI 1: Cari staff berdasarkan userId ==========
+            for (const [staffId, staff] of Object.entries(staffData)) {
+                if (staff.userId === uid && staff.noHp && staff.noHp !== '-' && staff.noHp !== '') {
+                    phoneNumber = staff.noHp;
+                    source = `staff.${staffId} (by userId)`;
+                    staffIdFound = staffId;
+                    break;
+                }
+            }
+            
+            // ========== STRATEGI 2: Cari staff berdasarkan staffId di user ==========
+            if (!phoneNumber && user.staffId) {
+                const staff = staffData[user.staffId];
+                if (staff && staff.noHp && staff.noHp !== '-' && staff.noHp !== '') {
+                    phoneNumber = staff.noHp;
+                    source = `staff.${user.staffId} (by staffId)`;
+                    staffIdFound = user.staffId;
+                }
+            }
+            
+            // ========== STRATEGI 3: Cari staff berdasarkan email ==========
+            if (!phoneNumber && user.email) {
+                for (const [staffId, staff] of Object.entries(staffData)) {
+                    if (staff.email === user.email && staff.noHp && staff.noHp !== '-' && staff.noHp !== '') {
+                        phoneNumber = staff.noHp;
+                        source = `staff.${staffId} (by email)`;
+                        staffIdFound = staffId;
+                        break;
+                    }
+                }
+            }
+            
+            // ========== STRATEGI 4: Cari staff berdasarkan nama ==========
+            if (!phoneNumber && user.nama) {
+                for (const [staffId, staff] of Object.entries(staffData)) {
+                    if (staff.nama === user.nama && staff.noHp && staff.noHp !== '-' && staff.noHp !== '') {
+                        phoneNumber = staff.noHp;
+                        source = `staff.${staffId} (by name)`;
+                        staffIdFound = staffId;
+                        break;
+                    }
+                }
+            }
+            
+            if (phoneNumber) {
+                // Cek apakah noHp di user auth sudah sama
+                const currentNoHp = user.noHp || '';
+                if (currentNoHp !== phoneNumber) {
+                    // Update users_auth dengan noHp dari staff
+                    await db.ref(`users_auth/${uid}/noHp`).set(phoneNumber);
+                    console.log(`✅ Updated ${user.nama || user.email} (${user.role}): ${phoneNumber} [${source}]`);
+                    updatedCount++;
+                    
+                    // Jika staffId belum ada di user, update juga
+                    if (!user.staffId && staffIdFound) {
+                        await db.ref(`users_auth/${uid}/staffId`).set(staffIdFound);
+                        console.log(`   ✅ Also updated staffId: ${staffIdFound}`);
+                    }
+                } else {
+                    console.log(`⏭️ ${user.nama || user.email} already has correct noHp: ${phoneNumber}`);
+                    skippedCount++;
+                }
+            } else {
+                console.log(`❌ No phone found for ${user.nama || user.email} (${user.role})`);
+                noMatchCount++;
+            }
+        }
+        
+        console.log(`📊 [syncNoHpToAllUsers] Summary:`);
+        console.log(`   ✅ Updated: ${updatedCount}`);
+        console.log(`   ⏭️ Skipped (already have or siswa): ${skippedCount}`);
+        console.log(`   ❌ No match found: ${noMatchCount}`);
+        console.log(`   📱 Total staff with noHp: ${Object.values(staffData).filter(s => s.noHp && s.noHp !== '-').length}`);
+        
+        return { updatedCount, skippedCount, noMatchCount };
+        
+    } catch (error) {
+        console.error('❌ Error in syncNoHpToAllUsers:', error);
+        return { updatedCount: 0, skippedCount: 0, noMatchCount: 0, error: error.message };
     }
 }
 
@@ -1109,6 +1233,22 @@ function saveStaff() {
             return window.firebase.database().ref(`staff/${id}`).set(staffData);
         }).then(() => {
             if (window.showToast) window.showToast("✅ Guru/Karyawan berhasil ditambahkan!");
+            
+            // ====== SYNC noHp ke user auth jika staff sudah punya akun ======
+            if (noHp && noHp !== '-') {
+                // Cari user auth yang terhubung dengan staff ini
+                db.ref('users_auth').orderByChild('staffId').equalTo(id).once('value').then(snap => {
+                    const users = snap.val();
+                    if (users) {
+                        const uid = Object.keys(users)[0];
+                        if (uid) {
+                            db.ref(`users_auth/${uid}/noHp`).set(noHp);
+                            console.log(`✅ Synced noHp to user auth: ${noHp}`);
+                        }
+                    }
+                }).catch(e => console.warn('Sync noHp error:', e));
+            }
+            
             if (typeof window.logActivity === 'function') {
                 const phoneInfo = noHp ? `, WA: ${noHp}` : '';
                 window.logActivity('add_staff', `Tambah staff: ${nama} (ID: ${id})${phoneInfo}`);
@@ -1124,6 +1264,21 @@ function saveStaff() {
     } else {
         window.firebase.database().ref(`staff/${id}`).update(staffData).then(() => {
             if (window.showToast) window.showToast("✅ Data guru/karyawan berhasil diupdate!");
+            
+            // ====== SYNC noHp ke user auth jika staff sudah punya akun ======
+            if (noHp && noHp !== '-') {
+                db.ref('users_auth').orderByChild('staffId').equalTo(id).once('value').then(snap => {
+                    const users = snap.val();
+                    if (users) {
+                        const uid = Object.keys(users)[0];
+                        if (uid) {
+                            db.ref(`users_auth/${uid}/noHp`).set(noHp);
+                            console.log(`✅ Synced noHp to user auth: ${noHp}`);
+                        }
+                    }
+                }).catch(e => console.warn('Sync noHp error:', e));
+            }
+            
             if (typeof window.logActivity === 'function') {
                 const phoneInfo = noHp ? `, WA: ${noHp}` : '';
                 window.logActivity('edit_staff', `Edit staff: ${nama} (ID: ${id})${phoneInfo}`);
@@ -1301,6 +1456,7 @@ async function createStaffUserAccount(staffId, staffName, staffEmail) {
         const staffData = staffSnapshot.val();
         if (staffData && staffData.noHp) {
             await window.firebase.database().ref(`users_auth/${user.uid}/noHp`).set(staffData.noHp);
+            console.log(`✅ Synced noHp to user auth: ${staffData.noHp}`);
         }
         
         if (window.showToast) window.showToast(`✅ Akun berhasil dibuat!`, "success");
@@ -1487,6 +1643,11 @@ function initStaffSystem() {
     setTimeout(() => {
         syncAllStaffFromUserAccounts();
     }, 2000);
+    
+    // Sync noHp dari staff ke users_auth
+    setTimeout(() => {
+        syncNoHpToAllUsers();
+    }, 3000);
     
     setTimeout(() => {
         console.log("📊 First render of staff table");
@@ -1738,12 +1899,14 @@ window.resetStaffFilters = resetStaffFilters;
 window.closeStaffPhotoModal = closeStaffPhotoModal;
 window.syncStaffFromUserAccount = syncStaffFromUserAccount;
 window.syncAllStaffFromUserAccounts = syncAllStaffFromUserAccounts;
+window.syncNoHpToAllUsers = syncNoHpToAllUsers;
 window.setupStaffSyncListeners = setupStaffSyncListeners;
 window.refreshStaffPhoto = refreshStaffPhoto;
 window.testStaffWhatsApp = testStaffWhatsApp;
 window.formatPhoneDisplay = formatPhoneDisplay;
 
-console.log("✅ staff.js V3.4 loaded - DENGAN WhatsApp integration! No HP staff tersinkron dengan akun user.");
+console.log("✅ staff.js V3.5 loaded - FIXED: Sync noHp from staff to user auth!");
+console.log("📱 No HP staff akan otomatis tersinkron ke users_auth.");
 
 // Auto-initialize when DOM ready
 if (document.readyState === 'loading') {
