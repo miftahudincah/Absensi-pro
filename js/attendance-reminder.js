@@ -1,24 +1,33 @@
-// attendance-reminder.js - VERSION 2.1 (FIXED: DETECT ALL USERS WITH WHATSAPP)
+// attendance-reminder.js - VERSION 3.0 (FIXED: NO MORE SPAM NOTIFICATIONS)
 // Fitur Pengingat Absensi via WhatsApp untuk semua role
 // Mengirim notifikasi jika belum absen lebih dari 5 menit setelah jam masuk
-// PERUBAHAN V2.1:
-//   - FIX: Deteksi semua user auth dengan noHp (prioritas utama)
-//   - FIX: Cek staff berdasarkan userId, staffId, dan email
-//   - FIX: Log lebih detail untuk setiap user yang dicek
-//   - FIX: Menampilkan daftar lengkap user yang terdeteksi
-//   - FIX: FORCE_REMINDER_MODE untuk testing
+// 
+// PERUBAHAN V3.0:
+//   - FIX: FORCE_REMINDER_MODE default = false (production mode)
+//   - FIX: Hanya berjalan jika ada user login (tidak auto-run)
+//   - FIX: Tambahkan cooldown global 5 menit untuk mencegah spam
+//   - FIX: Gunakan Firebase untuk tracking notifikasi (bukan localStorage)
+//   - FIX: Notifikasi hanya 1x per hari per user (global)
+//   - FIX: Cek user login sebelum proses reminder
+//   - FIX: Tambahkan pengecekan role (hanya aktif untuk admin/guru)
+//   - FIX: Log lebih detail untuk debugging
 // ============================================================================
 
 let reminderInterval = null;
 let reminderInitialized = false;
-let alreadyNotifiedToday = new Map(); // Menyimpan siapa yang sudah mendapat notifikasi hari ini
+let alreadyNotifiedToday = new Map(); // Cache lokal (fallback)
 let reminderRetryCount = 0;
+
+// ======================= COOLDOWN GLOBAL =======================
+let reminderCooldownUntil = 0;
+const GLOBAL_REMINDER_COOLDOWN_MS = 5 * 60 * 1000; // 5 menit cooldown
+let lastReminderRun = 0;
+let isReminderRunning = false;
 
 // ======================= KONFIGURASI =======================
 
-// FORCE MODE - Aktifkan untuk testing (set false untuk production)
-// Jika true, sistem akan mengirim reminder kapan saja (abaikan batasan jam)
-const FORCE_REMINDER_MODE = true; // <-- SET false UNTUK PRODUCTION
+// FORCE MODE - HARUS false untuk production!
+const FORCE_REMINDER_MODE = false; // <-- UBAH KE FALSE!
 
 const REMINDER_CONFIG = {
     delayAfterStart: 5,      // 5 menit setelah jam mulai
@@ -129,6 +138,86 @@ function formatWhatsAppNumber(phoneNumber) {
     if (formatted.startsWith('0')) formatted = '62' + formatted.substring(1);
     if (!formatted.startsWith('62')) formatted = '62' + formatted;
     return formatted;
+}
+
+// ======================= FIREBASE TRACKING NOTIFIKASI =======================
+
+/**
+ * Cek apakah user sudah mendapat notifikasi hari ini (dari Firebase)
+ * @param {string} uid - User ID
+ * @returns {Promise<boolean>}
+ */
+async function checkNotifiedTodayFirebase(uid) {
+    if (!uid) return false;
+    
+    try {
+        const today = new Date().toISOString().split('T')[0];
+        const snapshot = await db.ref(`reminder_tracking/${today}/${uid}`).once('value');
+        const exists = snapshot.exists();
+        return exists;
+    } catch (error) {
+        console.warn('Error checking Firebase notification tracking:', error);
+        // Fallback ke localStorage
+        const notifKey = `${uid}_${new Date().toISOString().split('T')[0]}`;
+        return alreadyNotifiedToday.has(notifKey);
+    }
+}
+
+/**
+ * Tandai user sudah mendapat notifikasi hari ini (di Firebase)
+ * @param {string} uid - User ID
+ * @param {string} nama - Nama user
+ * @param {string} role - Role user
+ * @returns {Promise<void>}
+ */
+async function markNotifiedTodayFirebase(uid, nama, role) {
+    if (!uid) return;
+    
+    try {
+        const today = new Date().toISOString().split('T')[0];
+        await db.ref(`reminder_tracking/${today}/${uid}`).set({
+            uid: uid,
+            nama: nama,
+            role: role,
+            sentAt: firebase.database.ServerValue.TIMESTAMP
+        });
+        console.log(`✅ Marked ${nama} as notified today in Firebase`);
+    } catch (error) {
+        console.warn('Error marking notification in Firebase:', error);
+        // Fallback ke localStorage
+        const notifKey = `${uid}_${new Date().toISOString().split('T')[0]}`;
+        alreadyNotifiedToday.set(notifKey, Date.now());
+    }
+}
+
+/**
+ * Bersihkan tracking notifikasi lama (lebih dari 7 hari)
+ * @returns {Promise<void>}
+ */
+async function cleanupOldNotificationTracking() {
+    try {
+        const snapshot = await db.ref('reminder_tracking').once('value');
+        const data = snapshot.val();
+        if (!data) return;
+        
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+        const cutoff = sevenDaysAgo.toISOString().split('T')[0];
+        
+        let deletedCount = 0;
+        for (const [date, users] of Object.entries(data)) {
+            if (date < cutoff) {
+                await db.ref(`reminder_tracking/${date}`).remove();
+                deletedCount++;
+            }
+        }
+        
+        if (deletedCount > 0) {
+            console.log(`🧹 Cleaned up ${deletedCount} old notification tracking records`);
+        }
+    } catch (error) {
+        console.warn('Error cleaning up old notification tracking:', error);
+    }
 }
 
 // ======================= AMBIL DATA USER DENGAN NOMOR WHATSAPP =======================
@@ -408,7 +497,7 @@ Halo *${user.nama}* ${roleEmoji} (${roleTitle}),
 
 📅 Tanggal: ${new Date().toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
 🕐 Jam Sekolah: *Pukul ${schoolStartTime} WIB*
-⏰ Waktu Sekarang: *${currentTime} WIB*
+⏰ Waktu Sekolah: *${currentTime} WIB*
 📊 Keterlambatan: *${minutesLate} menit*
 
 🚨 *SEGERA LAKUKAN ABSENSI FINGERPRINT!*
@@ -431,7 +520,7 @@ Halo *${user.nama}* ${roleEmoji} (${roleTitle}),
 // ======================= PROSES PENGINGAT =======================
 
 /**
- * Reset notifikasi harian
+ * Reset notifikasi harian (localStorage fallback)
  */
 function resetDailyNotifications() {
     const todayStr = new Date().toISOString().split('T')[0];
@@ -439,173 +528,227 @@ function resetDailyNotifications() {
     if (lastNotifDate !== todayStr) {
         alreadyNotifiedToday.clear();
         localStorage.setItem('reminder_last_date', todayStr);
-        console.log(`📅 New day (${todayStr}), reset notification tracking`);
+        console.log(`📅 New day (${todayStr}), reset notification tracking (localStorage fallback)`);
     }
 }
 
 /**
- * Proses pengingat untuk semua user (INDEPENDEN - tidak perlu user login)
+ * Proses pengingat untuk semua user
+ * SEKARANG MEMERLUKAN USER LOGIN!
  */
 async function processReminders() {
+    // ========== CEK APAKAH ADA USER LOGIN ==========
+    if (typeof currentUser === 'undefined' || !currentUser) {
+        console.log('⏳ No user logged in, skipping reminder check');
+        return;
+    }
+    
+    // ========== CEK COOLDOWN GLOBAL ==========
+    const now = Date.now();
+    if (now < reminderCooldownUntil) {
+        const remaining = Math.round((reminderCooldownUntil - now) / 1000);
+        console.log(`⏳ Global cooldown: ${remaining}s remaining`);
+        return;
+    }
+    
+    // ========== CEK APAKAH SEDANG BERJALAN ==========
+    if (isReminderRunning) {
+        console.log('⏳ Reminder process already running, skipping...');
+        return;
+    }
+    
+    isReminderRunning = true;
+    reminderCooldownUntil = now + GLOBAL_REMINDER_COOLDOWN_MS;
+    lastReminderRun = now;
+    
     console.log('🔔 [processReminders] Started...');
+    console.log(`👤 User: ${currentUser.nama} (${currentUser.role})`);
     
-    // Cek apakah fitur diaktifkan
-    if (!REMINDER_CONFIG.enabled) {
-        console.log('🔔 Reminder feature disabled');
-        return;
-    }
-    
-    // Cek apakah Firebase tersedia
-    if (typeof db === 'undefined' || !db) {
-        console.log('⏳ Firebase not ready, skipping reminder check');
-        return;
-    }
-    
-    // Reset notifikasi harian
-    resetDailyNotifications();
-    
-    // ========== CEK HARI LIBUR ==========
-    const isHoliday = await isTodayHolidayAsync();
-    if (isHoliday) {
-        console.log('🏖️ Today is holiday, skipping reminder');
-        return;
-    }
-    
-    const now = new Date();
-    const currentHour = now.getHours();
-    const currentMinute = now.getMinutes();
-    
-    // ========== CEK JAM OPERASIONAL ==========
-    let isWithinHours = false;
-    
-    if (FORCE_REMINDER_MODE) {
-        // FORCE MODE: Abaikan batasan jam
-        isWithinHours = true;
-        console.log(`🔧 FORCE MODE ENABLED - Reminder will run at any hour (current: ${currentHour}:${String(currentMinute).padStart(2, '0')})`);
-    } else {
-        // Normal mode: Cek jam
-        isWithinHours = (currentHour >= REMINDER_CONFIG.reminderStartHour && currentHour <= REMINDER_CONFIG.reminderEndHour);
-        if (!isWithinHours) {
-            console.log(`⏰ Reminder only between ${REMINDER_CONFIG.reminderStartHour}:00 - ${REMINDER_CONFIG.reminderEndHour}:00, current hour: ${currentHour}`);
+    try {
+        // Cek apakah fitur diaktifkan
+        if (!REMINDER_CONFIG.enabled) {
+            console.log('🔔 Reminder feature disabled');
             return;
         }
-    }
-    
-    // ========== AMBIL JAM MASUK SEKOLAH ==========
-    const schoolStartTime = await getSchoolStartTimeAsync();
-    const [startHour, startMinute] = schoolStartTime.split(':').map(Number);
-    
-    // Hitung menit setelah jam mulai
-    const currentTotalMinutes = now.getHours() * 60 + now.getMinutes();
-    const startTotalMinutes = startHour * 60 + startMinute;
-    const minutesAfterStart = currentTotalMinutes - startTotalMinutes;
-    
-    console.log(`⏰ School start: ${schoolStartTime}, Current: ${now.toLocaleTimeString()}, Minutes after start: ${minutesAfterStart}`);
-    
-    // Cek apakah sudah melebihi delay (5 menit)
-    if (minutesAfterStart < REMINDER_CONFIG.delayAfterStart) {
-        console.log(`⏳ Not yet time for reminder (${minutesAfterStart}/${REMINDER_CONFIG.delayAfterStart} minutes after start)`);
-        return;
-    }
-    
-    console.log(`🔔 Checking reminders at ${now.toLocaleTimeString()} (${minutesAfterStart} minutes after school start)`);
-    
-    // ========== DAPATKAN USER DENGAN WHATSAPP ==========
-    const users = await getUsersWithWhatsApp();
-    if (users.length === 0) {
-        console.log('📭 No users with WhatsApp number found');
-        return;
-    }
-    
-    const todayStr = now.toISOString().split('T')[0];
-    let sentCount = 0;
-    let alreadyAbsentCount = 0;
-    let alreadyNotifiedCount = 0;
-    let errorCount = 0;
-    
-    console.log(`👥 Processing ${users.length} users for reminder...`);
-    
-    for (const user of users) {
-        // Cek apakah sudah dapat notifikasi hari ini
-        const notifKey = `${user.uid}_${todayStr}`;
-        if (alreadyNotifiedToday.has(notifKey)) {
-            alreadyNotifiedCount++;
-            console.log(`⏭️ ${user.nama} already notified today, skipping`);
-            continue;
+        
+        // Cek apakah Firebase tersedia
+        if (typeof db === 'undefined' || !db) {
+            console.log('⏳ Firebase not ready, skipping reminder check');
+            return;
         }
         
-        // Cek apakah sudah absen
-        const hasCheckedIn = await hasUserCheckedInToday(user);
-        if (hasCheckedIn) {
-            alreadyAbsentCount++;
-            console.log(`✅ ${user.nama} already checked in, skipping`);
-            continue;
+        // Reset notifikasi harian (fallback)
+        resetDailyNotifications();
+        
+        // ========== CEK HARI LIBUR ==========
+        const isHoliday = await isTodayHolidayAsync();
+        if (isHoliday) {
+            console.log('🏖️ Today is holiday, skipping reminder');
+            return;
         }
         
-        // ============ KIRIM PENGINGAT VIA WHATSAPP ============
-        const minutesLate = minutesAfterStart;
-        let success = false;
+        const currentHour = now.getHours();
+        const currentMinute = now.getMinutes();
         
-        console.log(`📤 Sending reminder to ${user.nama} (${user.role}) - phone: ${user.phoneNumber}`);
+        // ========== CEK JAM OPERASIONAL ==========
+        let isWithinHours = false;
         
-        // Gunakan fungsi sendAttendanceReminder dari whatsapp.js jika tersedia
-        if (typeof sendAttendanceReminder === 'function') {
-            try {
-                const role = user.role === 'siswa' ? 'siswa' : 'staff';
-                const result = await sendAttendanceReminder(
-                    { 
-                        nama: user.nama, 
-                        noHp: user.phoneNumber,
-                        parentPhone: user.phoneNumber // Untuk siswa
-                    }, 
-                    role, 
-                    minutesLate
-                );
-                success = result === true;
-                if (success) {
-                    console.log(`   ✅ Reminder sent successfully to ${user.nama}`);
-                } else {
-                    console.log(`   ⚠️ sendAttendanceReminder returned false for ${user.nama}`);
-                }
-            } catch (err) {
-                console.error(`   ❌ Error sending reminder via sendAttendanceReminder for ${user.nama}:`, err);
-                success = false;
-            }
+        if (FORCE_REMINDER_MODE) {
+            // FORCE MODE: Abaikan batasan jam
+            isWithinHours = true;
+            console.log(`🔧 FORCE MODE ENABLED - Reminder will run at any hour (current: ${currentHour}:${String(currentMinute).padStart(2, '0')})`);
         } else {
-            console.warn('⚠️ sendAttendanceReminder function not available, using fallback');
+            // Normal mode: Cek jam
+            isWithinHours = (currentHour >= REMINDER_CONFIG.reminderStartHour && currentHour <= REMINDER_CONFIG.reminderEndHour);
+            if (!isWithinHours) {
+                console.log(`⏰ Reminder only between ${REMINDER_CONFIG.reminderStartHour}:00 - ${REMINDER_CONFIG.reminderEndHour}:00, current hour: ${currentHour}`);
+                return;
+            }
         }
         
-        // Fallback: kirim langsung via sendReminderViaWhatsApp
-        if (!success) {
-            console.log(`   📤 Using fallback for ${user.nama}`);
-            const message = generateReminderMessage(user, schoolStartTime, minutesLate);
-            success = await sendReminderViaWhatsApp(user.phoneNumber, message);
+        // ========== AMBIL JAM MASUK SEKOLAH ==========
+        const schoolStartTime = await getSchoolStartTimeAsync();
+        const [startHour, startMinute] = schoolStartTime.split(':').map(Number);
+        
+        // Hitung menit setelah jam mulai
+        const currentTotalMinutes = currentHour * 60 + currentMinute;
+        const startTotalMinutes = startHour * 60 + startMinute;
+        const minutesAfterStart = currentTotalMinutes - startTotalMinutes;
+        
+        console.log(`⏰ School start: ${schoolStartTime}, Current: ${now.toLocaleTimeString()}, Minutes after start: ${minutesAfterStart}`);
+        
+        // Cek apakah sudah melebihi delay (5 menit)
+        if (minutesAfterStart < REMINDER_CONFIG.delayAfterStart) {
+            console.log(`⏳ Not yet time for reminder (${minutesAfterStart}/${REMINDER_CONFIG.delayAfterStart} minutes after start)`);
+            return;
         }
         
-        if (success) {
-            sentCount++;
-            alreadyNotifiedToday.set(notifKey, Date.now());
-            console.log(`   ✅ Reminder sent to ${user.nama} (${user.phoneNumber})`);
+        console.log(`🔔 Checking reminders at ${now.toLocaleTimeString()} (${minutesAfterStart} minutes after school start)`);
+        
+        // ========== DAPATKAN USER DENGAN WHATSAPP ==========
+        const users = await getUsersWithWhatsApp();
+        if (users.length === 0) {
+            console.log('📭 No users with WhatsApp number found');
+            return;
+        }
+        
+        const todayStr = now.toISOString().split('T')[0];
+        let sentCount = 0;
+        let alreadyAbsentCount = 0;
+        let alreadyNotifiedCount = 0;
+        let errorCount = 0;
+        let skippedNoLogin = 0;
+        
+        console.log(`👥 Processing ${users.length} users for reminder...`);
+        
+        for (const user of users) {
+            // ========== CEK APAKAH USER SUDAH LOGIN ==========
+            // Kita hanya kirim jika user memiliki akun yang valid
+            if (!user.uid) {
+                skippedNoLogin++;
+                console.log(`⏭️ ${user.nama} has no uid, skipping`);
+                continue;
+            }
             
-            // Catat ke log (jika fungsi tersedia)
-            if (typeof window.logActivity === 'function') {
-                try {
-                    window.logActivity('attendance_reminder', `Kirim pengingat absensi ke ${user.nama} (${user.role}) - terlambat ${minutesLate} menit`);
-                } catch(e) { console.warn(e); }
+            // ========== CEK APAKAH SUDAH DAPAT NOTIFIKASI HARI INI (FIREBASE) ==========
+            const alreadyNotified = await checkNotifiedTodayFirebase(user.uid);
+            if (alreadyNotified) {
+                alreadyNotifiedCount++;
+                console.log(`⏭️ ${user.nama} already notified today (Firebase), skipping`);
+                continue;
             }
-        } else {
-            errorCount++;
-            console.log(`   ❌ Failed to send reminder to ${user.nama}`);
+            
+            // ========== CEK APAKAH SUDAH ABSEN ==========
+            const hasCheckedIn = await hasUserCheckedInToday(user);
+            if (hasCheckedIn) {
+                alreadyAbsentCount++;
+                console.log(`✅ ${user.nama} already checked in, skipping`);
+                continue;
+            }
+            
+            // ============ KIRIM PENGINGAT VIA WHATSAPP ============
+            const minutesLate = minutesAfterStart;
+            let success = false;
+            
+            console.log(`📤 Sending reminder to ${user.nama} (${user.role}) - phone: ${user.phoneNumber}`);
+            
+            // Gunakan fungsi sendAttendanceReminder dari whatsapp.js jika tersedia
+            if (typeof sendAttendanceReminder === 'function') {
+                try {
+                    const role = user.role === 'siswa' ? 'siswa' : 'staff';
+                    const result = await sendAttendanceReminder(
+                        { 
+                            nama: user.nama, 
+                            noHp: user.phoneNumber,
+                            parentPhone: user.phoneNumber // Untuk siswa
+                        }, 
+                        role, 
+                        minutesLate
+                    );
+                    success = result === true;
+                    if (success) {
+                        console.log(`   ✅ Reminder sent successfully to ${user.nama}`);
+                    } else {
+                        console.log(`   ⚠️ sendAttendanceReminder returned false for ${user.nama}`);
+                    }
+                } catch (err) {
+                    console.error(`   ❌ Error sending reminder via sendAttendanceReminder for ${user.nama}:`, err);
+                    success = false;
+                }
+            } else {
+                console.warn('⚠️ sendAttendanceReminder function not available, using fallback');
+            }
+            
+            // Fallback: kirim langsung via sendReminderViaWhatsApp
+            if (!success) {
+                console.log(`   📤 Using fallback for ${user.nama}`);
+                const message = generateReminderMessage(user, schoolStartTime, minutesLate);
+                success = await sendReminderViaWhatsApp(user.phoneNumber, message);
+            }
+            
+            if (success) {
+                sentCount++;
+                
+                // ========== TANDAI SUDAH NOTIFIKASI DI FIREBASE ==========
+                await markNotifiedTodayFirebase(user.uid, user.nama, user.role);
+                
+                console.log(`   ✅ Reminder sent to ${user.nama} (${user.phoneNumber})`);
+                
+                // Catat ke log (jika fungsi tersedia)
+                if (typeof window.logActivity === 'function') {
+                    try {
+                        window.logActivity('attendance_reminder', `Kirim pengingat absensi ke ${user.nama} (${user.role}) - terlambat ${minutesLate} menit`);
+                    } catch(e) { console.warn(e); }
+                }
+            } else {
+                errorCount++;
+                console.log(`   ❌ Failed to send reminder to ${user.nama}`);
+            }
         }
+        
+        // ========== SUMMARY ==========
+        console.log(`📊 Reminder summary:`);
+        console.log(`   ✅ Sent: ${sentCount}`);
+        console.log(`   ✅ Already checked in: ${alreadyAbsentCount}`);
+        console.log(`   ⏭️ Already notified today: ${alreadyNotifiedCount}`);
+        console.log(`   ⏭️ Skipped (no uid): ${skippedNoLogin}`);
+        console.log(`   ❌ Errors: ${errorCount}`);
+        console.log(`   📱 Total users with WhatsApp: ${users.length}`);
+        
+        // ========== CLEANUP OLD TRACKING (SETIAP HARI) ==========
+        // Lakukan cleanup seminggu sekali
+        const lastCleanup = localStorage.getItem('reminder_last_cleanup');
+        const todayStr = new Date().toISOString().split('T')[0];
+        if (!lastCleanup || lastCleanup !== todayStr) {
+            await cleanupOldNotificationTracking();
+            localStorage.setItem('reminder_last_cleanup', todayStr);
+        }
+        
+    } catch (error) {
+        console.error('❌ Error in processReminders:', error);
+    } finally {
+        isReminderRunning = false;
     }
-    
-    // ========== SUMMARY ==========
-    console.log(`📊 Reminder summary:`);
-    console.log(`   ✅ Sent: ${sentCount}`);
-    console.log(`   ✅ Already checked in: ${alreadyAbsentCount}`);
-    console.log(`   ⏭️ Already notified today: ${alreadyNotifiedCount}`);
-    console.log(`   ❌ Errors: ${errorCount}`);
-    console.log(`   📱 Total users with WhatsApp: ${users.length}`);
 }
 
 /**
@@ -663,6 +806,8 @@ function startReminderScheduler() {
     
     console.log(`🔔 Starting attendance reminder scheduler (check every ${REMINDER_CONFIG.checkInterval / 1000} seconds)`);
     console.log(`🔧 FORCE_REMINDER_MODE: ${FORCE_REMINDER_MODE ? '✅ ENABLED (testing mode)' : '❌ DISABLED (production mode)'}`);
+    console.log(`⏰ Active hours: ${REMINDER_CONFIG.reminderStartHour}:00 - ${REMINDER_CONFIG.reminderEndHour}:00`);
+    console.log(`👤 Requires user login: YES`);
     
     // Jalankan pertama kali setelah 10 detik
     setTimeout(() => {
@@ -696,7 +841,11 @@ async function triggerManualReminder() {
     if (typeof window.showToast === 'function') {
         window.showToast('⏳ Memproses pengingat absensi...', 'info');
     }
+    
+    // Reset cooldown untuk manual trigger
+    reminderCooldownUntil = 0;
     await processReminders();
+    
     if (typeof window.showToast === 'function') {
         window.showToast('✅ Proses pengingat selesai', 'success');
     }
@@ -705,7 +854,8 @@ async function triggerManualReminder() {
 // ======================= INISIALISASI =======================
 
 /**
- * Inisialisasi sistem pengingat (INDEPENDEN - langsung jalan tanpa user login)
+ * Inisialisasi sistem pengingat
+ * SEKARANG MEMERLUKAN USER LOGIN!
  */
 function initAttendanceReminder() {
     if (reminderInitialized) {
@@ -713,7 +863,31 @@ function initAttendanceReminder() {
         return;
     }
     
-    console.log('🔔 Initializing Attendance Reminder System (Independent Mode)...');
+    // ========== CEK USER LOGIN ==========
+    if (typeof currentUser === 'undefined' || !currentUser) {
+        console.log('⏳ No user logged in, waiting...');
+        // Coba lagi setelah 5 detik
+        setTimeout(() => {
+            if (typeof currentUser !== 'undefined' && currentUser) {
+                console.log(`👤 User logged in: ${currentUser.nama} (${currentUser.role})`);
+                initAttendanceReminder();
+            } else {
+                console.log('⏳ Still no user logged in, reminder will not start');
+            }
+        }, 5000);
+        return;
+    }
+    
+    // ========== CEK ROLE ==========
+    // Hanya admin dan guru yang boleh menjalankan reminder
+    const allowedRoles = ['admin', 'developer', 'wakil_kepala', 'guru'];
+    if (!allowedRoles.includes(currentUser.role)) {
+        console.log(`🔒 User role ${currentUser.role} is not allowed to run reminder. Only ${allowedRoles.join(', ')}`);
+        return;
+    }
+    
+    console.log('🔔 Initializing Attendance Reminder System...');
+    console.log(`👤 User: ${currentUser.nama} (${currentUser.role})`);
     console.log(`🔧 FORCE_REMINDER_MODE: ${FORCE_REMINDER_MODE ? '✅ ENABLED (testing mode)' : '❌ DISABLED (production mode)'}`);
     
     // Tunggu Firebase siap
@@ -723,12 +897,15 @@ function initAttendanceReminder() {
         return;
     }
     
+    // ========== CLEANUP OLD TRACKING ==========
+    cleanupOldNotificationTracking().catch(e => console.warn(e));
+    
     reminderInitialized = true;
     
     // Start scheduler
     startReminderScheduler();
     
-    console.log('✅ Attendance Reminder System initialized (running independently without user login)');
+    console.log('✅ Attendance Reminder System initialized (with user login required)');
 }
 
 /**
@@ -738,23 +915,57 @@ function cleanupAttendanceReminder() {
     stopReminderScheduler();
     reminderInitialized = false;
     alreadyNotifiedToday.clear();
+    isReminderRunning = false;
     console.log('🧹 Attendance reminder system cleaned up');
 }
 
 // ======================= AUTO INITIALIZATION ========================
-// Sistem akan langsung berjalan tanpa menunggu user login
+// SEKARANG TIDAK AUTO RUN - MENUNGGU USER LOGIN
 
 function autoInit() {
     if (typeof db !== 'undefined' && db) {
-        initAttendanceReminder();
+        // Cek apakah ada user login
+        if (typeof currentUser !== 'undefined' && currentUser) {
+            console.log(`👤 Auto-init: User detected (${currentUser.nama})`);
+            const allowedRoles = ['admin', 'developer', 'wakil_kepala', 'guru'];
+            if (allowedRoles.includes(currentUser.role)) {
+                initAttendanceReminder();
+            } else {
+                console.log(`🔒 Auto-init: Role ${currentUser.role} not allowed`);
+            }
+        } else {
+            console.log('⏳ Auto-init: Waiting for user login...');
+            // Coba lagi setiap 3 detik sampai user login
+            setTimeout(autoInit, 3000);
+        }
     } else {
         console.log('⏳ Waiting for Firebase to auto-init reminder...');
         setTimeout(autoInit, 1000);
     }
 }
 
-// Mulai auto-inisialisasi
-autoInit();
+// Mulai auto-inisialisasi (tapi akan menunggu user login)
+setTimeout(autoInit, 2000);
+
+// ======================= EVENT LISTENER UNTUK LOGIN =======================
+// Inisialisasi ulang saat user login
+document.addEventListener('userLoggedIn', function(e) {
+    const user = e.detail?.user || currentUser;
+    if (user) {
+        console.log(`🔔 userLoggedIn event: ${user.nama} (${user.role})`);
+        const allowedRoles = ['admin', 'developer', 'wakil_kepala', 'guru'];
+        if (allowedRoles.includes(user.role)) {
+            // Reset cooldown agar langsung jalan
+            reminderCooldownUntil = 0;
+            if (!reminderInitialized) {
+                initAttendanceReminder();
+            } else {
+                console.log('🔔 Reminder already initialized, triggering check...');
+                setTimeout(processReminders, 5000);
+            }
+        }
+    }
+});
 
 // ======================= EKSPOR KE GLOBAL =======================
 window.initAttendanceReminder = initAttendanceReminder;
@@ -763,7 +974,12 @@ window.triggerManualReminder = triggerManualReminder;
 window.getUsersWithWhatsApp = getUsersWithWhatsApp;
 window.processReminders = processReminders;
 window.FORCE_REMINDER_MODE = FORCE_REMINDER_MODE;
+window.checkNotifiedTodayFirebase = checkNotifiedTodayFirebase;
+window.markNotifiedTodayFirebase = markNotifiedTodayFirebase;
 
-console.log('✅ attendance-reminder.js v2.1 loaded - FIXED: Detects ALL users with WhatsApp!');
-console.log(`🔧 FORCE_REMINDER_MODE: ${FORCE_REMINDER_MODE ? '✅ ENABLED (testing)' : '❌ DISABLED (production)'}`);
-console.log('📱 Reminder will run every 60 seconds');
+console.log('✅ attendance-reminder.js v3.0 loaded - FIXED: NO MORE SPAM NOTIFICATIONS!');
+console.log(`🔧 FORCE_REMINDER_MODE: ${FORCE_REMINDER_MODE ? '⚠️ TESTING MODE' : '✅ PRODUCTION MODE'}`);
+console.log('📱 Reminder will run every 60 seconds (only when user is logged in)');
+console.log('🔒 Only Admin, Guru, Wakil Kepala, and Developer can run reminder');
+console.log('📊 Firebase tracking enabled - 1 notification per user per day');
+console.log('⏱️ Global cooldown: 5 minutes between runs');
